@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "320857165783",
+    "project_id": "kust-88683",
+    "storage_bucket": "kust-88683.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:320857165783:android:b8767aec4afc285e938592",
+        "android_client_info": {
+          "package_name": "com.example.kust"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFu9ekHeAkzaYf7GdUALax6LmwO4hLnbg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
