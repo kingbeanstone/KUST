@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
-import '../models/equipment_model.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -11,161 +10,188 @@ class SearchScreen extends StatefulWidget {
 }
 
 class _SearchScreenState extends State<SearchScreen> {
-  String? _currentSortKey;
+  String _currentTab = 'BCD'; // 'BCD' 또는 '호흡기'
+
+  void _showAddEditDialog(BuildContext context, EquipmentProvider provider, {dynamic existingItem}) {
+    final bool isEdit = existingItem != null;
+    final idController = TextEditingController(text: isEdit ? existingItem.id : "");
+    final nameController = TextEditingController(text: isEdit ? existingItem.name : "");
+    final memoController = TextEditingController(text: isEdit ? existingItem.memo : "");
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isEdit ? '장비 정보 수정' : '새 장비 추가', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!isEdit) // 추가 시에만 번호 입력 가능 (Key이므로 수정 불가)
+              TextField(
+                controller: idController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: '$_currentTab 번호 (필수)', border: const OutlineInputBorder()),
+              ),
+            if (!isEdit) const SizedBox(height: 12),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: '사용자 이름', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: memoController,
+              decoration: const InputDecoration(labelText: '기타 (상태 등)', border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () async {
+              if (idController.text.isEmpty) return;
+
+              if (_currentTab == 'BCD') {
+                if (isEdit) {
+                  await provider.updateBcd(idController.text, nameController.text, memoController.text);
+                } else {
+                  await provider.addBcd(idController.text, nameController.text, memoController.text);
+                }
+              } else {
+                if (isEdit) {
+                  await provider.updateRegulator(idController.text, nameController.text, memoController.text);
+                } else {
+                  await provider.addRegulator(idController.text, nameController.text, memoController.text);
+                }
+              }
+              if (context.mounted) Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
+            child: Text(isEdit ? '수정' : '추가'),
+          ),
+          if (isEdit && provider.isAdmin)
+            TextButton(
+              onPressed: () {
+                _currentTab == 'BCD'
+                    ? provider.deleteBcd(existingItem.id)
+                    : provider.deleteRegulator(existingItem.id);
+                Navigator.pop(context);
+              },
+              child: const Text('삭제', style: TextStyle(color: Colors.red)),
+            ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<EquipmentProvider>(context);
-    // 💡 '이름' 정렬 필터를 추가하여 목록을 구성
-    final sortKeys = ['이름', '가방', 'BCD', '호흡기'];
-
-    List<MemberEquipment> sortedData = List.from(provider.data);
-
-    // 정렬 로직
-    if (_currentSortKey != null) {
-      sortedData.sort((a, b) {
-        // 💡 '이름' 기준 정렬일 경우 단순 문자열 비교 수행
-        if (_currentSortKey == '이름') {
-          return a.name.compareTo(b.name);
-        }
-
-        // 장비 기준 정렬 로직
-        String valA = a.gears[_currentSortKey]?.value ?? '';
-        String valB = b.gears[_currentSortKey]?.value ?? '';
-
-        if (valA.isEmpty) return 1;
-        if (valB.isEmpty) return -1;
-
-        double? numA = double.tryParse(valA.replaceAll(RegExp(r'[^0-9.]'), ''));
-        double? numB = double.tryParse(valB.replaceAll(RegExp(r'[^0-9.]'), ''));
-
-        if (numA != null && numB != null) {
-          return numA.compareTo(numB);
-        }
-
-        return valA.compareTo(valB);
-      });
-    }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('장비별 정렬 검색', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('장비 인벤토리 현황', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        actions: [
+          if (provider.isAdmin)
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+              onPressed: () => _showAddEditDialog(context, provider),
+            ),
+        ],
       ),
       body: Column(
         children: [
-          // 장비 및 이름 선택 칩 영역
+          // 상단 탭 버튼
           Container(
-            height: 60,
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: sortKeys.map((key) {
-                  bool isSelected = _currentSortKey == key;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: ChoiceChip(
-                      label: Text(key, style: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      )),
-                      selected: isSelected,
-                      selectedColor: Colors.blue[700],
-                      backgroundColor: Colors.grey[100],
-                      onSelected: (selected) {
-                        setState(() => _currentSortKey = selected ? key : null);
-                      },
-                      showCheckmark: false,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(color: isSelected ? Colors.blue[700]! : Colors.transparent),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildTabButton('BCD'),
+                const SizedBox(width: 16),
+                _buildTabButton('호흡기'),
+              ],
             ),
           ),
-          const Divider(height: 1),
-          // 결과 리스트 뷰
+          // 리스트 영역
           Expanded(
-            child: sortedData.isEmpty
-                ? const Center(child: Text('데이터가 없습니다.'))
-                : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: sortedData.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final member = sortedData[index];
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[200]!),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue[50],
-                      child: Text("${index + 1}", style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold)),
-                    ),
-                    title: Text(
-                      member.name.isEmpty ? "(이름 없음)" : member.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 4,
-                        children: [
-                          _buildMiniInfo("가방", member.gears['가방']?.value),
-                          _buildMiniInfo("BCD", member.gears['BCD']?.value),
-                          _buildMiniInfo("호흡기", member.gears['호흡기']?.value),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+            child: _currentTab == 'BCD'
+                ? _buildBcdList(provider)
+                : _buildRegulatorList(provider),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildMiniInfo(String label, String? value) {
-    bool isHighlighted = _currentSortKey == label;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: isHighlighted ? Colors.blue[50] : Colors.grey[50],
-        borderRadius: BorderRadius.circular(4),
+  Widget _buildTabButton(String label) {
+    bool isSelected = _currentTab == label;
+    return GestureDetector(
+      onTap: () => setState(() => _currentTab = label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue[800] : Colors.grey[200],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.black54,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
       ),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(fontSize: 11, color: Colors.black54),
+    );
+  }
+
+  Widget _buildBcdList(EquipmentProvider provider) {
+    if (provider.bcds.isEmpty) return const Center(child: Text('등록된 BCD가 없습니다.'));
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: provider.bcds.length,
+      itemBuilder: (context, index) {
+        final item = provider.bcds[index];
+        return _buildInventoryTile(context, provider, 'BCD', item.id, item.name, item.memo, item);
+      },
+    );
+  }
+
+  Widget _buildRegulatorList(EquipmentProvider provider) {
+    if (provider.regulators.isEmpty) return const Center(child: Text('등록된 호흡기가 없습니다.'));
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: provider.regulators.length,
+      itemBuilder: (context, index) {
+        final item = provider.regulators[index];
+        return _buildInventoryTile(context, provider, '호흡기', item.id, item.name, item.memo, item);
+      },
+    );
+  }
+
+  Widget _buildInventoryTile(BuildContext context, EquipmentProvider provider, String type, String no, String name, String memo, dynamic item) {
+    return GestureDetector(
+      onTap: () => _showAddEditDialog(context, provider, existingItem: item),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Row(
           children: [
-            TextSpan(text: "$label: ", style: TextStyle(color: isHighlighted ? Colors.blue[800] : Colors.black54)),
-            TextSpan(
-              text: (value == null || value.isEmpty) ? "-" : value,
-              style: TextStyle(
-                color: isHighlighted ? Colors.blue[900] : Colors.black87,
-                fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
+            Text('$type : ', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+            SizedBox(width: 30, child: Text(no, style: const TextStyle(fontWeight: FontWeight.bold))),
+            const SizedBox(width: 10),
+            const Text('이름 : ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            Expanded(child: Text(name.isEmpty ? '(미지정)' : name, style: const TextStyle(fontSize: 14))),
+            const Text('기타 : ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            Expanded(child: Text(memo.isEmpty ? '-' : memo, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis)),
+            const Icon(Icons.edit, size: 14, color: Colors.grey),
           ],
         ),
       ),

@@ -1,21 +1,12 @@
 class GearStatus {
   String value;
   bool checked;
-
   GearStatus({this.value = '', this.checked = false});
-
-  Map<String, dynamic> toMap() => {
-    'value': value,
-    'checked': checked,
-  };
-
-  factory GearStatus.fromMap(Map<String, dynamic> map) {
-    return GearStatus(
-      value: map['value']?.toString() ?? '',
-      checked: map['checked'] is bool ? map['checked'] : false,
-    );
-  }
-
+  Map<String, dynamic> toMap() => {'value': value, 'checked': checked};
+  factory GearStatus.fromMap(Map<String, dynamic> map) => GearStatus(
+    value: map['value']?.toString() ?? '',
+    checked: map['checked'] is bool ? map['checked'] : false,
+  );
   GearStatus copy() => GearStatus(value: value, checked: checked);
 }
 
@@ -25,29 +16,17 @@ class MemberEquipment {
   int order;
   Map<String, GearStatus> gears;
 
-  MemberEquipment({
-    required this.id,
-    required this.name,
-    required this.order,
-    required this.gears,
-  });
+  MemberEquipment({required this.id, required this.name, required this.order, required this.gears});
 
   Map<String, dynamic> toMap() {
-    Map<String, dynamic> map = {
-      'id': id,
-      '이름': name,
-      'order': order,
-    };
-    gears.forEach((key, gear) {
-      map[key] = gear.toMap();
-    });
+    Map<String, dynamic> map = {'id': id, '이름': name, 'order': order};
+    gears.forEach((key, gear) => map[key] = gear.toMap());
     return map;
   }
 
   factory MemberEquipment.fromMap(String id, Map<String, dynamic> map) {
     const gearNames = ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'];
     Map<String, GearStatus> gearsMap = {};
-
     for (var name in gearNames) {
       if (map[name] != null && map[name] is Map) {
         gearsMap[name] = GearStatus.fromMap(Map<String, dynamic>.from(map[name]));
@@ -55,195 +34,69 @@ class MemberEquipment {
         gearsMap[name] = GearStatus();
       }
     }
-
-    return MemberEquipment(
-      id: id,
-      name: map['이름']?.toString() ?? '',
-      order: map['order'] is int ? map['order'] : 0,
-      gears: gearsMap,
-    );
+    return MemberEquipment(id: id, name: map['이름']?.toString() ?? '', order: map['order'] is int ? map['order'] : 0, gears: gearsMap);
   }
 
-  MemberEquipment copy() {
-    return MemberEquipment(
-      id: id,
-      name: name,
-      order: order,
-      gears: gears.map((key, value) => MapEntry(key, value.copy())),
-    );
-  }
+  MemberEquipment copy() => MemberEquipment(id: id, name: name, order: order, gears: gears.map((key, value) => MapEntry(key, value.copy())));
+}
+
+// 💡 BCD 독립 모델
+class BcdItem {
+  String id; // BCD 번호 (Key)
+  String name;
+  String memo;
+  BcdItem({required this.id, required this.name, required this.memo});
+  Map<String, dynamic> toMap() => {'name': name, 'memo': memo};
+  factory BcdItem.fromMap(String id, Map<String, dynamic> map) => BcdItem(id: id, name: map['name'] ?? '', memo: map['memo'] ?? '');
+}
+
+// 💡 호흡기 독립 모델
+class RegulatorItem {
+  String id; // 호흡기 번호 (Key)
+  String name;
+  String memo;
+  RegulatorItem({required this.id, required this.name, required this.memo});
+  Map<String, dynamic> toMap() => {'name': name, 'memo': memo};
+  factory RegulatorItem.fromMap(String id, Map<String, dynamic> map) => RegulatorItem(id: id, name: map['name'] ?? '', memo: map['memo'] ?? '');
 }
 
 class MealPlan {
-  String id;
-  String breakfast;
-  String lunch;
-  String dinner;
-  String snack;
-
-  MealPlan({
-    required this.id,
-    this.breakfast = '',
-    this.lunch = '',
-    this.dinner = '',
-    this.snack = '',
-  });
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'breakfast': breakfast,
-    'lunch': lunch,
-    'dinner': dinner,
-    'snack': snack,
-  };
-
-  factory MealPlan.fromMap(String id, Map<String, dynamic> map) {
-    return MealPlan(
-      id: id,
-      breakfast: map['breakfast']?.toString() ?? '',
-      lunch: map['lunch']?.toString() ?? '',
-      dinner: map['dinner']?.toString() ?? '',
-      snack: map['snack']?.toString() ?? '',
-    );
-  }
-
-  MealPlan copy() => MealPlan(
-    id: id,
-    breakfast: breakfast,
-    lunch: lunch,
-    dinner: dinner,
-    snack: snack,
-  );
+  String id; String breakfast; String lunch; String dinner; String snack;
+  MealPlan({required this.id, this.breakfast = '', this.lunch = '', this.dinner = '', this.snack = ''});
+  Map<String, dynamic> toMap() => {'id': id, 'breakfast': breakfast, 'lunch': lunch, 'dinner': dinner, 'snack': snack};
+  factory MealPlan.fromMap(String id, Map<String, dynamic> map) => MealPlan(id: id, breakfast: map['breakfast'] ?? '', lunch: map['lunch'] ?? '', dinner: map['dinner'] ?? '', snack: map['snack'] ?? '');
 }
 
 class ScheduleItem {
-  String time;
-  String description;
-
+  String time; String description;
   ScheduleItem({required this.time, required this.description});
-
   Map<String, dynamic> toMap() => {'time': time, 'description': description};
-
-  factory ScheduleItem.fromMap(Map<String, dynamic> map) {
-    return ScheduleItem(
-      time: map['time']?.toString() ?? '',
-      description: map['description']?.toString() ?? '',
-    );
-  }
+  factory ScheduleItem.fromMap(Map<String, dynamic> map) => ScheduleItem(time: map['time'] ?? '', description: map['description'] ?? '');
 }
 
 class DailySchedule {
-  String id;
-  List<ScheduleItem> items;
-
+  String id; List<ScheduleItem> items;
   DailySchedule({required this.id, required this.items});
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'items': items.map((i) => i.toMap()).toList(),
-  };
-
   factory DailySchedule.fromMap(String id, Map<String, dynamic> map) {
     var list = map['items'] as List? ?? [];
-    return DailySchedule(
-      id: id,
-      items: list.map((i) => ScheduleItem.fromMap(Map<String, dynamic>.from(i))).toList(),
-    );
+    return DailySchedule(id: id, items: list.map((i) => ScheduleItem.fromMap(Map<String, dynamic>.from(i))).toList());
   }
 }
 
 class NoticeItem {
-  String id;
-  String title;
-  String content;
-  DateTime timestamp;
-
-  NoticeItem({
-    required this.id,
-    required this.title,
-    required this.content,
-    required this.timestamp,
-  });
-
-  Map<String, dynamic> toMap() => {
-    'title': title,
-    'content': content,
-    'timestamp': timestamp.toIso8601String(),
-  };
-
-  factory NoticeItem.fromMap(String id, Map<String, dynamic> map) {
-    return NoticeItem(
-      id: id,
-      title: map['title']?.toString() ?? '',
-      content: map['content']?.toString() ?? '',
-      timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
-    );
-  }
+  String id; String title; String content; DateTime timestamp;
+  NoticeItem({required this.id, required this.title, required this.content, required this.timestamp});
+  factory NoticeItem.fromMap(String id, Map<String, dynamic> map) => NoticeItem(id: id, title: map['title'] ?? '', content: map['content'] ?? '', timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()));
 }
 
-// 💡 QnA 답변 모델
 class QnaReply {
-  String id;
-  String author;
-  String content;
-  DateTime timestamp;
-
-  QnaReply({
-    required this.id,
-    required this.author,
-    required this.content,
-    required this.timestamp,
-  });
-
-  Map<String, dynamic> toMap() => {
-    'author': author,
-    'content': content,
-    'timestamp': timestamp.toIso8601String(),
-  };
-
-  factory QnaReply.fromMap(String id, Map<String, dynamic> map) {
-    return QnaReply(
-      id: id,
-      author: map['author']?.toString() ?? '익명',
-      content: map['content']?.toString() ?? '',
-      timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
-    );
-  }
+  String id; String author; String content; DateTime timestamp;
+  QnaReply({required this.id, required this.author, required this.content, required this.timestamp});
+  factory QnaReply.fromMap(String id, Map<String, dynamic> map) => QnaReply(id: id, author: map['author'] ?? '익명', content: map['content'] ?? '', timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()));
 }
 
-// 💡 QnA 게시글 모델
 class QnaPost {
-  String id;
-  String title;
-  String content;
-  String author;
-  DateTime timestamp;
-  List<QnaReply> replies;
-
-  QnaPost({
-    required this.id,
-    required this.title,
-    required this.content,
-    required this.author,
-    required this.timestamp,
-    this.replies = const [],
-  });
-
-  Map<String, dynamic> toMap() => {
-    'title': title,
-    'content': content,
-    'author': author,
-    'timestamp': timestamp.toIso8601String(),
-  };
-
-  factory QnaPost.fromMap(String id, Map<String, dynamic> map, {List<QnaReply> replies = const []}) {
-    return QnaPost(
-      id: id,
-      title: map['title']?.toString() ?? '',
-      content: map['content']?.toString() ?? '',
-      author: map['author']?.toString() ?? '익명',
-      timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
-      replies: replies,
-    );
-  }
+  String id; String title; String content; String author; DateTime timestamp; List<QnaReply> replies;
+  QnaPost({required this.id, required this.title, required this.content, required this.author, required this.timestamp, this.replies = const []});
+  factory QnaPost.fromMap(String id, Map<String, dynamic> map, {List<QnaReply> replies = const []}) => QnaPost(id: id, title: map['title'] ?? '', content: map['content'] ?? '', author: map['author'] ?? '익명', timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()), replies: replies);
 }

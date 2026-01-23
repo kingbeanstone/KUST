@@ -10,7 +10,7 @@ import '../models/equipment_model.dart';
 class EquipmentProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // 💡 [필독] Firebase 콘솔 -> 프로젝트 설정 -> 서비스 계정에서 생성한 JSON 내용
+  // 💡 Firebase 서비스 계정 JSON (보안상 실제 키 관리에 유의하세요)
   final Map<String, dynamic> _serviceAccountJson = {
     "type": "service_account",
     "project_id": "kust-88683",
@@ -20,9 +20,6 @@ class EquipmentProvider with ChangeNotifier {
     "client_id": "106582988868650414164",
     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
     "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40kust-88683.iam.gserviceaccount.com",
-    "universe_domain": "googleapis.com"
   };
 
   final _scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
@@ -36,34 +33,38 @@ class EquipmentProvider with ChangeNotifier {
   List<MemberEquipment> _data = [];
   List<MemberEquipment> get data => _data;
 
-  List<MealPlan> _meals = [];
-  List<MealPlan> get meals => _meals;
-
-  List<DailySchedule> _schedules = [];
-  List<DailySchedule> get schedules => _schedules;
-
   List<NoticeItem> _notices = [];
   List<NoticeItem> get notices => _notices;
 
   List<QnaPost> _qnaPosts = [];
   List<QnaPost> get qnaPosts => _qnaPosts;
 
+  List<BcdItem> _bcds = [];
+  List<BcdItem> get bcds => _bcds;
+
+  List<RegulatorItem> _regulators = [];
+  List<RegulatorItem> get regulators => _regulators;
+
+  List<MealPlan> _meals = [];
+  List<MealPlan> get meals => _meals;
+
+  List<DailySchedule> _schedules = [];
+  List<DailySchedule> get schedules => _schedules;
+
   EquipmentProvider() {
     _initProvider();
   }
 
-  // 💡 초기화 시 로컬 저장소에서 설정 불러오기 및 리스너 등록
   Future<void> _initProvider() async {
     await _loadPreferences();
     _listenToMembers();
-    _listenToMeals();
-    _listenToSchedules();
     _listenToNotices();
     _listenToQna();
+    _listenToInventory();
+    _listenToMeals();
+    _listenToSchedules();
     _subscribeToNotices();
   }
-
-  // --- 설정 로드/저장 로직 (SharedPreferences) ---
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
@@ -71,7 +72,7 @@ class EquipmentProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- 관리자 인증 및 세션 로직 ---
+  // --- 관리자 인증 로직 (Async) ---
 
   Future<bool> authenticate(String password, {bool remember = false}) async {
     if (password == "779") {
@@ -99,7 +100,65 @@ class EquipmentProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- QnA 관련 로직 (게시글 및 댓글 관리) ---
+  // --- 인벤토리(BCD, 호흡기) 관련 로직 ---
+
+  void _listenToInventory() {
+    _db.collection('bcds').snapshots().listen((snapshot) {
+      _bcds = snapshot.docs.map((doc) => BcdItem.fromMap(doc.id, doc.data())).toList();
+      _bcds.sort((a, b) => int.tryParse(a.id)?.compareTo(int.tryParse(b.id) ?? 0) ?? a.id.compareTo(b.id));
+      notifyListeners();
+    });
+
+    _db.collection('regulators').snapshots().listen((snapshot) {
+      _regulators = snapshot.docs.map((doc) => RegulatorItem.fromMap(doc.id, doc.data())).toList();
+      _regulators.sort((a, b) => int.tryParse(a.id)?.compareTo(int.tryParse(b.id) ?? 0) ?? a.id.compareTo(b.id));
+      notifyListeners();
+    });
+  }
+
+  Future<void> addBcd(String id, String name, String memo) async {
+    await _db.collection('bcds').doc(id).set({'name': name, 'memo': memo});
+  }
+
+  Future<void> updateBcd(String id, String name, String memo) async {
+    await _db.collection('bcds').doc(id).update({'name': name, 'memo': memo});
+  }
+
+  Future<void> deleteBcd(String id) async {
+    if (!_isAdmin) return;
+    await _db.collection('bcds').doc(id).delete();
+  }
+
+  Future<void> addRegulator(String id, String name, String memo) async {
+    await _db.collection('regulators').doc(id).set({'name': name, 'memo': memo});
+  }
+
+  Future<void> updateRegulator(String id, String name, String memo) async {
+    await _db.collection('regulators').doc(id).update({'name': name, 'memo': memo});
+  }
+
+  Future<void> deleteRegulator(String id) async {
+    if (!_isAdmin) return;
+    await _db.collection('regulators').doc(id).delete();
+  }
+
+  // --- 기존 리스너 및 데이터 동기화 ---
+
+  void _listenToMembers() {
+    _db.collection('members').snapshots().listen((snapshot) {
+      _data = snapshot.docs.map((doc) => MemberEquipment.fromMap(doc.id, doc.data())).toList();
+      _data.sort((a, b) => a.order.compareTo(b.order));
+      notifyListeners();
+    });
+  }
+
+  void _listenToNotices() {
+    _db.collection('notices').snapshots().listen((snapshot) {
+      _notices = snapshot.docs.map((doc) => NoticeItem.fromMap(doc.id, doc.data())).toList();
+      _notices.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      notifyListeners();
+    });
+  }
 
   void _listenToQna() {
     _db.collection('qna').snapshots().listen((snapshot) async {
@@ -111,99 +170,6 @@ class EquipmentProvider with ChangeNotifier {
       }
       _qnaPosts = posts;
       _qnaPosts.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      notifyListeners();
-    });
-  }
-
-  Future<void> addQnaPost(String title, String content, String author) async {
-    await _db.collection('qna').add({
-      'title': title,
-      'content': content,
-      'author': author,
-      'timestamp': DateTime.now().toIso8601String(),
-      'lastReplyAt': DateTime.now().toIso8601String(),
-    });
-  }
-
-  Future<void> addQnaReply(String postId, String content, String author) async {
-    await _db.collection('qna').doc(postId).collection('replies').add({
-      'content': content,
-      'author': author,
-      'timestamp': DateTime.now().toIso8601String(),
-    });
-
-    await _db.collection('qna').doc(postId).update({
-      'lastReplyAt': DateTime.now().toIso8601String(),
-    });
-  }
-
-  Future<void> deleteQnaPost(String postId) async {
-    if (!_isAdmin) return;
-    await _db.collection('qna').doc(postId).delete();
-  }
-
-  Future<void> deleteQnaReply(String postId, String replyId) async {
-    if (!_isAdmin) return;
-    await _db.collection('qna').doc(postId).collection('replies').doc(replyId).delete();
-
-    await _db.collection('qna').doc(postId).update({
-      'lastReplyAt': DateTime.now().toIso8601String(),
-    });
-  }
-
-  // --- 푸시 알림 로직 (HTTP v1) ---
-
-  Future<String> _getAccessToken() async {
-    final accountCredentials = auth.ServiceAccountCredentials.fromJson(_serviceAccountJson);
-    final client = await auth.clientViaServiceAccount(accountCredentials, _scopes);
-    final accessCredentials = await auth.obtainAccessCredentialsViaServiceAccount(
-      accountCredentials,
-      _scopes,
-      client,
-    );
-    client.close();
-    return accessCredentials.accessToken.data;
-  }
-
-  Future<void> sendNoticePush(NoticeItem notice) async {
-    if (!_isAdmin) return;
-    try {
-      final String accessToken = await _getAccessToken();
-      final String projectId = _serviceAccountJson['project_id'];
-      final String url = 'https://fcm.googleapis.com/v1/projects/$projectId/messages:send';
-
-      await http.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken',
-        },
-        body: jsonEncode({
-          'message': {
-            'topic': 'notices',
-            'notification': {
-              'title': '[KUST 공지] ${notice.title}',
-              'body': notice.content.length > 50
-                  ? '${notice.content.substring(0, 50)}...'
-                  : notice.content,
-            },
-            'android': { 'priority': 'high', 'notification': { 'sound': 'default' } },
-            'apns': { 'payload': { 'aps': { 'sound': 'default' } } },
-            'data': { 'noticeId': notice.id },
-          }
-        }),
-      );
-    } catch (e) {
-      debugPrint("알림 전송 에러: $e");
-    }
-  }
-
-  // --- Firestore 리스너 ---
-
-  void _listenToMembers() {
-    _db.collection('members').snapshots().listen((snapshot) {
-      _data = snapshot.docs.map((doc) => MemberEquipment.fromMap(doc.id, doc.data())).toList();
-      _data.sort((a, b) => a.order.compareTo(b.order));
       notifyListeners();
     });
   }
@@ -222,40 +188,15 @@ class EquipmentProvider with ChangeNotifier {
     });
   }
 
-  void _listenToNotices() {
-    _db.collection('notices').snapshots().listen((snapshot) {
-      _notices = snapshot.docs.map((doc) => NoticeItem.fromMap(doc.id, doc.data())).toList();
-      _notices.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      notifyListeners();
-    });
-  }
-
   Future<void> _subscribeToNotices() async {
     try {
       await FirebaseMessaging.instance.subscribeToTopic('notices');
     } catch (e) {
-      debugPrint("토픽 구독 에러: $e");
+      debugPrint("FCM 토픽 구독 실패: $e");
     }
   }
 
-  // --- 데이터 CRUD 메서드 ---
-
-  Future<void> addNotice(String title, String content) async {
-    if (!_isAdmin) return;
-    await _db.collection('notices').add({
-      'title': title, 'content': content, 'timestamp': DateTime.now().toIso8601String()
-    });
-  }
-
-  Future<void> updateNotice(String id, String title, String content) async {
-    if (!_isAdmin) return;
-    await _db.collection('notices').doc(id).update({'title': title, 'content': content});
-  }
-
-  Future<void> deleteNotice(String id) async {
-    if (!_isAdmin) return;
-    await _db.collection('notices').doc(id).delete();
-  }
+  // --- CRUD 작업 (전체 기능 포함) ---
 
   Future<void> saveBulkChanges(List<MemberEquipment> updatedList) async {
     if (!_isAdmin) return;
@@ -266,11 +207,17 @@ class EquipmentProvider with ChangeNotifier {
     await batch.commit();
   }
 
-  Future<void> toggleCheck(String id, String field) async {
+  Future<void> addRow() async {
     if (!_isAdmin) return;
-    final member = _data.firstWhere((m) => m.id == id);
-    final bool currentStatus = member.gears[field]?.checked ?? false;
-    await _db.collection('members').doc(id).set({ field: { 'checked': !currentStatus } }, SetOptions(merge: true));
+    final String id = DateTime.now().millisecondsSinceEpoch.toString();
+    int nextOrder = _data.isEmpty ? 0 : _data.last.order + 1;
+    final newRow = MemberEquipment(
+      id: id,
+      name: '',
+      order: nextOrder,
+      gears: {for (var k in ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타']) k: GearStatus()},
+    );
+    await _db.collection('members').doc(id).set(newRow.toMap());
   }
 
   Future<void> deleteMember(String id) async {
@@ -278,15 +225,11 @@ class EquipmentProvider with ChangeNotifier {
     await _db.collection('members').doc(id).delete();
   }
 
-  Future<void> addRow() async {
+  Future<void> toggleCheck(String id, String field) async {
     if (!_isAdmin) return;
-    final String id = DateTime.now().millisecondsSinceEpoch.toString();
-    int nextOrder = _data.isEmpty ? 0 : _data.last.order + 1;
-    final newRow = MemberEquipment(
-      id: id, name: '', order: nextOrder,
-      gears: { for (var k in ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타']) k: GearStatus() },
-    );
-    await _db.collection('members').doc(id).set(newRow.toMap());
+    final member = _data.firstWhere((m) => m.id == id);
+    final bool currentStatus = member.gears[field]?.checked ?? false;
+    await _db.collection('members').doc(id).set({field: {'checked': !currentStatus}}, SetOptions(merge: true));
   }
 
   Future<void> resetAllChecks() async {
@@ -294,7 +237,9 @@ class EquipmentProvider with ChangeNotifier {
     final batch = _db.batch();
     for (var member in _data) {
       Map<String, dynamic> resetGears = {};
-      member.gears.forEach((key, gear) { resetGears[key] = {'value': gear.value, 'checked': false}; });
+      member.gears.forEach((key, gear) {
+        resetGears[key] = {'value': gear.value, 'checked': false};
+      });
       batch.set(_db.collection('members').doc(member.id), resetGears, SetOptions(merge: true));
     }
     await batch.commit();
@@ -334,5 +279,82 @@ class EquipmentProvider with ChangeNotifier {
     List items = List.from(doc.data()?['items'] as List);
     items.removeAt(index);
     await docRef.update({'items': items});
+  }
+
+  Future<void> addNotice(String title, String content) async {
+    if (!_isAdmin) return;
+    await _db.collection('notices').add({'title': title, 'content': content, 'timestamp': DateTime.now().toIso8601String()});
+  }
+
+  Future<void> updateNotice(String id, String title, String content) async {
+    if (!_isAdmin) return;
+    await _db.collection('notices').doc(id).update({'title': title, 'content': content});
+  }
+
+  Future<void> deleteNotice(String id) async {
+    if (!_isAdmin) return;
+    await _db.collection('notices').doc(id).delete();
+  }
+
+  Future<void> addQnaPost(String title, String content, String author) async {
+    await _db.collection('qna').add({
+      'title': title,
+      'content': content,
+      'author': author,
+      'timestamp': DateTime.now().toIso8601String(),
+      'lastReplyAt': DateTime.now().toIso8601String()
+    });
+  }
+
+  Future<void> addQnaReply(String postId, String content, String author) async {
+    await _db.collection('qna').doc(postId).collection('replies').add({
+      'content': content,
+      'author': author,
+      'timestamp': DateTime.now().toIso8601String()
+    });
+    await _db.collection('qna').doc(postId).update({'lastReplyAt': DateTime.now().toIso8601String()});
+  }
+
+  Future<void> deleteQnaPost(String postId) async {
+    if (!_isAdmin) return;
+    await _db.collection('qna').doc(postId).delete();
+  }
+
+  Future<void> deleteQnaReply(String postId, String replyId) async {
+    if (!_isAdmin) return;
+    await _db.collection('qna').doc(postId).collection('replies').doc(replyId).delete();
+    await _db.collection('qna').doc(postId).update({'lastReplyAt': DateTime.now().toIso8601String()});
+  }
+
+  // --- 푸시 알림 발송 ---
+
+  Future<void> sendNoticePush(NoticeItem notice) async {
+    if (!_isAdmin) return;
+    try {
+      final accountCredentials = auth.ServiceAccountCredentials.fromJson(_serviceAccountJson);
+      final client = await auth.clientViaServiceAccount(accountCredentials, _scopes);
+      final accessCredentials = await auth.obtainAccessCredentialsViaServiceAccount(accountCredentials, _scopes, client);
+      final accessToken = accessCredentials.accessToken.data;
+      client.close();
+
+      await http.post(
+        Uri.parse('https://fcm.googleapis.com/v1/projects/${_serviceAccountJson['project_id']}/messages:send'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $accessToken',
+        },
+        body: jsonEncode({
+          'message': {
+            'topic': 'notices',
+            'notification': {
+              'title': '[KUST 공지] ${notice.title}',
+              'body': notice.content.length > 50 ? '${notice.content.substring(0, 50)}...' : notice.content
+            }
+          }
+        }),
+      );
+    } catch (e) {
+      debugPrint("푸시 알림 전송 에러: $e");
+    }
   }
 }
