@@ -51,6 +51,13 @@ class EquipmentProvider with ChangeNotifier {
   List<DailySchedule> _schedules = [];
   List<DailySchedule> get schedules => _schedules;
 
+  List<ExecutiveItem> _executives = [];
+  List<ExecutiveItem> get executives => _executives;
+
+  // 💡 공용 장비(슈트, 마스크 등) 리스트 추가
+  List<GeneralGearItem> _generalGears = [];
+  List<GeneralGearItem> get generalGears => _generalGears;
+
   EquipmentProvider() {
     _initProvider();
   }
@@ -63,6 +70,8 @@ class EquipmentProvider with ChangeNotifier {
     _listenToInventory();
     _listenToMeals();
     _listenToSchedules();
+    _listenToExecutives();
+    _listenToGeneralGears(); // 💡 공용 장비 리스너 초기화
     _subscribeToNotices();
   }
 
@@ -72,7 +81,7 @@ class EquipmentProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- 관리자 인증 로직 (Async) ---
+  // --- 관리자 인증 로직 ---
 
   Future<bool> authenticate(String password, {bool remember = false}) async {
     if (password == "779") {
@@ -98,6 +107,75 @@ class EquipmentProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('isPasswordSaved');
     notifyListeners();
+  }
+
+  // --- 공용 장비(슈트, 마스크 등) 관련 로직 ---
+
+  void _listenToGeneralGears() {
+    _db.collection('general_gears').snapshots().listen((snapshot) {
+      _generalGears = snapshot.docs.map((doc) => GeneralGearItem.fromMap(doc.id, doc.data())).toList();
+      notifyListeners();
+    });
+  }
+
+  Future<void> updateGeneralGearCount(String gearId, int delta) async {
+    if (!_isAdmin) return;
+    final docRef = _db.collection('general_gears').doc(gearId);
+    final doc = await docRef.get();
+    if (doc.exists) {
+      int current = doc.data()?['count'] ?? 0;
+      await docRef.update({'count': (current + delta) < 0 ? 0 : (current + delta)});
+    } else {
+      await docRef.set({'count': delta < 0 ? 0 : delta, 'memos': []});
+    }
+  }
+
+  Future<void> addGeneralGearMemo(String gearId, String memo) async {
+    if (!_isAdmin) return;
+    final docRef = _db.collection('general_gears').doc(gearId);
+    final doc = await docRef.get();
+    if (doc.exists) {
+      await docRef.update({'memos': FieldValue.arrayUnion([memo])});
+    } else {
+      await docRef.set({'count': 0, 'memos': [memo]});
+    }
+  }
+
+  Future<void> deleteGeneralGearMemo(String gearId, int index) async {
+    if (!_isAdmin) return;
+    final docRef = _db.collection('general_gears').doc(gearId);
+    final doc = await docRef.get();
+    if (doc.exists) {
+      List<String> memos = List<String>.from(doc.data()?['memos'] ?? []);
+      if (index >= 0 && index < memos.length) {
+        memos.removeAt(index);
+        await docRef.update({'memos': memos});
+      }
+    }
+  }
+
+  // --- 임원단 관련 로직 ---
+
+  void _listenToExecutives() {
+    _db.collection('executives').snapshots().listen((snapshot) {
+      _executives = snapshot.docs.map((doc) => ExecutiveItem.fromMap(doc.id, doc.data())).toList();
+      notifyListeners();
+    });
+  }
+
+  Future<void> addExecutive(ExecutiveItem item) async {
+    if (!_isAdmin) return;
+    await _db.collection('executives').add(item.toMap());
+  }
+
+  Future<void> updateExecutive(ExecutiveItem item) async {
+    if (!_isAdmin) return;
+    await _db.collection('executives').doc(item.id).update(item.toMap());
+  }
+
+  Future<void> deleteExecutive(String id) async {
+    if (!_isAdmin) return;
+    await _db.collection('executives').doc(id).delete();
   }
 
   // --- 인벤토리(BCD, 호흡기) 관련 로직 ---
