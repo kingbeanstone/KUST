@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
+import '../models/equipment_model.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -10,12 +11,11 @@ class MoreScreen extends StatefulWidget {
 }
 
 class _MoreScreenState extends State<MoreScreen> {
-  bool _rememberMe = false; // 체크박스 상태 관리를 위한 변수
+  bool _rememberMe = false;
 
   void _showAdminAuthDialog(BuildContext context, EquipmentProvider provider) async {
-    // 💡 비밀번호가 기억되어 있는 경우 즉시 인증 수행
     if (provider.isPasswordSaved) {
-      await provider.authenticate("779"); // 저장된 비밀번호로 자동 인증 (await 추가)
+      await provider.authenticate("779");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('저장된 정보로 자동 인증되었습니다.')),
@@ -75,8 +75,8 @@ class _MoreScreenState extends State<MoreScreen> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
               TextButton(
-                onPressed: () async { // 💡 async 추가
-                  final success = await provider.authenticate(_pwdController.text, remember: _rememberMe); // 💡 await 추가
+                onPressed: () async {
+                  final success = await provider.authenticate(_pwdController.text, remember: _rememberMe);
                   if (!mounted) return;
                   Navigator.pop(context);
                   if (success) {
@@ -98,6 +98,106 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
+  // 💡 임원단 추가/수정 다이얼로그 (한 줄 소개 추가)
+  void _showExecutiveDialog(BuildContext context, EquipmentProvider provider, {ExecutiveItem? existing}) {
+    final bool isEdit = existing != null;
+    final nameController = TextEditingController(text: existing?.name ?? "");
+    final genController = TextEditingController(text: existing?.generation ?? "");
+    final posController = TextEditingController(text: existing?.position ?? "");
+    final phoneController = TextEditingController(text: existing?.phone ?? "");
+    final introController = TextEditingController(text: existing?.intro ?? "");
+    String selectedGender = existing?.gender ?? "male";
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(isEdit ? '임원 정보 수정' : '새 임원 등록', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _genderOption(setDialogState, "male", "👦 남자", selectedGender == "male", (v) => selectedGender = v),
+                      const SizedBox(width: 20),
+                      _genderOption(setDialogState, "female", "👧 여자", selectedGender == "female", (v) => selectedGender = v),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(controller: nameController, decoration: const InputDecoration(labelText: '이름', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextField(controller: genController, decoration: const InputDecoration(labelText: '기수', hintText: '예: 25기', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextField(controller: posController, decoration: const InputDecoration(labelText: '직책', hintText: '예: 회장', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '전화번호', hintText: '010-0000-0000', border: OutlineInputBorder())),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: introController,
+                    maxLength: 30,
+                    decoration: const InputDecoration(labelText: '한 줄 소개', hintText: '간단한 각오나 소개를 입력하세요.', border: OutlineInputBorder()),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+              if (isEdit)
+                TextButton(
+                  onPressed: () {
+                    provider.deleteExecutive(existing.id);
+                    Navigator.pop(context);
+                  },
+                  child: const Text('삭제', style: TextStyle(color: Colors.red)),
+                ),
+              ElevatedButton(
+                onPressed: () {
+                  if (nameController.text.isEmpty) return;
+                  final item = ExecutiveItem(
+                    id: existing?.id ?? "",
+                    gender: selectedGender,
+                    name: nameController.text,
+                    generation: genController.text,
+                    position: posController.text,
+                    phone: phoneController.text,
+                    intro: introController.text,
+                  );
+                  if (isEdit) {
+                    provider.updateExecutive(item);
+                  } else {
+                    provider.addExecutive(item);
+                  }
+                  Navigator.pop(context);
+                },
+                child: const Text('저장'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _genderOption(StateSetter setDialogState, String value, String label, bool isSelected, Function(String) onSelect) {
+    return GestureDetector(
+      onTap: () {
+        setDialogState(() => onSelect(value));
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue[50] : Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? Colors.blue : Colors.transparent),
+        ),
+        child: Text(label, style: TextStyle(color: isSelected ? Colors.blue : Colors.black54, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<EquipmentProvider>(context);
@@ -111,6 +211,7 @@ class _MoreScreenState extends State<MoreScreen> {
       ),
       body: SingleChildScrollView(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 관리자 상태 카드
             Container(
@@ -172,10 +273,112 @@ class _MoreScreenState extends State<MoreScreen> {
                 ),
               ),
 
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Text('기타 설정 및 서비스 준비 중', style: TextStyle(color: Colors.grey, fontSize: 12)),
-            )
+            // 💡 임원단 소개 섹션
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('👥 임원단 소개', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  if (provider.isAdmin)
+                    IconButton(
+                      onPressed: () => _showExecutiveDialog(context, provider),
+                      icon: const Icon(Icons.person_add_alt_1, color: Colors.blue, size: 20),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                ],
+              ),
+            ),
+
+            if (provider.executives.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Center(child: Text('등록된 임원단이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13))),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: provider.executives.length,
+                itemBuilder: (context, index) {
+                  final ex = provider.executives[index];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(ex.gender == "male" ? "👦" : "👧", style: const TextStyle(fontSize: 24)),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                      const SizedBox(width: 6),
+                                      Text(ex.generation, style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(ex.position, style: const TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(ex.phone, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                                if (provider.isAdmin)
+                                  GestureDetector(
+                                    onTap: () => _showExecutiveDialog(context, provider, existing: ex),
+                                    child: const Padding(
+                                      padding: EdgeInsets.only(top: 4.0),
+                                      child: Text('수정', style: TextStyle(color: Colors.grey, fontSize: 11, decoration: TextDecoration.underline)),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        // 💡 한 줄 소개 표시
+                        if (ex.intro.isNotEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8.0),
+                            child: Divider(height: 1, thickness: 0.5),
+                          ),
+                          Row(
+                            children: [
+                              const Icon(Icons.format_quote, size: 14, color: Colors.grey),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  ex.intro,
+                                  style: const TextStyle(fontSize: 13, color: Colors.black54, fontStyle: FontStyle.italic),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+
+            const SizedBox(height: 40),
+            const Center(child: Text('기타 설정 및 서비스 준비 중', style: TextStyle(color: Colors.grey, fontSize: 11))),
+            const SizedBox(height: 20),
           ],
         ),
       ),

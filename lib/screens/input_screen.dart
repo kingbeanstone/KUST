@@ -18,6 +18,10 @@ class _InputScreenState extends State<InputScreen> {
 
   List<MemberEquipment> _localEditingData = [];
 
+  // 💡 정렬 상태 변수
+  String? _sortColumn; // 현재 정렬 기준 (null이면 기본 순서)
+  bool _isAscending = true;
+
   final ScrollController _headerHController = ScrollController();
   final ScrollController _bodyHController = ScrollController();
 
@@ -58,8 +62,31 @@ class _InputScreenState extends State<InputScreen> {
       _isEditMode = false;
       _isSortMode = false;
       _isDeleteMode = false;
+      _sortColumn = null;
       _selectedIds.clear();
       _localEditingData = [];
+    });
+  }
+
+  // 💡 정렬 버튼 클릭 로직
+  void _toggleSort(String colName) {
+    if (_isSortMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('순서 변경 중에는 정렬 필터를 사용할 수 없습니다.'), duration: Duration(seconds: 1)),
+      );
+      return;
+    }
+    setState(() {
+      if (_sortColumn == colName) {
+        if (_isAscending) {
+          _isAscending = false; // 오름차순 -> 내림차순
+        } else {
+          _sortColumn = null; // 내림차순 -> 정렬 해제
+        }
+      } else {
+        _sortColumn = colName;
+        _isAscending = true; // 새로운 컬럼 오름차순 시작
+      }
     });
   }
 
@@ -80,7 +107,28 @@ class _InputScreenState extends State<InputScreen> {
   Widget build(BuildContext context) {
     final provider = Provider.of<EquipmentProvider>(context);
     final gearKeys = ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'];
-    final displayData = _isEditMode ? _localEditingData : provider.data;
+
+    // 💡 정렬 로직 적용
+    List<MemberEquipment> baseData = _isEditMode ? _localEditingData : provider.data;
+    List<MemberEquipment> displayData = List.from(baseData);
+
+    if (_sortColumn != null && !_isSortMode) {
+      displayData.sort((a, b) {
+        dynamic aVal = _getSortValue(a, _sortColumn!);
+        dynamic bVal = _getSortValue(b, _sortColumn!);
+
+        int? aInt = int.tryParse(aVal.toString());
+        int? bInt = int.tryParse(bVal.toString());
+
+        int cmp;
+        if (aInt != null && bInt != null) {
+          cmp = aInt.compareTo(bInt);
+        } else {
+          cmp = aVal.toString().compareTo(bVal.toString());
+        }
+        return _isAscending ? cmp : -cmp;
+      });
+    }
 
     double fixedSectionWidth = noWidth + nameWidth + fixedBorderWidth;
     if (_isSortMode) fixedSectionWidth += sortColWidth;
@@ -96,6 +144,8 @@ class _InputScreenState extends State<InputScreen> {
       ),
       body: Column(
         children: [
+          // 💡 상단 정렬 버튼 바
+          _buildSortButtonBar(),
           _buildFullHeader(gearKeys, fixedSectionWidth),
           const Divider(height: 1, thickness: 1),
           Expanded(
@@ -134,7 +184,6 @@ class _InputScreenState extends State<InputScreen> {
                                 width: nameWidth,
                                 height: rowHeight,
                                 initialValue: member.name,
-                                // 💡 관리자 인증 여부 반영
                                 enabled: _isEditMode && provider.isAdmin,
                                 fontSize: 13,
                                 onUpdate: (v) => _updateLocalValue(member.id, '이름', v),
@@ -163,7 +212,6 @@ class _InputScreenState extends State<InputScreen> {
                                 width: colWidth,
                                 height: rowHeight,
                                 initialValue: member.gears[k]?.value ?? '',
-                                // 💡 관리자 인증 여부 반영
                                 enabled: _isEditMode && provider.isAdmin,
                                 fontSize: 11,
                                 onUpdate: (v) => _updateLocalValue(member.id, k, v),
@@ -184,6 +232,63 @@ class _InputScreenState extends State<InputScreen> {
     );
   }
 
+  dynamic _getSortValue(MemberEquipment m, String col) {
+    if (col == '이름') return m.name;
+    return m.gears[col]?.value ?? '';
+  }
+
+  // 💡 상단 정렬 버튼 위젯
+  Widget _buildSortButtonBar() {
+    final sortItems = ['이름', '가방', 'BCD', '호흡기'];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.sort, size: 16, color: Colors.blueGrey),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: sortItems.map((label) {
+                  bool isActive = _sortColumn == label;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(label),
+                      selected: isActive,
+                      onSelected: (_) => _toggleSort(label),
+                      selectedColor: Colors.blue[600],
+                      labelStyle: TextStyle(
+                        color: isActive ? Colors.white : Colors.black87,
+                        fontSize: 12,
+                        fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                      avatar: isActive ? Icon(_isAscending ? Icons.arrow_upward : Icons.arrow_downward, size: 12, color: Colors.white) : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          if (_sortColumn != null)
+            IconButton(
+              onPressed: () => setState(() => _sortColumn = null),
+              icon: const Icon(Icons.close, size: 16, color: Colors.red),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            )
+        ],
+      ),
+    );
+  }
+
   Widget _buildFullHeader(List<String> gearKeys, double fixedWidth) {
     return Container(
       height: headerHeight,
@@ -197,7 +302,7 @@ class _InputScreenState extends State<InputScreen> {
                 if (_isSortMode) _headerCell('정렬', sortColWidth),
                 if (_isDeleteMode) _headerCell('선택', deleteColWidth),
                 _headerCell('N', noWidth),
-                _headerCell('이름', nameWidth),
+                _headerCell('이름', nameWidth, onTap: () => _toggleSort('이름'), isSorted: _sortColumn == '이름'),
               ],
             ),
           ),
@@ -205,7 +310,16 @@ class _InputScreenState extends State<InputScreen> {
             child: SingleChildScrollView(
               controller: _headerHController,
               scrollDirection: Axis.horizontal,
-              child: Row(children: gearKeys.map((k) => _headerCell(k, colWidth)).toList()),
+              child: Row(
+                children: gearKeys.map((k) {
+                  bool canSort = (k == '가방' || k == 'BCD' || k == '호흡기');
+                  return _headerCell(
+                    k, colWidth,
+                    onTap: canSort ? () => _toggleSort(k) : null,
+                    isSorted: _sortColumn == k,
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ],
@@ -214,7 +328,6 @@ class _InputScreenState extends State<InputScreen> {
   }
 
   List<Widget> _buildAppBarActions(EquipmentProvider provider) {
-    // 💡 관리자가 아닐 경우 어떠한 액션 버튼도 보여주지 않음
     if (!provider.isAdmin) return [];
 
     if (_isDeleteMode) {
@@ -241,6 +354,17 @@ class _InputScreenState extends State<InputScreen> {
         ),
       ];
     }
+    if (_isSortMode) {
+      return [
+        TextButton(onPressed: _resetModes, child: const Text('정렬 취소', style: TextStyle(color: Colors.red))),
+        TextButton(
+          onPressed: () async {
+            _resetModes();
+          },
+          child: const Text('정렬 완료', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+        ),
+      ];
+    }
     return [
       TextButton(onPressed: () {
         setState(() {
@@ -248,16 +372,31 @@ class _InputScreenState extends State<InputScreen> {
           _localEditingData = provider.data.map((m) => m.copy()).toList();
         });
       }, child: const Text('수정', style: TextStyle(color: Colors.black54))),
-      TextButton(onPressed: () => setState(() => _isSortMode = true), child: const Text('정렬', style: TextStyle(color: Colors.black54))),
+      TextButton(onPressed: () => setState(() {
+        _isSortMode = true;
+        _sortColumn = null;
+      }), child: const Text('정렬', style: TextStyle(color: Colors.black54))),
       TextButton(onPressed: () => setState(() => _isDeleteMode = true), child: const Text('삭제', style: TextStyle(color: Colors.black54))),
       TextButton(onPressed: provider.addRow, child: const Text('추가', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold))),
     ];
   }
 
-  Widget _headerCell(String text, double width) => Container(
-    width: width, alignment: Alignment.center,
-    decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[300]!))),
-    child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black)),
+  Widget _headerCell(String text, double width, {VoidCallback? onTap, bool isSorted = false}) => InkWell(
+    onTap: onTap,
+    child: Container(
+      width: width, alignment: Alignment.center,
+      decoration: BoxDecoration(
+          color: isSorted ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+          border: Border(right: BorderSide(color: Colors.grey[300]!))
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isSorted ? Colors.blue[800] : Colors.black)),
+          if (isSorted) Icon(_isAscending ? Icons.arrow_drop_up : Icons.arrow_drop_down, size: 14, color: Colors.blue[800]),
+        ],
+      ),
+    ),
   );
 
   Widget _dataCell(Widget child, double width, {Color? color}) => Container(
@@ -313,7 +452,7 @@ class _EditableCell extends StatefulWidget {
   final Function(String) onUpdate;
   final bool isGear;
 
-  const _EditableCell({super.key, required this.width, required this.height, required this.initialValue, required this.enabled, required this.fontSize, required this.onUpdate, this.isGear = false});
+  const _EditableCell({required this.width, required this.height, required this.initialValue, required this.enabled, required this.fontSize, required this.onUpdate, this.isGear = false});
 
   @override
   State<_EditableCell> createState() => _EditableCellState();
