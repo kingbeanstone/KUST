@@ -13,6 +13,7 @@ class MoreScreen extends StatefulWidget {
 class _MoreScreenState extends State<MoreScreen> {
   bool _rememberMe = false;
 
+  // 관리자 인증 다이얼로그
   void _showAdminAuthDialog(BuildContext context, EquipmentProvider provider) async {
     if (provider.isPasswordSaved) {
       await provider.authenticate("779");
@@ -98,7 +99,74 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  // 💡 임원단 추가/수정 다이얼로그 (한 줄 소개 추가)
+  // 💡 앱 소개 상세 화면 (BottomSheet)
+  void _showAppIntro(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('KUST 앱 소개', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        'assets/images/best.png', // 첨부하신 이미지 경로
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          height: 200,
+                          color: Colors.grey[200],
+                          child: const Center(child: Icon(Icons.image_not_supported, color: Colors.grey)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      '안녕하세요! KUST 동계 원정 앱입니다.',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '본 애플리케이션은 경북대학교 스킨스쿠버 동아리 KUST 동계 원정에서 대원들의 원활한 장비 관리와 정보 공유를 위해 제작되었습니다.\n\n'
+                          '주요 기능:\n'
+                          '• 개인 및 공용 장비 실시간 현황 확인\n'
+                          '• 식단 및 원정 일정 공유\n'
+                          '• 관리자 알림 및 QnA 게시판\n\n'
+                          'KUST 대원 여러분의 안전하고 즐거운 다이빙을 응원합니다!',
+                      style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.6),
+                    ),
+                    const SizedBox(height: 30),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 임원단 추가/수정 다이얼로그
   void _showExecutiveDialog(BuildContext context, EquipmentProvider provider, {ExecutiveItem? existing}) {
     final bool isEdit = existing != null;
     final nameController = TextEditingController(text: existing?.name ?? "");
@@ -260,22 +328,9 @@ class _MoreScreenState extends State<MoreScreen> {
               ),
             ),
 
-            if (provider.isPasswordSaved && !provider.isAdmin)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () => provider.clearSavedPassword(),
-                    icon: const Icon(Icons.delete_sweep, size: 14, color: Colors.red),
-                    label: const Text('저장된 관리자 정보 삭제', style: TextStyle(color: Colors.red, fontSize: 12)),
-                  ),
-                ),
-              ),
-
-            // 💡 임원단 소개 섹션
+            // 임원단 소개 섹션
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -351,7 +406,6 @@ class _MoreScreenState extends State<MoreScreen> {
                             ),
                           ],
                         ),
-                        // 💡 한 줄 소개 표시
                         if (ex.intro.isNotEmpty) ...[
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -376,8 +430,28 @@ class _MoreScreenState extends State<MoreScreen> {
                 },
               ),
 
+            // 💡 앱 정보 섹션 (새로 추가됨)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+              child: Text('📱 앱 정보', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.info_outline, color: Colors.blue),
+                title: const Text('KUST 앱 소개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () => _showAppIntro(context),
+              ),
+            ),
+
             const SizedBox(height: 40),
-            const Center(child: Text('기타 설정 및 서비스 준비 중', style: TextStyle(color: Colors.grey, fontSize: 11))),
+            const Center(child: Text('버전 정보 v1.6.0', style: TextStyle(color: Colors.grey, fontSize: 11))),
             const SizedBox(height: 20),
           ],
         ),
