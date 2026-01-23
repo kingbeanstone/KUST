@@ -11,6 +11,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // 💡 Kotlin DSL 문법: 'is'가 반드시 붙어야 함
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -21,15 +23,10 @@ android {
 
     defaultConfig {
         applicationId = "com.example.kust"
-
-        // 💡 수정: flutter.minSdkVersion 대신 숫자 21을 직접 입력하세요.
-        // Firestore 라이브러리는 안드로이드 API 레벨 21 미만에서는 작동하지 않습니다.
         minSdk = flutter.minSdkVersion
-
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
         multiDexEnabled = true
     }
 
@@ -45,5 +42,5 @@ flutter {
 }
 
 dependencies {
-    // 플러터 패키지 관리 시스템이 필요한 의존성을 자동으로 주입합니다.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }

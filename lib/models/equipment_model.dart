@@ -75,11 +75,11 @@ class MemberEquipment {
 }
 
 class MealPlan {
-  String id;      // 날짜 ID (예: "1.29")
+  String id;
   String breakfast;
   String lunch;
   String dinner;
-  String snack;   // 💡 야식 항목 추가
+  String snack;
 
   MealPlan({
     required this.id,
@@ -114,4 +114,70 @@ class MealPlan {
     dinner: dinner,
     snack: snack,
   );
+}
+
+class ScheduleItem {
+  String time;
+  String description;
+
+  ScheduleItem({required this.time, required this.description});
+
+  Map<String, dynamic> toMap() => {'time': time, 'description': description};
+
+  factory ScheduleItem.fromMap(Map<String, dynamic> map) {
+    return ScheduleItem(
+      time: map['time']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
+    );
+  }
+}
+
+class DailySchedule {
+  String id;
+  List<ScheduleItem> items;
+
+  DailySchedule({required this.id, required this.items});
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'items': items.map((i) => i.toMap()).toList(),
+  };
+
+  factory DailySchedule.fromMap(String id, Map<String, dynamic> map) {
+    var list = map['items'] as List? ?? [];
+    return DailySchedule(
+      id: id,
+      items: list.map((i) => ScheduleItem.fromMap(Map<String, dynamic>.from(i))).toList(),
+    );
+  }
+}
+
+// 💡 공지사항 모델 추가
+class NoticeItem {
+  String id;
+  String title;
+  String content;
+  DateTime timestamp;
+
+  NoticeItem({
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.timestamp,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'content': content,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory NoticeItem.fromMap(String id, Map<String, dynamic> map) {
+    return NoticeItem(
+      id: id,
+      title: map['title']?.toString() ?? '',
+      content: map['content']?.toString() ?? '',
+      timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
+    );
+  }
 }
