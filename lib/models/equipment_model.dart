@@ -152,7 +152,6 @@ class DailySchedule {
   }
 }
 
-// 💡 공지사항 모델 추가
 class NoticeItem {
   String id;
   String title;
@@ -178,6 +177,73 @@ class NoticeItem {
       title: map['title']?.toString() ?? '',
       content: map['content']?.toString() ?? '',
       timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
+    );
+  }
+}
+
+// 💡 QnA 답변 모델
+class QnaReply {
+  String id;
+  String author;
+  String content;
+  DateTime timestamp;
+
+  QnaReply({
+    required this.id,
+    required this.author,
+    required this.content,
+    required this.timestamp,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'author': author,
+    'content': content,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory QnaReply.fromMap(String id, Map<String, dynamic> map) {
+    return QnaReply(
+      id: id,
+      author: map['author']?.toString() ?? '익명',
+      content: map['content']?.toString() ?? '',
+      timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
+    );
+  }
+}
+
+// 💡 QnA 게시글 모델
+class QnaPost {
+  String id;
+  String title;
+  String content;
+  String author;
+  DateTime timestamp;
+  List<QnaReply> replies;
+
+  QnaPost({
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.author,
+    required this.timestamp,
+    this.replies = const [],
+  });
+
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'content': content,
+    'author': author,
+    'timestamp': timestamp.toIso8601String(),
+  };
+
+  factory QnaPost.fromMap(String id, Map<String, dynamic> map, {List<QnaReply> replies = const []}) {
+    return QnaPost(
+      id: id,
+      title: map['title']?.toString() ?? '',
+      content: map['content']?.toString() ?? '',
+      author: map['author']?.toString() ?? '익명',
+      timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
+      replies: replies,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'providers/equipment_provider.dart';
 import 'screens/home_screen.dart';
@@ -9,10 +10,22 @@ import 'screens/notice_screen.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/more_screen.dart';
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   try {
     await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    // 권한 요청
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true, badge: true, sound: true,
+    );
   } catch (e) {
     debugPrint("Firebase 초기화 에러: $e");
   }
@@ -36,7 +49,7 @@ class KustApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
-        fontFamily: 'Pretendard', // 혹은 기본 폰트
+        fontFamily: 'Pretendard',
       ),
       home: const MainTabScreen(),
     );
@@ -54,12 +67,28 @@ class _MainTabScreenState extends State<MainTabScreen> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    const HomeScreen(),      // 홈 탭
-    const ScheduleScreen(),  // 일정 탭
-    const NoticeScreen(),    // 공지 탭
-    const MealPlanScreen(),  // 식단 탭
-    const MoreScreen(),      // 더보기 탭
+    const HomeScreen(),
+    const ScheduleScreen(),
+    const NoticeScreen(),
+    const MealPlanScreen(),
+    const MoreScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // 포그라운드 메시지 리스너
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.notification != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${message.notification!.title}: ${message.notification!.body}'),
+            backgroundColor: Colors.blue[800],
+          ),
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,8 +103,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
         selectedItemColor: Colors.blue[800],
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
-        selectedFontSize: 12,
-        unselectedFontSize: 12,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: '홈'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '일정'),

@@ -7,7 +7,6 @@ import '../models/equipment_model.dart';
 class NoticeScreen extends StatelessWidget {
   const NoticeScreen({super.key});
 
-  // 💡 공지사항 작성 및 수정을 통합한 다이얼로그
   void _showNoticeDialog(BuildContext context, EquipmentProvider provider, {NoticeItem? existingNotice}) {
     final bool isEdit = existingNotice != null;
     final titleController = TextEditingController(text: existingNotice?.title ?? "");
@@ -16,46 +15,28 @@ class NoticeScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        // 💡 다이얼로그의 전체 너비를 화면의 90% 정도로 고정
         insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-        title: Text(
-            isEdit ? '공지사항 수정' : '공지사항 작성',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-        ),
+        title: Text(isEdit ? '공지사항 수정' : '공지사항 작성', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         content: SizedBox(
-          // 💡 다이얼로그 내부 너비를 명시적으로 설정하여 크게 보이게 함
           width: MediaQuery.of(context).size.width * 0.9,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: titleController,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-                decoration: const InputDecoration(
-                  labelText: '제목',
-                  hintText: '공지 제목을 입력하세요',
-                  border: OutlineInputBorder(),
-                ),
+                decoration: const InputDecoration(labelText: '제목', border: OutlineInputBorder()),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: contentController,
-                maxLines: 8, // 💡 줄 수를 늘려 내용 칸을 더 크게 만듬
-                decoration: const InputDecoration(
-                  labelText: '내용',
-                  hintText: '대원들에게 전달할 상세 내용을 입력하세요',
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(),
-                ),
+                maxLines: 8,
+                decoration: const InputDecoration(labelText: '내용', border: OutlineInputBorder()),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('취소', style: TextStyle(color: Colors.grey))
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           ElevatedButton(
             onPressed: () {
               if (titleController.text.isNotEmpty && contentController.text.isNotEmpty) {
@@ -65,16 +46,36 @@ class NoticeScreen extends StatelessWidget {
                   provider.addNotice(titleController.text, contentController.text);
                 }
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(isEdit ? '공지사항이 수정되었습니다.' : '공지사항이 등록되었습니다.')),
-                );
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue[800],
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
             child: Text(isEdit ? '수정 완료' : '등록'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPushConfirmDialog(BuildContext context, EquipmentProvider provider, NoticeItem notice) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('푸시 알림 전송'),
+        content: Text("'${notice.title}' 공지를 모든 대원에게 알림으로 보낼까요?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await provider.sendNoticePush(notice);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('알림이 전송되었습니다.')));
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('전송 실패. 서버 키를 확인하세요.'), backgroundColor: Colors.red));
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
+            child: const Text('지금 전송'),
           ),
         ],
       ),
@@ -117,21 +118,9 @@ class NoticeScreen extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!)),
       child: ExpansionTile(
-        shape: const RoundedRectangleBorder(side: BorderSide.none),
-        leading: const CircleAvatar(
-          backgroundColor: Color(0xFFE3F2FD),
-          child: Icon(Icons.campaign, color: Colors.blue, size: 20),
-        ),
-        title: Text(
-          notice.title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-        ),
+        title: Text(notice.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text(dateStr, style: const TextStyle(fontSize: 11, color: Colors.grey)),
         children: [
           Padding(
@@ -140,27 +129,23 @@ class NoticeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(),
-                const SizedBox(height: 8),
-                Text(
-                  notice.content,
-                  style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
-                ),
+                Text(notice.content, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.5)),
                 if (provider.isAdmin)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // 💡 수정 버튼 추가
+                      TextButton.icon(
+                        onPressed: () => _showPushConfirmDialog(context, provider, notice),
+                        icon: const Icon(Icons.notifications_active_outlined, size: 16, color: Colors.orange),
+                        label: const Text('알림 전송', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                      ),
                       TextButton.icon(
                         onPressed: () => _showNoticeDialog(context, provider, existingNotice: notice),
                         icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.blue),
                         label: const Text('수정', style: TextStyle(color: Colors.blue, fontSize: 12)),
                       ),
-                      const SizedBox(width: 8),
-                      // 삭제 버튼
                       TextButton.icon(
-                        onPressed: () {
-                          _showDeleteConfirmDialog(context, provider, notice.id);
-                        },
+                        onPressed: () => _showDeleteConfirmDialog(context, provider, notice.id),
                         icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
                         label: const Text('삭제', style: TextStyle(color: Colors.red, fontSize: 12)),
                       ),
@@ -178,17 +163,10 @@ class NoticeScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('공지 삭제'),
-        content: const Text('이 공지사항을 정말로 삭제하시겠습니까?'),
+        title: const Text('공지 삭제'), content: const Text('정말로 삭제하시겠습니까?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-          TextButton(
-              onPressed: () {
-                provider.deleteNotice(id);
-                Navigator.pop(context);
-              },
-              child: const Text('삭제', style: TextStyle(color: Colors.red))
-          ),
+          TextButton(onPressed: () { provider.deleteNotice(id); Navigator.pop(context); }, child: const Text('삭제', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
