@@ -7,6 +7,7 @@ import '../models/equipment_model.dart';
 class NoticeScreen extends StatelessWidget {
   const NoticeScreen({super.key});
 
+  // --- 공지 작성/수정 다이얼로그 ---
   void _showNoticeDialog(BuildContext context, EquipmentProvider provider, {NoticeItem? existingNotice}) {
     final bool isEdit = existingNotice != null;
     final titleController = TextEditingController(text: existingNotice?.title ?? "");
@@ -16,7 +17,8 @@ class NoticeScreen extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         insetPadding: const EdgeInsets.symmetric(horizontal: 20),
-        title: Text(isEdit ? '공지사항 수정' : '공지사항 작성', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text(isEdit ? '공지사항 수정' : '공지사항 작성',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         content: SizedBox(
           width: MediaQuery.of(context).size.width * 0.9,
           child: Column(
@@ -56,22 +58,23 @@ class NoticeScreen extends StatelessWidget {
     );
   }
 
+  // --- 푸시 알림 전송 확인 다이얼로그 ---
   void _showPushConfirmDialog(BuildContext context, EquipmentProvider provider, NoticeItem notice) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('푸시 알림 전송'),
-        content: Text("'${notice.title}' 공지를 모든 대원에게 알림으로 보낼까요?"),
+        content: Text("'${notice.title}' 공지를 모든 대원에게 알림으로 보낼까요?\n(등록된 모든 기기에 직접 발송됩니다.)"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              try {
-                await provider.sendNoticePush(notice);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('알림이 전송되었습니다.')));
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('전송 실패. 서버 키를 확인하세요.'), backgroundColor: Colors.red));
+              await provider.sendNoticePush(notice);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('알림 전송 프로세스가 시작되었습니다. 디버그 로그를 확인하세요.')),
+                );
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
@@ -114,13 +117,37 @@ class NoticeScreen extends StatelessWidget {
   }
 
   Widget _buildNoticeCard(BuildContext context, EquipmentProvider provider, NoticeItem notice) {
-    final dateStr = DateFormat('yyyy.MM.dd HH:mm').format(notice.timestamp);
+    // 날짜 형식 변환 (문자열 -> DateTime -> String)
+    String dateStr;
+    try {
+      final dt = DateTime.parse(notice.timestamp);
+      dateStr = DateFormat('yyyy.MM.dd HH:mm').format(dt);
+    } catch (e) {
+      dateStr = notice.timestamp;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        // 💡 홈 화면 게시 중인 공지는 테두리 강조
+        border: Border.all(color: notice.isPinned ? Colors.blue[300]! : Colors.grey[200]!, width: notice.isPinned ? 2 : 1),
+        boxShadow: notice.isPinned ? [BoxShadow(color: Colors.blue.withOpacity(0.1), blurRadius: 8)] : null,
+      ),
       child: ExpansionTile(
-        title: Text(notice.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        shape: const RoundedRectangleBorder(side: BorderSide.none),
+        collapsedShape: const RoundedRectangleBorder(side: BorderSide.none),
+        title: Row(
+          children: [
+            if (notice.isPinned)
+              const Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.push_pin, size: 16, color: Colors.blue),
+              ),
+            Expanded(child: Text(notice.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14))),
+          ],
+        ),
         subtitle: Text(dateStr, style: const TextStyle(fontSize: 11, color: Colors.grey)),
         children: [
           Padding(
@@ -129,25 +156,43 @@ class NoticeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Divider(),
+                const SizedBox(height: 8),
                 Text(notice.content, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.5)),
+                const SizedBox(height: 16),
                 if (provider.isAdmin)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TextButton.icon(
+                      // 💡 홈 화면 게시(고정) 버튼
+                      _actionButton(
+                        onPressed: () => provider.pinNotice(notice.id),
+                        icon: notice.isPinned ? Icons.home : Icons.home_outlined,
+                        label: notice.isPinned ? '홈 게시 중' : '홈 게시',
+                        color: notice.isPinned ? Colors.blue : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      // 푸시 알림 전송 버튼
+                      _actionButton(
                         onPressed: () => _showPushConfirmDialog(context, provider, notice),
-                        icon: const Icon(Icons.notifications_active_outlined, size: 16, color: Colors.orange),
-                        label: const Text('알림 전송', style: TextStyle(color: Colors.orange, fontSize: 12)),
+                        icon: Icons.notifications_active_outlined,
+                        label: '알림',
+                        color: Colors.orange,
                       ),
-                      TextButton.icon(
+                      const SizedBox(width: 8),
+                      // 수정 버튼
+                      _actionButton(
                         onPressed: () => _showNoticeDialog(context, provider, existingNotice: notice),
-                        icon: const Icon(Icons.edit_outlined, size: 16, color: Colors.blue),
-                        label: const Text('수정', style: TextStyle(color: Colors.blue, fontSize: 12)),
+                        icon: Icons.edit_outlined,
+                        label: '수정',
+                        color: Colors.blueGrey,
                       ),
-                      TextButton.icon(
+                      const SizedBox(width: 8),
+                      // 삭제 버튼
+                      _actionButton(
                         onPressed: () => _showDeleteConfirmDialog(context, provider, notice.id),
-                        icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                        label: const Text('삭제', style: TextStyle(color: Colors.red, fontSize: 12)),
+                        icon: Icons.delete_outline,
+                        label: '삭제',
+                        color: Colors.redAccent,
                       ),
                     ],
                   ),
@@ -159,14 +204,35 @@ class NoticeScreen extends StatelessWidget {
     );
   }
 
+  // 버튼 스타일 공통 위젯
+  Widget _actionButton({required VoidCallback onPressed, required IconData icon, required String label, required Color color}) {
+    return InkWell(
+      onTap: onPressed,
+      child: Column(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
   void _showDeleteConfirmDialog(BuildContext context, EquipmentProvider provider, String id) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('공지 삭제'), content: const Text('정말로 삭제하시겠습니까?'),
+        title: const Text('공지 삭제'),
+        content: const Text('정말로 이 공지사항을 삭제하시겠습니까?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-          TextButton(onPressed: () { provider.deleteNotice(id); Navigator.pop(context); }, child: const Text('삭제', style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () {
+              provider.deleteNotice(id);
+              Navigator.pop(context);
+            },
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );

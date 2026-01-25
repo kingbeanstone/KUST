@@ -69,6 +69,11 @@ class EquipmentProvider with ChangeNotifier {
     _initProvider();
   }
 
+  NoticeItem? get homeNotice {
+    if (_notices.isEmpty) return null;
+    return _notices.firstWhere((n) => n.isPinned, orElse: () => _notices.first);
+  }
+
   Future<void> _initProvider() async {
     addLog("시스템 초기화...");
     await _loadPreferences();
@@ -84,6 +89,27 @@ class EquipmentProvider with ChangeNotifier {
     _listenToExecutives();
     _listenToGeneralGears();
     _subscribeToNotices();
+  }
+  Future<void> pinNotice(String id) async {
+    if (!_isAdmin) return;
+    try {
+      final batch = _db.batch();
+
+      // 1. 기존에 고정된 모든 공지의 고정 해제
+      for (var notice in _notices) {
+        if (notice.isPinned) {
+          batch.update(_db.collection('notices').doc(notice.id), {'isPinned': false});
+        }
+      }
+
+      // 2. 선택한 공지만 고정 설정
+      batch.update(_db.collection('notices').doc(id), {'isPinned': true});
+
+      await batch.commit();
+      addLog("홈 화면 공지 설정 완료");
+    } catch (e) {
+      addLog("공지 고정 에러: $e");
+    }
   }
 
   Future<void> _loadPreferences() async {

@@ -1,3 +1,6 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+
 class GearStatus {
   String value;
   bool checked;
@@ -148,14 +151,43 @@ class DailySchedule {
 
 // 💡 공지사항 모델
 class NoticeItem {
-  String id; String title; String content; DateTime timestamp;
-  NoticeItem({required this.id, required this.title, required this.content, required this.timestamp});
-  factory NoticeItem.fromMap(String id, Map<String, dynamic> map) => NoticeItem(
-    id: id,
-    title: map['title'] ?? '',
-    content: map['content'] ?? '',
-    timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
-  );
+  final String id;
+  final String title;
+  final String content;
+  final String timestamp;
+  final bool isPinned;
+  final List<String> imageUrls;
+
+  NoticeItem({
+    required this.id,
+    required this.title,
+    required this.content,
+    required this.timestamp,
+    this.isPinned = false, // 기본값 설정
+    this.imageUrls = const [],
+  });
+
+  factory NoticeItem.fromMap(String id, Map<String, dynamic> map) {
+    return NoticeItem(
+      id: id,
+      title: map['title'] ?? '',
+      content: map['content'] ?? '',
+      timestamp: map['timestamp'] ?? '',
+      isPinned: map['isPinned'] ?? false, // Firestore에서 읽어오기
+      imageUrls: List<String>.from(map['imageUrls'] ?? []),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'content': content,
+      'timestamp': timestamp,
+      'isPinned': isPinned,
+      'imageUrls': imageUrls, // 💡 저장 시 리스트 포함
+    };
+  }
+
 }
 
 // 💡 Q&A 답변 모델
