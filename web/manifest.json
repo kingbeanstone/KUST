@@ -1,9 +1,9 @@
 {
-    "name": "kust",
-    "short_name": "kust",
+    "name": "KUST Winter Expedition",
+    "short_name": "KUST W.E",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#9ed4f7",
     "theme_color": "#0175C2",
     "description": "A new Flutter project.",
     "orientation": "portrait-primary",
