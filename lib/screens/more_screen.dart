@@ -320,8 +320,8 @@ class _MoreScreenState extends State<MoreScreen> {
 
                   // 🔔 서비스 설정 섹션
                   const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    child: Text('🔔 서비스 설정', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    //child: Text('🔔 서비스 설정', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -345,22 +345,7 @@ class _MoreScreenState extends State<MoreScreen> {
                   ),
 
                   // 🛠 시스템 진단 도구
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Text('🛠 시스템 진단', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-                    child: ListTile(
-                      leading: const Icon(Icons.bug_report_outlined, color: Colors.blueGrey),
-                      title: const Text('디버그 로그 보기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      trailing: Switch(
-                        value: _showDebugConsole,
-                        onChanged: (val) => setState(() => _showDebugConsole = val),
-                      ),
-                    ),
-                  ),
+
 
                   // 👥 임원단 소개 섹션
                   Padding(
@@ -385,6 +370,22 @@ class _MoreScreenState extends State<MoreScreen> {
                       title: const Text('KUST 앱 소개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                       trailing: const Icon(Icons.chevron_right, size: 20),
                       onTap: () => _showAppIntro(context),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 6, 16,8),
+                    //child: Text('🛠 시스템 진단', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+                    child: ListTile(
+                      leading: const Icon(Icons.bug_report_outlined, color: Colors.blueGrey),
+                      title: const Text('디버그 로그 보기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                      trailing: Switch(
+                        value: _showDebugConsole,
+                        onChanged: (val) => setState(() => _showDebugConsole = val),
+                      ),
                     ),
                   ),
 
