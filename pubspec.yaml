@@ -50,6 +50,9 @@ dependencies:
   googleapis_auth: ^1.4.1 # 최신 버전 확인
   shared_preferences: ^2.2.2
   flutter_native_splash: ^2.4.7
+  image_picker: ^1.0.4
+  firebase_storage: ^12.4.10
+
 
 dev_dependencies:
   flutter_test:

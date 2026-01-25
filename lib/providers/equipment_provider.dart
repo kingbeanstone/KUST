@@ -7,6 +7,10 @@ import 'package:googleapis_auth/auth_io.dart' as auth;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/equipment_model.dart';
+import 'package:firebase_storage/firebase_storage.dart'; // 💡 이미지 저장용
+
+import 'package:image_picker/image_picker.dart';
+
 
 class EquipmentProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -34,6 +38,7 @@ class EquipmentProvider with ChangeNotifier {
   };
 
   final _scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   bool _isAdmin = false;
   bool get isAdmin => _isAdmin;
@@ -90,6 +95,37 @@ class EquipmentProvider with ChangeNotifier {
     _listenToGeneralGears();
     _subscribeToNotices();
   }
+
+  Future<List<String>> uploadImages(List<XFile> images) async {
+    List<String> urls = [];
+    if (images.isEmpty) return urls;
+
+    addLog("업로드 대기 중: ${images.length}장");
+    for (var i = 0; i < images.length; i++) {
+      try {
+        final image = images[i];
+        String fileName = "${DateTime.now().millisecondsSinceEpoch}_${image.name}";
+        Reference ref = _storage.ref().child('notices/$fileName');
+
+        final bytes = await image.readAsBytes();
+        String contentType = 'image/jpeg';
+        if (fileName.toLowerCase().endsWith('.png')) contentType = 'image/png';
+
+        addLog("[${i+1}/${images.length}] 업로드 중...");
+        UploadTask uploadTask = ref.putData(bytes, SettableMetadata(contentType: contentType));
+
+        TaskSnapshot snapshot = await uploadTask;
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+
+        urls.add(downloadUrl);
+        addLog("[${i+1}/${images.length}] 성공: $fileName");
+      } catch (e) {
+        addLog("[${i+1}] 실패 에러: $e");
+      }
+    }
+    return urls;
+  }
+
   Future<void> pinNotice(String id) async {
     if (!_isAdmin) return;
     try {
@@ -421,20 +457,65 @@ class EquipmentProvider with ChangeNotifier {
     await docRef.update({'items': items});
   }
 
-  Future<void> addNotice(String title, String content) async {
+  Future<void> addNotice(String title, String content, {List<String> imageUrls = const []}) async {
     if (!_isAdmin) return;
-    await _db.collection('notices').add({'title': title, 'content': content, 'timestamp': DateTime.now().toIso8601String()});
+    try {
+      await _db.collection('notices').add({
+        'title': title,
+        'content': content,
+        'timestamp': DateTime.now().toIso8601String(),
+        'isPinned': false,
+        'imageUrls': imageUrls,
+      });
+      addLog("게시글 저장 완료 (사진 ${imageUrls.length}장)");
+    } catch (e) {
+      addLog("DB 저장 실패: $e");
+    }
   }
 
-  Future<void> updateNotice(String id, String title, String content) async {
+  Future<void> updateNotice(String id, String title, String content, {List<String> imageUrls = const []}) async {
     if (!_isAdmin) return;
-    await _db.collection('notices').doc(id).update({'title': title, 'content': content});
+    try {
+      await _db.collection('notices').doc(id).update({
+        'title': title,
+        'content': content,
+        'imageUrls': imageUrls,
+      });
+      addLog("공지 수정 완료");
+    } catch (e) {
+      addLog("수정 실패: $e");
+    }
   }
 
   Future<void> deleteNotice(String id) async {
     if (!_isAdmin) return;
-    await _db.collection('notices').doc(id).delete();
+    try {
+      // 1. 메모리상의 리스트에서 해당 공지 데이터 찾기
+      final notice = _notices.firstWhere((n) => n.id == id);
+
+      // 2. 스토리지 이미지 삭제 프로세스
+      if (notice.imageUrls.isNotEmpty) {
+        addLog("스토리지 이미지 ${notice.imageUrls.length}장 삭제 시작...");
+        for (String url in notice.imageUrls) {
+          try {
+            // URL로부터 Storage Reference를 생성하여 삭제 실행
+            await _storage.refFromURL(url).delete();
+          } catch (e) {
+            // 이미 삭제되었거나 찾을 수 없는 경우 로그만 남기고 계속 진행
+            addLog("이미지 삭제 스킵 (이미 없음): $url");
+          }
+        }
+      }
+
+      // 3. Firestore 문서 삭제
+      await _db.collection('notices').doc(id).delete();
+      addLog("공지 및 사진 완전 삭제 완료");
+    } catch (e) {
+      addLog("공지 삭제 에러: $e");
+    }
   }
+
+
 
   Future<void> addQnaPost(String title, String content, String author) async {
     await _db.collection('qna').add({'title': title, 'content': content, 'author': author, 'timestamp': DateTime.now().toIso8601String(), 'lastReplyAt': DateTime.now().toIso8601String()});
