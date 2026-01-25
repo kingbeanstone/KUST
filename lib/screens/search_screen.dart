@@ -21,6 +21,9 @@ class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _memoController = TextEditingController();
 
   void _showAddEditDialog(BuildContext context, EquipmentProvider provider, {dynamic existingItem}) {
+    // 💡 안전장치: 관리자가 아니면 함수 실행 즉시 종료
+    if (!provider.isAdmin) return;
+
     final bool isEdit = existingItem != null;
     final idController = TextEditingController(text: isEdit ? existingItem.id : "");
     final nameController = TextEditingController(text: isEdit ? existingItem.name : "");
@@ -101,7 +104,7 @@ class _SearchScreenState extends State<SearchScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          // 💡 BCD나 호흡기 탭일 때만 개별 추가 버튼 노출
+          // 💡 BCD나 호흡기 탭일 때만 개별 추가 버튼 노출 (관리자만)
           if (provider.isAdmin && (_currentTab == 'BCD' || _currentTab == '호흡기'))
             IconButton(
               icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
@@ -317,7 +320,14 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _buildInventoryTile(BuildContext context, EquipmentProvider provider, String type, String no, String name, String memo, dynamic item) {
     return GestureDetector(
-      onTap: () => _showAddEditDialog(context, provider, existingItem: item),
+      // 💡 관리자 모드일 때만 수정 다이얼로그 호출, 아닐 경우 안내 메시지 표시
+      onTap: provider.isAdmin
+          ? () => _showAddEditDialog(context, provider, existingItem: item)
+          : () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('수정하려면 관리자 인증이 필요합니다.'), duration: Duration(seconds: 1)),
+        );
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(16),
@@ -335,7 +345,8 @@ class _SearchScreenState extends State<SearchScreen> {
             Expanded(child: Text(name.isEmpty ? '(미지정)' : name, style: const TextStyle(fontSize: 14))),
             const Text('기타 : ', style: TextStyle(color: Colors.grey, fontSize: 13)),
             Expanded(child: Text(memo.isEmpty ? '-' : memo, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis)),
-            const Icon(Icons.edit, size: 14, color: Colors.grey),
+            // 💡 관리자일 때만 편집 아이콘 노출
+            if (provider.isAdmin) const Icon(Icons.edit, size: 14, color: Colors.grey),
           ],
         ),
       ),
