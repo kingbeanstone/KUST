@@ -214,6 +214,50 @@ class NoticeScreen extends StatelessWidget {
     );
   }
 
+  void _showFullImage(BuildContext context, String url) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 💡 InteractiveViewer를 사용하여 확대/축소 지원
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: Colors.black.withOpacity(0.9),
+                child: InteractiveViewer(
+                  clipBehavior: Clip.none,
+                  maxScale: 5.0,
+                  child: Image.network(
+                    url,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => const Center(
+                      child: Icon(Icons.broken_image, color: Colors.white, size: 50),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // 닫기 버튼
+            Positioned(
+              top: 40,
+              right: 20,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<EquipmentProvider>(context);
@@ -245,6 +289,8 @@ class NoticeScreen extends StatelessWidget {
     );
   }
 
+
+
   Widget _buildNoticeCard(BuildContext context, EquipmentProvider provider, NoticeItem notice) {
     String dateStr;
     try {
@@ -254,7 +300,6 @@ class NoticeScreen extends StatelessWidget {
       dateStr = notice.timestamp;
     }
 
-    // 슬라이더 제어를 위한 컨트롤러와 페이지 상태
     final PageController pageController = PageController();
     int currentPage = 0;
 
@@ -287,13 +332,14 @@ class NoticeScreen extends StatelessWidget {
                       const Divider(),
                       const SizedBox(height: 8),
 
-                      // 💡 클릭 가능한 이미지 슬라이더 영역
+                      // 💡 인스타그램 스타일 비율 고정 슬라이더
                       if (notice.imageUrls.isNotEmpty) ...[
                         Stack(
                           alignment: Alignment.center,
                           children: [
-                            SizedBox(
-                              height: 250,
+                            // 💡 AspectRatio(1.0)을 사용하여 1:1 정사각형 비율로 고정
+                            AspectRatio(
+                              aspectRatio: 1.0,
                               child: PageView.builder(
                                 controller: pageController,
                                 onPageChanged: (index) => setState(() => currentPage = index),
@@ -304,12 +350,16 @@ class NoticeScreen extends StatelessWidget {
                                     padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        notice.imageUrls[idx],
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (context, error, stackTrace) => Container(
-                                          color: Colors.grey[100],
-                                          child: const Center(child: Icon(Icons.broken_image_outlined, color: Colors.grey)),
+                                      child: GestureDetector(
+                                        // 💡 터치 시 원본 이미지를 보여주는 함수 호출
+                                        onTap: () => _showFullImage(context, notice.imageUrls[idx]),
+                                        child: Image.network(
+                                          notice.imageUrls[idx],
+                                          fit: BoxFit.cover, // 정사각형 영역을 가득 채우도록 설정
+                                          errorBuilder: (context, error, stackTrace) => Container(
+                                            color: Colors.grey[100],
+                                            child: const Center(child: Icon(Icons.broken_image_outlined, color: Colors.grey)),
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -318,7 +368,6 @@ class NoticeScreen extends StatelessWidget {
                               ),
                             ),
 
-                            // 💡 좌측 클릭 버튼 (첫 페이지가 아닐 때만 노출)
                             if (notice.imageUrls.length > 1 && currentPage > 0)
                               Positioned(
                                 left: 10,
@@ -332,7 +381,6 @@ class NoticeScreen extends StatelessWidget {
                                 ),
                               ),
 
-                            // 💡 우측 클릭 버튼 (마지막 페이지가 아닐 때만 노출)
                             if (notice.imageUrls.length > 1 && currentPage < notice.imageUrls.length - 1)
                               Positioned(
                                 right: 10,
@@ -348,7 +396,6 @@ class NoticeScreen extends StatelessWidget {
                           ],
                         ),
 
-                        // 이미지 인디케이터 (점)
                         if (notice.imageUrls.length > 1)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -394,38 +441,15 @@ class NoticeScreen extends StatelessWidget {
         ],
       ),
     );
-  }
 
+  }
   Widget _actionButton({required VoidCallback onPressed, required IconData icon, required String label, required Color color}) {
-    return InkWell(
-      onTap: onPressed,
-      child: Column(
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
+    return InkWell(onTap: onPressed, child: Column(children: [Icon(icon, size: 20, color: color), const SizedBox(height: 2), Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold))]));
   }
 
   void _showDeleteConfirmDialog(BuildContext context, EquipmentProvider provider, String id) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('공지 삭제'),
-        content: const Text('정말로 삭제하시겠습니까?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-          TextButton(
-            onPressed: () {
-              provider.deleteNotice(id);
-              Navigator.pop(context);
-            },
-            child: const Text('삭제', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+    showDialog(context: context, builder: (context) => AlertDialog(title: const Text('공지 삭제'), content: const Text('정말로 삭제하시겠습니까?'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')), TextButton(onPressed: () { provider.deleteNotice(id); Navigator.pop(context); }, child: const Text('삭제', style: TextStyle(color: Colors.red)))]));
   }
+
+
 }

@@ -12,10 +12,12 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Provider를 통해 관리자 여부 및 공지사항 데이터를 가져옵니다.
+    // Provider를 구독합니다.
     final provider = context.watch<EquipmentProvider>();
     final isAdmin = provider.isAdmin;
-    final latestNotice = provider.notices.isNotEmpty ? provider.notices.first : null;
+
+    // 💡 중요: notices.first 대신 provider.homeNotice를 사용하여 고정된 공지를 먼저 가져옵니다.
+    final homeNotice = provider.homeNotice;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -29,9 +31,7 @@ class HomeScreen extends StatelessWidget {
             icon: Icon(isAdmin ? Icons.admin_panel_settings : Icons.person_outline,
                 color: isAdmin ? Colors.blue : Colors.black87),
             onPressed: () {
-              if (isAdmin) {
-                // 관리자 로그아웃 혹은 설정 이동 로직 (필요시)
-              }
+              // 관리자 탭(더보기)으로 이동하거나 필요한 로직 수행
             },
           ),
         ],
@@ -93,8 +93,8 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 30),
 
-            // 💡 하단 퀵 알림 카드 (관리자 편집 기능 포함)
-            _buildQuickInfoCard(context, provider, latestNotice),
+            // 💡 하단 퀵 알림 카드 (고정 공지 로직 적용)
+            _buildQuickInfoCard(context, provider, homeNotice),
           ],
         ),
       ),
@@ -144,19 +144,22 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildQuickInfoCard(BuildContext context, EquipmentProvider provider, NoticeItem? notice) {
+    // 💡 공지가 고정되었는지 여부에 따라 색상 변경
+    final bool isPinned = notice?.isPinned ?? false;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
           gradient: LinearGradient(
-              colors: provider.isAdmin
+              colors: isPinned
                   ? [Colors.blue[900]!, Colors.blue[700]!] // 관리자일 때 조금 더 진한 색상
                   : [Colors.blue[800]!, Colors.blue[600]!]
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.blue.withOpacity(0.3),
+              color: isPinned ? Colors.indigo.withOpacity(0.4) : Colors.blue.withOpacity(0.3),
               blurRadius: 10,
               offset: const Offset(0, 5),
             )
@@ -164,14 +167,15 @@ class HomeScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.campaign, color: Colors.white, size: 32),
+          // 💡 고정 여부에 따라 아이콘 변경 (핀 아이콘 vs 일반 캠페인 아이콘)
+          Icon(isPinned ? Icons.push_pin : Icons.campaign, color: Colors.white, size: 30),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    notice?.title ?? '알림',
+                    isPinned ? '[필독] ${notice?.title}' : (notice?.title ?? '알림'),
                     style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)
                 ),
                 const SizedBox(height: 2),
@@ -225,7 +229,12 @@ class HomeScreen extends StatelessWidget {
                 if (existingNotice == null) {
                   await provider.addNotice(titleController.text, contentController.text);
                 } else {
-                  await provider.updateNotice(existingNotice.id, titleController.text, contentController.text);
+                  await provider.updateNotice(
+                      existingNotice.id,
+                      titleController.text,
+                      contentController.text,
+                      imageUrls: existingNotice.imageUrls // 기존 이미지 유지
+                  );
                 }
                 if (context.mounted) Navigator.pop(context);
               }

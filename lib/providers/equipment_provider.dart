@@ -76,7 +76,14 @@ class EquipmentProvider with ChangeNotifier {
 
   NoticeItem? get homeNotice {
     if (_notices.isEmpty) return null;
-    return _notices.firstWhere((n) => n.isPinned, orElse: () => _notices.first);
+
+    // 1. 고정된(isPinned) 공지가 있는지 먼저 찾습니다.
+    try {
+      return _notices.firstWhere((n) => n.isPinned == true);
+    } catch (e) {
+      // 2. 고정된 게 하나도 없다면 가장 최신 게시물을 반환합니다.
+      return _notices.first;
+    }
   }
 
   Future<void> _initProvider() async {
@@ -464,10 +471,10 @@ class EquipmentProvider with ChangeNotifier {
         'title': title,
         'content': content,
         'timestamp': DateTime.now().toIso8601String(),
-        'isPinned': false,
+        'isPinned': false, // 💡 명시적으로 false 설정
         'imageUrls': imageUrls,
       });
-      addLog("게시글 저장 완료 (사진 ${imageUrls.length}장)");
+      addLog("게시글 저장 완료");
     } catch (e) {
       addLog("DB 저장 실패: $e");
     }
