@@ -9,6 +9,8 @@ import 'providers/equipment_provider.dart';
 import 'providers/schedule_provider.dart';
 import 'providers/meal_plan_provider.dart';
 import 'providers/notice_provider.dart';
+import 'providers/executive_checklist_provider.dart';
+import 'providers/member_provider.dart';
 
 // Screens
 import 'screens/home_screen.dart';
@@ -16,6 +18,10 @@ import 'screens/schedule_screen.dart';
 import 'screens/notice_screen.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/more_screen.dart';
+import 'screens/executive_checklist_screen.dart';
+import 'screens/member_management_screen.dart';
+
+
 
 // 💡 백그라운드 메시지 핸들러
 @pragma('vm:entry-point')
@@ -67,6 +73,8 @@ void main() async {
         ChangeNotifierProvider(create: (context) => ScheduleProvider()),
         ChangeNotifierProvider(create: (context) => MealPlanProvider()), // 이 줄이 있어야 합니다!
         ChangeNotifierProvider(create: (context) => NoticeProvider()), // 이 줄이 있어야 합니다!
+        ChangeNotifierProvider(create: (context) => ExecutiveChecklistProvider()),
+        ChangeNotifierProvider(create: (context) => MemberProvider()),
       ],
       child: KustApp(isInitialized: isFirebaseInitialized),
     ),
@@ -210,6 +218,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '공지'),
           BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: '식단'),
           BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
+
         ],
       ),
     );
