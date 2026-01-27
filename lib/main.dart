@@ -4,7 +4,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+// Providers
 import 'providers/equipment_provider.dart';
+import 'providers/schedule_provider.dart';
+import 'providers/meal_plan_provider.dart';
+import 'providers/notice_provider.dart';
+
+// Screens
 import 'screens/home_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/notice_screen.dart';
@@ -23,10 +29,12 @@ void main() async {
   // 1. 바인딩 초기화
   WidgetsFlutterBinding.ensureInitialized();
 
+  bool isFirebaseInitialized = false;
+
   // 2. 파이어베이스 초기화
   try {
     if (kIsWeb) {
-      // 💡 웹 환경에서는 이 옵션 설정이 index.html의 설정보다 우선시되어야 합니다.
+      // 💡 웹/PWA 환경 명시적 옵션 설정
       await Firebase.initializeApp(
         options: const FirebaseOptions(
           apiKey: "AIzaSyAZnDCZeKVdUBC1eM6e6X-tYvUXZz6kUfU",
@@ -41,42 +49,83 @@ void main() async {
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     }
+    isFirebaseInitialized = true;
     debugPrint("파이어베이스 초기화 성공");
+
+    // 💡 3. 알림 및 웹 푸시(VAPID) 설정 호출
+    _setupNotifications();
+
   } catch (e) {
     debugPrint("파이어베이스 초기화 에러: $e");
   }
 
-  // 알림 설정 (비동기 실행)
-  _initNotifications();
-
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => EquipmentProvider(),
-      child: const KustApp(),
+    // 💡 MultiProvider를 사용하여 여러 Provider를 등록합니다.
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => EquipmentProvider()),
+        ChangeNotifierProvider(create: (context) => ScheduleProvider()),
+        ChangeNotifierProvider(create: (context) => MealPlanProvider()), // 이 줄이 있어야 합니다!
+        ChangeNotifierProvider(create: (context) => NoticeProvider()), // 이 줄이 있어야 합니다!
+      ],
+      child: KustApp(isInitialized: isFirebaseInitialized),
     ),
   );
 }
 
-// 알림 관련 설정
-Future<void> _initNotifications() async {
+// 💡 알림 권한 및 웹 푸시(VAPID) 설정
+Future<void> _setupNotifications() async {
   try {
-    // 웹 브라우저 환경에서도 푸시 알림 인스턴스를 안전하게 가져옵니다.
     FirebaseMessaging messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(
+
+    // 권한 요청 (알림 허용 팝업)
+    NotificationSettings settings = await messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
+
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint('알림 권한 허용됨');
+
+      // 💡 아이폰 PWA 환경에서 푸시를 받으려면 VAPID 키가 반드시 필요합니다.
+      if (kIsWeb) {
+        String? token = await messaging.getToken(
+            vapidKey: "BMkK18nQuhq3wGivZk_2HfDiQ9ojEW6U9WT3c0F-_6zn-8O0XNFYjdJ1eHopIR65gBQGzhq_0xnzLkxyxjvm9bU"
+        );
+        debugPrint("웹 푸시 토큰: $token");
+      }
+    }
   } catch (e) {
-    debugPrint("알림 권한 요청 실패 또는 지원되지 않는 브라우저: $e");
+    debugPrint("알림 설정 중 에러 발생: $e");
   }
 }
 
 class KustApp extends StatelessWidget {
-  const KustApp({super.key});
+  final bool isInitialized;
+  const KustApp({super.key, required this.isInitialized});
 
   @override
   Widget build(BuildContext context) {
+    // 파이어베이스 초기화 실패 시 방어 화면
+    if (!isInitialized) {
+      return MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.error_outline, color: Colors.red, size: 50),
+                SizedBox(height: 16),
+                Text("서버 연결에 실패했습니다."),
+                Text("인터넷 연결을 확인하고 다시 실행해주세요."),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return MaterialApp(
       title: 'KUST 동계 원정',
       debugShowCheckedModeBanner: false,
@@ -85,9 +134,9 @@ class KustApp extends StatelessWidget {
         useMaterial3: true,
         fontFamily: 'Pretendard',
       ),
-      // 💡 빌드 에러 로그를 확인하기 위해 간단한 에러 핸들링 추가 (선택 사항)
       builder: (context, child) {
         return MediaQuery(
+          // 시스템 폰트 크기 무시 (UI 깨짐 방지)
           data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
           child: child!,
         );
@@ -119,12 +168,19 @@ class _MainTabScreenState extends State<MainTabScreen> {
   void initState() {
     super.initState();
 
-    // 포그라운드 메시지 리스너
+    // 앱 실행 중(포그라운드) 메시지 수신 시 처리
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${message.notification!.title}: ${message.notification!.body}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message.notification!.title ?? '알림', style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(message.notification!.body ?? ''),
+              ],
+            ),
             backgroundColor: Colors.blue[800],
             behavior: SnackBarBehavior.floating,
           ),

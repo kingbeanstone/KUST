@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
-import '../models/equipment_model.dart';
+import '../providers/meal_plan_provider.dart';
+// import '../models/equipment_model.dart';
+import '../models/meal_plan_model.dart';
 
 class MealPlanScreen extends StatefulWidget {
   const MealPlanScreen({super.key});
@@ -11,17 +13,6 @@ class MealPlanScreen extends StatefulWidget {
 }
 
 class _MealPlanScreenState extends State<MealPlanScreen> {
-  final List<Map<String, String>> _dates = [
-    {'label': '목 1.29', 'id': '1.29'},
-    {'label': '금 1.30', 'id': '1.30'},
-    {'label': '토 1.31', 'id': '1.31'},
-    {'label': '일 2.1', 'id': '2.1'},
-    {'label': '월 2.2', 'id': '2.2'},
-    {'label': '화 2.3', 'id': '2.3'},
-    {'label': '수 2.4', 'id': '2.4'},
-    {'label': '목 2.5', 'id': '2.5'},
-  ];
-
   int _selectedDateIndex = 0;
   bool _isEditMode = false;
 
@@ -39,9 +30,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     super.dispose();
   }
 
-  void _loadMealData(EquipmentProvider provider) {
-    final currentId = _dates[_selectedDateIndex]['id']!;
-    final meal = provider.meals.firstWhere(
+  // 💡 선택된 날짜에 맞는 식단 데이터 로드
+  void _loadMealData(MealPlanProvider mealProvider) {
+    if (mealProvider.dates.isEmpty) return;
+
+    final currentId = mealProvider.dates[_selectedDateIndex]['id']!;
+    final meal = mealProvider.meals.firstWhere(
           (m) => m.id == currentId,
       orElse: () => MealPlan(id: currentId),
     );
@@ -54,8 +48,11 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<EquipmentProvider>(context);
-    if (!_isEditMode) _loadMealData(provider);
+    // 관리자 확인을 위한 EquipmentProvider와 데이터 관리를 위한 MealPlanProvider 사용
+    final equipmentProvider = Provider.of<EquipmentProvider>(context);
+    final mealProvider = Provider.of<MealPlanProvider>(context);
+
+    if (!_isEditMode) _loadMealData(mealProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -64,8 +61,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          // 💡 관리자 인증이 된 경우에만 수정 버튼 노출
-          if (provider.isAdmin) ...[
+          if (equipmentProvider.isAdmin) ...[
             if (_isEditMode)
               TextButton(
                 onPressed: () => setState(() => _isEditMode = false),
@@ -75,13 +71,13 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               onPressed: () async {
                 if (_isEditMode) {
                   final updatedMeal = MealPlan(
-                    id: _dates[_selectedDateIndex]['id']!,
+                    id: mealProvider.dates[_selectedDateIndex]['id']!,
                     breakfast: _breakfastController.text,
                     lunch: _lunchController.text,
                     dinner: _dinnerController.text,
                     snack: _snackController.text,
                   );
-                  await provider.saveMeal(updatedMeal);
+                  await mealProvider.saveMeal(updatedMeal);
                   setState(() => _isEditMode = false);
                 } else {
                   setState(() => _isEditMode = true);
@@ -95,36 +91,63 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       ),
       body: Column(
         children: [
+          // 💡 상단 날짜 카드 탭 (ScheduleScreen과 동일한 스타일)
           Container(
-            height: 60,
+            height: 90,
             color: Colors.white,
-            child: SingleChildScrollView(
+            child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: List.generate(_dates.length, (index) {
-                  bool isSelected = _selectedDateIndex == index;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ChoiceChip(
-                      label: Text(_dates[index]['label']!),
-                      selected: isSelected,
-                      onSelected: (val) {
-                        if (val) setState(() {
-                          _selectedDateIndex = index;
-                          _isEditMode = false;
-                        });
-                      },
-                      selectedColor: Colors.blue[700],
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              itemCount: mealProvider.dates.length,
+              itemBuilder: (context, index) {
+                bool isSelected = _selectedDateIndex == index;
+                final dayInfo = mealProvider.dates[index];
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedDateIndex = index;
+                      _isEditMode = false;
+                    });
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 120,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[800] : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? Colors.blue[800]! : Colors.grey[200]!,
+                        width: 1.5,
                       ),
-                      showCheckmark: false,
+                      boxShadow: isSelected
+                          ? [BoxShadow(color: Colors.blue[800]!.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                          : [],
                     ),
-                  );
-                }),
-              ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          dayInfo['date']!,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isSelected ? Colors.white.withOpacity(0.8) : Colors.black45,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          dayInfo['title']!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isSelected ? Colors.white : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           const Divider(height: 1),
@@ -136,6 +159,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 _buildMealCard('☀️ 점심', _lunchController),
                 _buildMealCard('🌙 저녁', _dinnerController),
                 _buildMealCard('🍕 야식', _snackController),
+                const SizedBox(height: 40),
               ],
             ),
           ),
@@ -149,19 +173,30 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.grey[50],
-              borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
             ),
-            child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueGrey)),
+            child: Row(
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.blueGrey)),
+              ],
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -169,17 +204,18 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 ? TextField(
               controller: controller,
               maxLines: null,
-              style: const TextStyle(fontSize: 15),
+              style: const TextStyle(fontSize: 15, height: 1.5),
               decoration: const InputDecoration(
-                hintText: '메뉴를 입력하세요',
+                hintText: '식단 내용을 입력하세요...',
                 border: InputBorder.none,
                 isDense: true,
               ),
             )
                 : Text(
-              controller.text.isEmpty ? '등록된 식단이 없습니다.' : controller.text,
+              controller.text.isEmpty ? '아직 등록된 식단이 없습니다.' : controller.text,
               style: TextStyle(
                 fontSize: 15,
+                height: 1.5,
                 color: controller.text.isEmpty ? Colors.grey : const Color(0xFF212121),
               ),
             ),

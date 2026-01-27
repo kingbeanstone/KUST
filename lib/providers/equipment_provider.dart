@@ -51,22 +51,20 @@ class EquipmentProvider with ChangeNotifier {
 
   // 데이터 리스트
   List<MemberEquipment> _data = [];
-  List<NoticeItem> _notices = [];
+  // List<NoticeItem> _notices = [];
   List<QnaPost> _qnaPosts = [];
   List<BcdItem> _bcds = [];
   List<RegulatorItem> _regulators = [];
-  List<MealPlan> _meals = [];
-  List<DailySchedule> _schedules = [];
+  //List<DailySchedule> _schedules = [];
   List<ExecutiveItem> _executives = [];
   List<GeneralGearItem> _generalGears = [];
 
   List<MemberEquipment> get data => _data;
-  List<NoticeItem> get notices => _notices;
+  // List<NoticeItem> get notices => _notices;
   List<QnaPost> get qnaPosts => _qnaPosts;
   List<BcdItem> get bcds => _bcds;
   List<RegulatorItem> get regulators => _regulators;
-  List<MealPlan> get meals => _meals;
-  List<DailySchedule> get schedules => _schedules;
+  //List<DailySchedule> get schedules => _schedules;
   List<ExecutiveItem> get executives => _executives;
   List<GeneralGearItem> get generalGears => _generalGears;
 
@@ -74,17 +72,17 @@ class EquipmentProvider with ChangeNotifier {
     _initProvider();
   }
 
-  NoticeItem? get homeNotice {
-    if (_notices.isEmpty) return null;
-
-    // 1. 고정된(isPinned) 공지가 있는지 먼저 찾습니다.
-    try {
-      return _notices.firstWhere((n) => n.isPinned == true);
-    } catch (e) {
-      // 2. 고정된 게 하나도 없다면 가장 최신 게시물을 반환합니다.
-      return _notices.first;
-    }
-  }
+  // NoticeItem? get homeNotice {
+  //   if (_notices.isEmpty) return null;
+  //
+  //   // 1. 고정된(isPinned) 공지가 있는지 먼저 찾습니다.
+  //   try {
+  //     return _notices.firstWhere((n) => n.isPinned == true);
+  //   } catch (e) {
+  //     // 2. 고정된 게 하나도 없다면 가장 최신 게시물을 반환합니다.
+  //     return _notices.first;
+  //   }
+  // }
 
   Future<void> _initProvider() async {
     addLog("시스템 초기화...");
@@ -93,11 +91,10 @@ class EquipmentProvider with ChangeNotifier {
 
     // 데이터 리스너 시작
     _listenToMembers();
-    _listenToNotices();
+    // _listenToNotices();
     _listenToQna();
     _listenToInventory();
-    _listenToMeals();
-    _listenToSchedules();
+   // _listenToSchedules();
     _listenToExecutives();
     _listenToGeneralGears();
     _subscribeToNotices();
@@ -133,27 +130,27 @@ class EquipmentProvider with ChangeNotifier {
     return urls;
   }
 
-  Future<void> pinNotice(String id) async {
-    if (!_isAdmin) return;
-    try {
-      final batch = _db.batch();
-
-      // 1. 기존에 고정된 모든 공지의 고정 해제
-      for (var notice in _notices) {
-        if (notice.isPinned) {
-          batch.update(_db.collection('notices').doc(notice.id), {'isPinned': false});
-        }
-      }
-
-      // 2. 선택한 공지만 고정 설정
-      batch.update(_db.collection('notices').doc(id), {'isPinned': true});
-
-      await batch.commit();
-      addLog("홈 화면 공지 설정 완료");
-    } catch (e) {
-      addLog("공지 고정 에러: $e");
-    }
-  }
+  // Future<void> pinNotice(String id) async {
+  //   if (!_isAdmin) return;
+  //   try {
+  //     final batch = _db.batch();
+  //
+  //     // 1. 기존에 고정된 모든 공지의 고정 해제
+  //     for (var notice in _notices) {
+  //       if (notice.isPinned) {
+  //         batch.update(_db.collection('notices').doc(notice.id), {'isPinned': false});
+  //       }
+  //     }
+  //
+  //     // 2. 선택한 공지만 고정 설정
+  //     batch.update(_db.collection('notices').doc(id), {'isPinned': true});
+  //
+  //     await batch.commit();
+  //     addLog("홈 화면 공지 설정 완료");
+  //   } catch (e) {
+  //     addLog("공지 고정 에러: $e");
+  //   }
+  // }
 
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
@@ -200,56 +197,56 @@ class EquipmentProvider with ChangeNotifier {
   }
 
   // --- 알림 발송 (30명 규모: 모든 토큰에 개별 발송) ---
-  Future<void> sendNoticePush(NoticeItem notice) async {
-    if (!_isAdmin) return;
-    try {
-      addLog("알림 발송 준비...");
-      final accountCredentials = auth.ServiceAccountCredentials.fromJson(_serviceAccountJson);
-      final client = await auth.clientViaServiceAccount(accountCredentials, _scopes);
-      final accessCredentials = await auth.obtainAccessCredentialsViaServiceAccount(accountCredentials, _scopes, client);
-      final accessToken = accessCredentials.accessToken.data;
-      client.close();
-
-      final fcmUrl = 'https://fcm.googleapis.com/v1/projects/${_serviceAccountJson['project_id']}/messages:send';
-
-      // fcm_tokens 컬렉션에서 모든 토큰 가져오기
-      final tokenSnapshot = await _db.collection('fcm_tokens').get();
-      if (tokenSnapshot.docs.isEmpty) {
-        addLog("발송 대상(토큰)이 없습니다.");
-        return;
-      }
-
-      addLog("${tokenSnapshot.docs.length}명에게 발송 시작...");
-      int count = 0;
-      for (var doc in tokenSnapshot.docs) {
-        final token = doc.data()['token'];
-        if (token == null) continue;
-
-        try {
-          final response = await http.post(
-            Uri.parse(fcmUrl),
-            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $accessToken'},
-            body: jsonEncode({
-              'message': {
-                'token': token,
-                'notification': {
-                  'title': '[KUST 공지] ${notice.title}',
-                  'body': notice.content.length > 50 ? '${notice.content.substring(0, 50)}...' : notice.content
-                },
-                'webpush': { 'notification': { 'icon': '/icons/Icon-192.png', 'click_action': '/' } }
-              }
-            }),
-          );
-          if (response.statusCode == 200) count++;
-        } catch (e) {
-          debugPrint("개별 발송 에러: $e");
-        }
-      }
-      addLog("$count명 발송 완료!");
-    } catch (e) {
-      addLog("발송 프로세스 실패: $e");
-    }
-  }
+  // Future<void> sendNoticePush(NoticeItem notice) async {
+  //   if (!_isAdmin) return;
+  //   try {
+  //     addLog("알림 발송 준비...");
+  //     final accountCredentials = auth.ServiceAccountCredentials.fromJson(_serviceAccountJson);
+  //     final client = await auth.clientViaServiceAccount(accountCredentials, _scopes);
+  //     final accessCredentials = await auth.obtainAccessCredentialsViaServiceAccount(accountCredentials, _scopes, client);
+  //     final accessToken = accessCredentials.accessToken.data;
+  //     client.close();
+  //
+  //     final fcmUrl = 'https://fcm.googleapis.com/v1/projects/${_serviceAccountJson['project_id']}/messages:send';
+  //
+  //     // fcm_tokens 컬렉션에서 모든 토큰 가져오기
+  //     final tokenSnapshot = await _db.collection('fcm_tokens').get();
+  //     if (tokenSnapshot.docs.isEmpty) {
+  //       addLog("발송 대상(토큰)이 없습니다.");
+  //       return;
+  //     }
+  //
+  //     addLog("${tokenSnapshot.docs.length}명에게 발송 시작...");
+  //     int count = 0;
+  //     for (var doc in tokenSnapshot.docs) {
+  //       final token = doc.data()['token'];
+  //       if (token == null) continue;
+  //
+  //       try {
+  //         final response = await http.post(
+  //           Uri.parse(fcmUrl),
+  //           headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $accessToken'},
+  //           body: jsonEncode({
+  //             'message': {
+  //               'token': token,
+  //               'notification': {
+  //                 'title': '[KUST 공지] ${notice.title}',
+  //                 'body': notice.content.length > 50 ? '${notice.content.substring(0, 50)}...' : notice.content
+  //               },
+  //               'webpush': { 'notification': { 'icon': '/icons/Icon-192.png', 'click_action': '/' } }
+  //             }
+  //           }),
+  //         );
+  //         if (response.statusCode == 200) count++;
+  //       } catch (e) {
+  //         debugPrint("개별 발송 에러: $e");
+  //       }
+  //     }
+  //     addLog("$count명 발송 완료!");
+  //   } catch (e) {
+  //     addLog("발송 프로세스 실패: $e");
+  //   }
+  // }
 
   // --- 관리자 인증 및 설정 ---
   Future<bool> authenticate(String password, {bool remember = false}) async {
@@ -284,12 +281,12 @@ class EquipmentProvider with ChangeNotifier {
     });
   }
 
-  void _listenToNotices() {
-    _db.collection('notices').orderBy('timestamp', descending: true).snapshots().listen((snapshot) {
-      _notices = snapshot.docs.map((doc) => NoticeItem.fromMap(doc.id, doc.data())).toList();
-      notifyListeners();
-    });
-  }
+  // void _listenToNotices() {
+  //   _db.collection('notices').orderBy('timestamp', descending: true).snapshots().listen((snapshot) {
+  //     _notices = snapshot.docs.map((doc) => NoticeItem.fromMap(doc.id, doc.data())).toList();
+  //     notifyListeners();
+  //   });
+  // }
 
   void _listenToQna() {
     _db.collection('qna').orderBy('timestamp', descending: true).snapshots().listen((snapshot) async {
@@ -317,19 +314,14 @@ class EquipmentProvider with ChangeNotifier {
     });
   }
 
-  void _listenToMeals() {
-    _db.collection('meals').snapshots().listen((snapshot) {
-      _meals = snapshot.docs.map((doc) => MealPlan.fromMap(doc.id, doc.data())).toList();
-      notifyListeners();
-    });
-  }
 
-  void _listenToSchedules() {
-    _db.collection('schedules').snapshots().listen((snapshot) {
-      _schedules = snapshot.docs.map((doc) => DailySchedule.fromMap(doc.id, doc.data())).toList();
-      notifyListeners();
-    });
-  }
+
+  // void _listenToSchedules() {
+  //   _db.collection('schedules').snapshots().listen((snapshot) {
+  //     _schedules = snapshot.docs.map((doc) => DailySchedule.fromMap(doc.id, doc.data())).toList();
+  //     notifyListeners();
+  //   });
+  // }
 
   void _listenToExecutives() {
     _db.collection('executives').snapshots().listen((snapshot) {
@@ -434,56 +426,8 @@ class EquipmentProvider with ChangeNotifier {
     addLog("체크리스트 리셋 완료");
   }
 
-  Future<void> saveMeal(MealPlan meal) async { if (!_isAdmin) return; await _db.collection('meals').doc(meal.id).set(meal.toMap()); }
 
 
-  // 💡 리스트 전체를 저장하는 기능 (순서 변경 시 사용)
-  Future<void> updateDailySchedule(DailySchedule schedule) async {
-    if (!_isAdmin) return;
-    await _db.collection('schedules').doc(schedule.id).set(schedule.toMap());
-  }
-
-  // 💡 특정 인덱스에 일정을 추가/삽입하는 기능
-  Future<void> saveScheduleItem(String dayId, ScheduleItem item, {int? atIndex}) async {
-    if (!_isAdmin) return;
-
-    final schedule = _schedules.firstWhere(
-          (s) => s.id == dayId,
-      orElse: () => DailySchedule(id: dayId, items: []),
-    );
-
-    if (atIndex != null) {
-      schedule.items.insert(atIndex, item);
-    } else {
-      schedule.items.add(item);
-    }
-
-    await updateDailySchedule(schedule);
-  }
-
-  // 💡 일정 수정
-  Future<void> updateScheduleItem(String dayId, int index, ScheduleItem newItem) async {
-    if (!_isAdmin) return;
-    final schedule = _schedules.firstWhere((s) => s.id == dayId);
-    schedule.items[index] = newItem;
-    await updateDailySchedule(schedule);
-  }
-
-  // 💡 일정 삭제
-  Future<void> deleteScheduleItem(String dayId, int index) async {
-    if (!_isAdmin) return;
-    final schedule = _schedules.firstWhere((s) => s.id == dayId);
-    schedule.items.removeAt(index);
-    await updateDailySchedule(schedule);
-  }
-
-  Future<void> addScheduleItem(String dateId, ScheduleItem newItem) async {
-    if (!_isAdmin) return;
-    final docRef = _db.collection('schedules').doc(dateId);
-    final doc = await docRef.get();
-    if (doc.exists) { await docRef.update({'items': FieldValue.arrayUnion([newItem.toMap()])}); }
-    else { await docRef.set({'items': [newItem.toMap()]}); }
-  }
 
   Future<void> addNotice(String title, String content, {List<String> imageUrls = const []}) async {
     if (!_isAdmin) return;
@@ -515,33 +459,33 @@ class EquipmentProvider with ChangeNotifier {
     }
   }
 
-  Future<void> deleteNotice(String id) async {
-    if (!_isAdmin) return;
-    try {
-      // 1. 메모리상의 리스트에서 해당 공지 데이터 찾기
-      final notice = _notices.firstWhere((n) => n.id == id);
-
-      // 2. 스토리지 이미지 삭제 프로세스
-      if (notice.imageUrls.isNotEmpty) {
-        addLog("스토리지 이미지 ${notice.imageUrls.length}장 삭제 시작...");
-        for (String url in notice.imageUrls) {
-          try {
-            // URL로부터 Storage Reference를 생성하여 삭제 실행
-            await _storage.refFromURL(url).delete();
-          } catch (e) {
-            // 이미 삭제되었거나 찾을 수 없는 경우 로그만 남기고 계속 진행
-            addLog("이미지 삭제 스킵 (이미 없음): $url");
-          }
-        }
-      }
-
-      // 3. Firestore 문서 삭제
-      await _db.collection('notices').doc(id).delete();
-      addLog("공지 및 사진 완전 삭제 완료");
-    } catch (e) {
-      addLog("공지 삭제 에러: $e");
-    }
-  }
+  // Future<void> deleteNotice(String id) async {
+  //   if (!_isAdmin) return;
+  //   try {
+  //     // 1. 메모리상의 리스트에서 해당 공지 데이터 찾기
+  //     final notice = _notices.firstWhere((n) => n.id == id);
+  //
+  //     // 2. 스토리지 이미지 삭제 프로세스
+  //     if (notice.imageUrls.isNotEmpty) {
+  //       addLog("스토리지 이미지 ${notice.imageUrls.length}장 삭제 시작...");
+  //       for (String url in notice.imageUrls) {
+  //         try {
+  //           // URL로부터 Storage Reference를 생성하여 삭제 실행
+  //           await _storage.refFromURL(url).delete();
+  //         } catch (e) {
+  //           // 이미 삭제되었거나 찾을 수 없는 경우 로그만 남기고 계속 진행
+  //           addLog("이미지 삭제 스킵 (이미 없음): $url");
+  //         }
+  //       }
+  //     }
+  //
+  //     // 3. Firestore 문서 삭제
+  //     await _db.collection('notices').doc(id).delete();
+  //     addLog("공지 및 사진 완전 삭제 완료");
+  //   } catch (e) {
+  //     addLog("공지 삭제 에러: $e");
+  //   }
+  // }
 
 
 

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
-import '../models/equipment_model.dart';
+import '../providers/schedule_provider.dart';
+import '../models/schedule_model.dart';
 
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
@@ -11,22 +12,113 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
-  final List<Map<String, String>> _dates = [
-    {'date': '1.29 (목)', 'title': '1일차 (동방파제)', 'id': '1.29'},
-    {'date': '1.30 (금)', 'title': '2일차 (보목)', 'id': '1.30'},
-    {'date': '1.31 (토)', 'title': '3일차 (입도)', 'id': '1.31'},
-    {'date': '2.1 (일)', 'title': '4일차 (드라이데이)', 'id': '2.1'},
-    {'date': '2.2 (월)', 'title': '5일차 (입도)', 'id': '2.2'},
-    {'date': '2.3 (화)', 'title': '6일차 (보팅)', 'id': '2.3'},
-    {'date': '2.4 (수)', 'title': '7일차 (동기여행)', 'id': '2.4'},
-    {'date': '2.5 (목)', 'title': '8일차 (복귀)', 'id': '2.5'},
-  ];
-
   int _selectedDateIndex = 0;
 
-  void _showItemDialog(BuildContext context, EquipmentProvider provider, {ScheduleItem? item, int? index, int? insertAtIndex}) {
-    if (!provider.isAdmin) return;
+  // 💡 날짜 탭 관리 다이얼로그 (ScheduleProvider와 연결)
+  void _showManageDaysDialog(BuildContext context, ScheduleProvider scheduleProvider) {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('📅 일정 날짜 관리', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: Column(
+              children: [
+                const Text('길게 눌러 순서 변경 / 클릭하여 수정', style: TextStyle(fontSize: 12, color: Colors.blue)),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ReorderableListView(
+                    onReorder: (oldIndex, newIndex) {
+                      setDialogState(() {
+                        scheduleProvider.reorderDates(oldIndex, newIndex);
+                      });
+                      setState(() {});
+                    },
+                    children: List.generate(scheduleProvider.dates.length, (index) {
+                      final day = scheduleProvider.dates[index];
+                      return ListTile(
+                        key: ValueKey(day['id']),
+                        leading: const Icon(Icons.drag_handle),
+                        title: Text(day['title']!, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                        subtitle: Text(day['date']!, style: const TextStyle(fontSize: 12)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.edit_note, color: Colors.blue),
+                          onPressed: () => _editDayInfo(context, index, scheduleProvider, setDialogState),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                setDialogState(() {
+                  scheduleProvider.addDay();
+                });
+                setState(() {});
+              },
+              child: const Text('날짜 추가'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('닫기'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
+  // 💡 개별 날짜 텍스트 수정 (ScheduleProvider와 연결)
+  void _editDayInfo(BuildContext context, int index, ScheduleProvider scheduleProvider, StateSetter setDialogState) {
+    final dateController = TextEditingController(text: scheduleProvider.dates[index]['date']);
+    final titleController = TextEditingController(text: scheduleProvider.dates[index]['title']);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('날짜 정보 수정'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: dateController, decoration: const InputDecoration(labelText: '날짜 (예: 1.29 (목))')),
+            TextField(controller: titleController, decoration: const InputDecoration(labelText: '제목 (예: 1일차 (장소))')),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setDialogState(() {
+                scheduleProvider.removeDay(index);
+              });
+              setState(() {});
+              Navigator.pop(context);
+            },
+            child: const Text('이 날짜 삭제', style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setDialogState(() {
+                scheduleProvider.updateDayInfo(index, dateController.text, titleController.text);
+              });
+              setState(() {});
+              Navigator.pop(context);
+            },
+            child: const Text('적용'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 일정 항목 다이얼로그 (ScheduleProvider와 연결)
+  void _showItemDialog(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, {ScheduleItem? item, int? index, int? insertAtIndex}) {
+    if (!isAdmin) return;
     final TextEditingController _timeController = TextEditingController(text: item?.time ?? "");
     final TextEditingController _descController = TextEditingController(text: item?.description ?? "");
 
@@ -58,7 +150,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           if (item != null && index != null)
             TextButton(
               onPressed: () {
-                provider.deleteScheduleItem(_dates[_selectedDateIndex]['id']!, index);
+                scheduleProvider.deleteScheduleItem(scheduleProvider.dates[_selectedDateIndex]['id']!, index);
                 Navigator.pop(context);
               },
               child: const Text('삭제', style: TextStyle(color: Colors.red)),
@@ -66,17 +158,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           ElevatedButton(
             onPressed: () {
               if (_timeController.text.isEmpty || _descController.text.isEmpty) return;
-
-              final newItem = ScheduleItem(
-                time: _timeController.text,
-                description: _descController.text,
-              );
-
-              final dayId = _dates[_selectedDateIndex]['id']!;
+              final newItem = ScheduleItem(time: _timeController.text, description: _descController.text);
+              final dayId = scheduleProvider.dates[_selectedDateIndex]['id']!;
               if (item == null) {
-                provider.saveScheduleItem(dayId, newItem, atIndex: insertAtIndex);
+                scheduleProvider.saveScheduleItem(dayId, newItem, atIndex: insertAtIndex);
               } else {
-                provider.updateScheduleItem(dayId, index!, newItem);
+                scheduleProvider.updateScheduleItem(dayId, index!, newItem);
               }
               Navigator.pop(context);
             },
@@ -89,10 +176,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<EquipmentProvider>(context);
-    final currentId = _dates[_selectedDateIndex]['id']!;
+    // 💡 두 Provider를 동시에 가져옵니다.
+    final equipmentProvider = Provider.of<EquipmentProvider>(context);
+    final scheduleProvider = Provider.of<ScheduleProvider>(context);
 
-    final dailySchedule = provider.schedules.firstWhere(
+    final isAdmin = equipmentProvider.isAdmin;
+    final dates = scheduleProvider.dates;
+
+    if (_selectedDateIndex >= dates.length) _selectedDateIndex = 0;
+
+    final currentId = dates.isNotEmpty ? dates[_selectedDateIndex]['id']! : "";
+
+    final dailySchedule = scheduleProvider.schedules.firstWhere(
           (s) => s.id == currentId,
       orElse: () => DailySchedule(id: currentId, items: []),
     );
@@ -104,23 +199,31 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          if (provider.isAdmin && dailySchedule.items.isNotEmpty)
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.settings_outlined, color: Colors.blue),
+              onPressed: () => _showManageDaysDialog(context, scheduleProvider),
+              tooltip: '일자 관리',
+            ),
+          if (isAdmin && dailySchedule.items.isNotEmpty)
             const Padding(
-              padding: EdgeInsets.only(right: 16),
+              padding: EdgeInsets.only(right: 8),
               child: Center(child: Text('길게 눌러 이동', style: TextStyle(fontSize: 11, color: Colors.blue))),
             )
         ],
       ),
       body: Column(
         children: [
-          // 💡 상단 날짜 바 UI 개선
+          // 상단 날짜 바
           Container(
-            height: 90, // 높이를 조금 더 확보하여 여유를 줌
+            height: 90,
             color: Colors.white,
-            child: ListView.builder(
+            child: dates.isEmpty
+                ? const Center(child: Text('설정된 일자가 없습니다.'))
+                : ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              itemCount: _dates.length,
+              itemCount: dates.length,
               itemBuilder: (context, index) {
                 bool isSelected = _selectedDateIndex == index;
                 return GestureDetector(
@@ -144,7 +247,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _dates[index]['date']!,
+                          dates[index]['date']!,
                           style: TextStyle(
                             fontSize: 10,
                             letterSpacing: 0.5,
@@ -154,7 +257,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _dates[index]['title']!,
+                          dates[index]['title']!,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 13,
@@ -172,9 +275,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           const Divider(height: 1),
           // 일정 리스트
           Expanded(
-            child: dailySchedule.items.isEmpty
+            child: dates.isEmpty
                 ? _buildEmptyState()
-                : provider.isAdmin
+                : dailySchedule.items.isEmpty
+                ? _buildEmptyState()
+                : isAdmin
                 ? ReorderableListView.builder(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
               itemCount: dailySchedule.items.length,
@@ -183,13 +288,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                   if (newIndex > oldIndex) newIndex -= 1;
                   final item = dailySchedule.items.removeAt(oldIndex);
                   dailySchedule.items.insert(newIndex, item);
-                  provider.updateDailySchedule(dailySchedule);
+                  scheduleProvider.updateDailySchedule(dailySchedule);
                 });
               },
               proxyDecorator: (child, index, animation) {
                 return Material(
-                  elevation: 5,
-                  color: Colors.transparent,
+                  elevation: 5, color: Colors.transparent,
                   borderRadius: BorderRadius.circular(16),
                   child: child,
                 );
@@ -199,9 +303,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 return Column(
                   key: ValueKey('${item.time}_${item.description}_$index'),
                   children: [
-                    _buildTimelineItem(context, provider, item, index),
+                    _buildTimelineItem(context, scheduleProvider, isAdmin, item, index),
                     if (index < dailySchedule.items.length - 1)
-                      _buildInsertPoint(context, provider, index + 1),
+                      _buildInsertPoint(context, scheduleProvider, isAdmin, index + 1),
                   ],
                 );
               },
@@ -211,15 +315,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               itemCount: dailySchedule.items.length,
               itemBuilder: (context, index) {
                 final item = dailySchedule.items[index];
-                return _buildTimelineItem(context, provider, item, index);
+                return _buildTimelineItem(context, scheduleProvider, isAdmin, item, index);
               },
             ),
           ),
         ],
       ),
-      floatingActionButton: provider.isAdmin
+      floatingActionButton: isAdmin && dates.isNotEmpty
           ? FloatingActionButton.extended(
-        onPressed: () => _showItemDialog(context, provider),
+        onPressed: () => _showItemDialog(context, scheduleProvider, isAdmin),
         backgroundColor: Colors.blue[800],
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('일정 추가', style: TextStyle(color: Colors.white)),
@@ -235,20 +339,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         children: [
           Icon(Icons.event_note, size: 48, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text('등록된 일정이 없습니다.', style: TextStyle(color: Colors.grey)),
+          const Text('일정이 없습니다.', style: TextStyle(color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _buildInsertPoint(BuildContext context, EquipmentProvider provider, int atIndex) {
+  Widget _buildInsertPoint(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, int atIndex) {
     return Row(
       children: [
         const SizedBox(width: 5),
         Container(width: 2, height: 30, color: Colors.blue[100]),
         const SizedBox(width: 10),
         IconButton(
-          onPressed: () => _showItemDialog(context, provider, insertAtIndex: atIndex),
+          onPressed: () => _showItemDialog(context, scheduleProvider, isAdmin, insertAtIndex: atIndex),
           icon: Icon(Icons.add_circle, color: Colors.blue[200], size: 24),
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
@@ -259,26 +363,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _buildTimelineItem(BuildContext context, EquipmentProvider provider, ScheduleItem item, int index) {
+  Widget _buildTimelineItem(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, ScheduleItem item, int index) {
     return IntrinsicHeight(
       child: Row(
         children: [
           Column(
             children: [
               Container(
-                width: 12,
-                height: 12,
+                width: 12, height: 12,
                 decoration: BoxDecoration(color: Colors.blue[800], shape: BoxShape.circle),
               ),
-              Expanded(
-                child: Container(width: 2, color: Colors.blue[100]),
-              ),
+              Expanded(child: Container(width: 2, color: Colors.blue[100])),
             ],
           ),
           const SizedBox(width: 20),
           Expanded(
             child: GestureDetector(
-              onTap: provider.isAdmin ? () => _showItemDialog(context, provider, item: item, index: index) : null,
+              onTap: isAdmin ? () => _showItemDialog(context, scheduleProvider, isAdmin, item: item, index: index) : null,
               child: Container(
                 margin: const EdgeInsets.only(bottom: 10, top: 2),
                 padding: const EdgeInsets.all(16),
@@ -295,20 +396,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            item.time,
-                            style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
+                          Text(item.time, style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13)),
                           const SizedBox(height: 4),
-                          Text(
-                            item.description,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF212121)),
-                          ),
+                          Text(item.description, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF212121))),
                         ],
                       ),
                     ),
-                    if (provider.isAdmin)
-                      const Icon(Icons.drag_indicator, color: Colors.grey, size: 20),
+                    if (isAdmin) const Icon(Icons.drag_indicator, color: Colors.grey, size: 20),
                   ],
                 ),
               ),
