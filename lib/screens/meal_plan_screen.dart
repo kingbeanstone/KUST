@@ -13,16 +13,9 @@ class MealPlanScreen extends StatefulWidget {
 
 class _MealPlanScreenState extends State<MealPlanScreen> {
   bool _isEditMode = false;
-  // 모든 날짜의 데이터를 한 번에 관리하기 위한 맵 (날짜 ID : 식단 객체)
   Map<String, MealPlan> _editingMeals = {};
 
-  // 표 설정을 위한 상수들
-  static const double labelColumnWidth = 70.0; // 좌측 라벨 열 너비
-  static const double dateColumnWidth = 140.0; // 각 날짜 열 너비
-  static const double cellHeight = 100.0;      // 각 칸의 높이
-  static const double headerHeight = 60.0;     // 헤더 높이
-
-  // 편집 모드 진입 시 현재 데이터 복사
+  // 편집 모드 진입
   void _enterEditMode(MealPlanProvider provider) {
     setState(() {
       _isEditMode = true;
@@ -54,12 +47,27 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     final equipmentProvider = Provider.of<EquipmentProvider>(context);
     final mealProvider = Provider.of<MealPlanProvider>(context);
 
+    if (mealProvider.dates.isEmpty) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    // 날짜 데이터를 3개씩 묶어서 리스트로 만듭니다.
+    List<List<Map<String, String>>> chunkedDates = [];
+    for (var i = 0; i < mealProvider.dates.length; i += 3) {
+      chunkedDates.add(
+        mealProvider.dates.sublist(i, i + 3 > mealProvider.dates.length ? mealProvider.dates.length : i + 3),
+      );
+    }
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('🍱 원정 식단표 (전체)', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        title: const Text('🍱 원정 식단표', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        centerTitle: true,
         actions: [
           if (equipmentProvider.isAdmin)
             TextButton(
@@ -72,166 +80,140 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 ),
               ),
             ),
-          if (_isEditMode)
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.red),
-              onPressed: () => setState(() => _isEditMode = false),
-            ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
+      body: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: chunkedDates.length,
+        itemBuilder: (context, index) {
+          return _buildMealTableBlock(chunkedDates[index], mealProvider);
+        },
+      ),
+    );
+  }
+
+  // 💡 Table 위젯을 사용하여 3일치 블록 생성 (오버플로 해결의 핵심)
+  Widget _buildMealTableBlock(List<Map<String, String>> currentChunk, MealPlanProvider provider) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Table(
+          // 열 너비 설정: 첫 번째(라벨)는 고정, 나머지는 균등 분할
+          columnWidths: {
+            0: const FixedColumnWidth(50),
+            for (int i = 1; i <= currentChunk.length; i++) i: const FlexColumnWidth(),
+          },
+          border: TableBorder.all(color: Colors.grey[200]!, width: 1),
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
           children: [
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 1. 좌측 고정 라벨 열 (아침, 점심, 저녁, 야식)
-                    _buildFixedLabelColumn(),
-
-                    // 2. 우측 가로 스크롤 데이터 영역 (날짜별 열들)
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: List.generate(mealProvider.dates.length, (index) {
-                            final dayInfo = mealProvider.dates[index];
-                            final String dayId = dayInfo['id']!;
-
-                            final meal = _isEditMode
-                                ? _editingMeals[dayId]!
-                                : mealProvider.meals.firstWhere(
-                                  (m) => m.id == dayId,
-                              orElse: () => MealPlan(id: dayId),
-                            );
-
-                            return _buildDateDataColumn(dayInfo, meal);
-                          }),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            // 1. 헤더 행 (구분 + 날짜들)
+            TableRow(
+              decoration: const BoxDecoration(color: Color(0xFFF1F3F5)),
+              children: [
+                _buildLabelCell('구분', isHeader: true),
+                ...currentChunk.map((d) => _buildDateHeaderCell(d['title']!, d['date']!)),
+              ],
             ),
+            // 2. 식단 행들
+            _buildTableRow('아침', 'breakfast', currentChunk, provider),
+            _buildTableRow('점심', 'lunch', currentChunk, provider),
+            _buildTableRow('저녁', 'dinner', currentChunk, provider),
+            _buildTableRow('야식', 'snack', currentChunk, provider),
           ],
         ),
       ),
     );
   }
 
-  // 좌측 고정 항목 열 생성
-  Widget _buildFixedLabelColumn() {
-    return Container(
-      width: labelColumnWidth,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
-        border: Border(right: BorderSide(color: Colors.grey[300]!, width: 1)),
-      ),
-      child: Column(
-        children: [
-          _buildCell('일차', headerHeight, isHeader: true),
-          _buildCell('아침', cellHeight),
-          _buildCell('점심', cellHeight),
-          _buildCell('저녁', cellHeight),
-          _buildCell('야식', cellHeight),
-        ],
-      ),
+  // 💡 TableRow 빌더
+  TableRow _buildTableRow(String label, String field, List<Map<String, String>> chunk, MealPlanProvider provider) {
+    return TableRow(
+      children: [
+        _buildLabelCell(label),
+        ...chunk.map((d) {
+          final dayId = d['id']!;
+          final meal = _isEditMode
+              ? _editingMeals[dayId]!
+              : provider.meals.firstWhere((m) => m.id == dayId, orElse: () => MealPlan(id: dayId));
+
+          String value = '';
+          if (field == 'breakfast') value = meal.breakfast;
+          if (field == 'lunch') value = meal.lunch;
+          if (field == 'dinner') value = meal.dinner;
+          if (field == 'snack') value = meal.snack;
+
+          return _buildDataCell(dayId, field, value);
+        }),
+      ],
     );
   }
 
-  // 날짜별 데이터 열 생성
-  Widget _buildDateDataColumn(Map<String, String> dayInfo, MealPlan meal) {
+  // 좌측 라벨 셀
+  Widget _buildLabelCell(String text, {bool isHeader = false}) {
     return Container(
-      width: dateColumnWidth,
-      decoration: BoxDecoration(
-        border: Border(right: BorderSide(color: Colors.grey[200]!, width: 1)),
-      ),
-      child: Column(
-        children: [
-          // 열 헤더 (날짜 정보)
-          Container(
-            height: headerHeight,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.blue[50],
-              border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(dayInfo['title']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
-                Text(dayInfo['date']!, style: const TextStyle(fontSize: 10, color: Colors.black54)),
-              ],
-            ),
-          ),
-          // 데이터 셀들
-          _buildEditableCell(meal.id, 'breakfast', meal.breakfast),
-          _buildEditableCell(meal.id, 'lunch', meal.lunch),
-          _buildEditableCell(meal.id, 'dinner', meal.dinner),
-          _buildEditableCell(meal.id, 'snack', meal.snack),
-        ],
-      ),
-    );
-  }
-
-  // 일반 텍스트 셀 (라벨용)
-  Widget _buildCell(String text, double height, {bool isHeader = false}) {
-    return Container(
-      height: height,
-      width: labelColumnWidth,
+      padding: const EdgeInsets.symmetric(vertical: 16),
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-      ),
       child: Text(
         text,
         style: TextStyle(
-          fontSize: isHeader ? 12 : 13,
-          fontWeight: isHeader ? FontWeight.bold : FontWeight.w500,
-          color: isHeader ? Colors.black87 : Colors.blueGrey[700],
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: isHeader ? Colors.black87 : Colors.blueGrey[600],
         ),
       ),
     );
   }
 
-  // 입력 가능한 데이터 셀
-  Widget _buildEditableCell(String mealId, String field, String value) {
+  // 날짜 헤더 셀
+  Widget _buildDateHeaderCell(String title, String date) {
     return Container(
-      height: cellHeight,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      color: Colors.blue[50],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue)),
+          const SizedBox(height: 2),
+          Text(date, style: const TextStyle(fontSize: 9, color: Colors.black54)),
+        ],
       ),
+    );
+  }
+
+  // 데이터 셀 (입력 및 표시)
+  Widget _buildDataCell(String dayId, String field, String value) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      alignment: Alignment.center,
       child: _isEditMode
           ? TextFormField(
         initialValue: value,
-        onChanged: (v) => _updateLocalMeal(mealId, field, v),
+        onChanged: (v) => _updateLocalMeal(dayId, field, v),
         maxLines: null,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 13),
+        style: const TextStyle(fontSize: 12, height: 1.3),
         decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
           border: InputBorder.none,
-          hintText: '입력...',
-          hintStyle: TextStyle(fontSize: 12, color: Colors.grey),
+          hintText: '입력',
+          hintStyle: TextStyle(fontSize: 11, color: Colors.grey),
         ),
       )
-          : Center(
-        child: Text(
-          value.isEmpty ? '-' : value,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 13,
-            color: value.isEmpty ? Colors.grey[400] : Colors.black87,
-          ),
-        ),
+          : Text(
+        value.isEmpty ? '-' : value,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.3),
       ),
     );
   }
 
-  // 편집 중 데이터 로컬 업데이트
   void _updateLocalMeal(String id, String field, String value) {
     final current = _editingMeals[id]!;
     _editingMeals[id] = MealPlan(
