@@ -436,32 +436,53 @@ class EquipmentProvider with ChangeNotifier {
 
   Future<void> saveMeal(MealPlan meal) async { if (!_isAdmin) return; await _db.collection('meals').doc(meal.id).set(meal.toMap()); }
 
+
+  // 💡 리스트 전체를 저장하는 기능 (순서 변경 시 사용)
+  Future<void> updateDailySchedule(DailySchedule schedule) async {
+    if (!_isAdmin) return;
+    await _db.collection('schedules').doc(schedule.id).set(schedule.toMap());
+  }
+
+  // 💡 특정 인덱스에 일정을 추가/삽입하는 기능
+  Future<void> saveScheduleItem(String dayId, ScheduleItem item, {int? atIndex}) async {
+    if (!_isAdmin) return;
+
+    final schedule = _schedules.firstWhere(
+          (s) => s.id == dayId,
+      orElse: () => DailySchedule(id: dayId, items: []),
+    );
+
+    if (atIndex != null) {
+      schedule.items.insert(atIndex, item);
+    } else {
+      schedule.items.add(item);
+    }
+
+    await updateDailySchedule(schedule);
+  }
+
+  // 💡 일정 수정
+  Future<void> updateScheduleItem(String dayId, int index, ScheduleItem newItem) async {
+    if (!_isAdmin) return;
+    final schedule = _schedules.firstWhere((s) => s.id == dayId);
+    schedule.items[index] = newItem;
+    await updateDailySchedule(schedule);
+  }
+
+  // 💡 일정 삭제
+  Future<void> deleteScheduleItem(String dayId, int index) async {
+    if (!_isAdmin) return;
+    final schedule = _schedules.firstWhere((s) => s.id == dayId);
+    schedule.items.removeAt(index);
+    await updateDailySchedule(schedule);
+  }
+
   Future<void> addScheduleItem(String dateId, ScheduleItem newItem) async {
     if (!_isAdmin) return;
     final docRef = _db.collection('schedules').doc(dateId);
     final doc = await docRef.get();
     if (doc.exists) { await docRef.update({'items': FieldValue.arrayUnion([newItem.toMap()])}); }
     else { await docRef.set({'items': [newItem.toMap()]}); }
-  }
-
-  Future<void> updateScheduleItem(String dateId, int index, ScheduleItem updatedItem) async {
-    if (!_isAdmin) return;
-    final docRef = _db.collection('schedules').doc(dateId);
-    final doc = await docRef.get();
-    if (!doc.exists) return;
-    List items = List.from((doc.data() as Map<String, dynamic>)['items'] as List);
-    items[index] = updatedItem.toMap();
-    await docRef.update({'items': items});
-  }
-
-  Future<void> deleteScheduleItem(String dateId, int index) async {
-    if (!_isAdmin) return;
-    final docRef = _db.collection('schedules').doc(dateId);
-    final doc = await docRef.get();
-    if (!doc.exists) return;
-    List items = List.from((doc.data() as Map<String, dynamic>)['items'] as List);
-    items.removeAt(index);
-    await docRef.update({'items': items});
   }
 
   Future<void> addNotice(String title, String content, {List<String> imageUrls = const []}) async {

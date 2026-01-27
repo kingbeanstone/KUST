@@ -133,19 +133,58 @@ class MealPlan {
 
 // 💡 일정 아이템 모델
 class ScheduleItem {
-  String time; String description;
+  final String time;
+  final String description;
+
   ScheduleItem({required this.time, required this.description});
-  Map<String, dynamic> toMap() => {'time': time, 'description': description};
-  factory ScheduleItem.fromMap(Map<String, dynamic> map) => ScheduleItem(time: map['time'] ?? '', description: map['description'] ?? '');
+
+  // 💡 데이터를 Map으로 변환 (저장용)
+  Map<String, dynamic> toMap() {
+    return {
+      'time': time,
+      'description': description,
+    };
+  }
+
+  // 💡 Map에서 객체로 변환 (불러오기용)
+  factory ScheduleItem.fromMap(Map<String, dynamic> map) {
+    return ScheduleItem(
+      time: map['time'] ?? '',
+      description: map['description'] ?? '',
+    );
+  }
 }
 
 // 💡 일별 일정 모델
 class DailySchedule {
-  String id; List<ScheduleItem> items;
+  final String id; // 날짜 (예: 1.29)
+  final List<ScheduleItem> items;
+
   DailySchedule({required this.id, required this.items});
+
+  // 💡 DailySchedule 전체를 Map으로 변환 (저장용)
+  Map<String, dynamic> toMap() {
+    return {
+      'items': items.map((item) => item.toMap()).toList(),
+    };
+  }
+
   factory DailySchedule.fromMap(String id, Map<String, dynamic> map) {
-    var list = map['items'] as List? ?? [];
-    return DailySchedule(id: id, items: list.map((i) => ScheduleItem.fromMap(Map<String, dynamic>.from(i))).toList());
+    final List<dynamic> itemsData = map['items'] ?? [];
+    return DailySchedule(
+      id: id,
+      items: itemsData.map((item) => ScheduleItem.fromMap(Map<String, dynamic>.from(item))).toList(),
+    );
+  }
+
+
+  // 💡 파이어베이스 문서로부터 객체 생성
+  factory DailySchedule.fromFirestore(String id, Map<String, dynamic> data) {
+    final List<dynamic> itemsData = data['items'] ?? [];
+    return DailySchedule(
+      id: id,
+      items: itemsData.map((item) => ScheduleItem.fromMap(item)).toList(),
+    );
   }
 }
 

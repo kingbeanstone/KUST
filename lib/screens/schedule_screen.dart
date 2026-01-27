@@ -12,19 +12,19 @@ class ScheduleScreen extends StatefulWidget {
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
   final List<Map<String, String>> _dates = [
-    {'label': '목 1.29', 'id': '1.29'},
-    {'label': '금 1.30', 'id': '1.30'},
-    {'label': '토 1.31', 'id': '1.31'},
-    {'label': '일 2.1', 'id': '2.1'},
-    {'label': '월 2.2', 'id': '2.2'},
-    {'label': '화 2.3', 'id': '2.3'},
-    {'label': '수 2.4', 'id': '2.4'},
-    {'label': '목 2.5', 'id': '2.5'},
+    {'date': '1.29 (목)', 'title': '1일차 (동방파제)', 'id': '1.29'},
+    {'date': '1.30 (금)', 'title': '2일차 (보목)', 'id': '1.30'},
+    {'date': '1.31 (토)', 'title': '3일차 (입도)', 'id': '1.31'},
+    {'date': '2.1 (일)', 'title': '4일차 (드라이데이)', 'id': '2.1'},
+    {'date': '2.2 (월)', 'title': '5일차 (입도)', 'id': '2.2'},
+    {'date': '2.3 (화)', 'title': '6일차 (보팅)', 'id': '2.3'},
+    {'date': '2.4 (수)', 'title': '7일차 (동기여행)', 'id': '2.4'},
+    {'date': '2.5 (목)', 'title': '8일차 (복귀)', 'id': '2.5'},
   ];
 
   int _selectedDateIndex = 0;
 
-  void _showItemDialog(BuildContext context, EquipmentProvider provider, {ScheduleItem? item, int? index}) {
+  void _showItemDialog(BuildContext context, EquipmentProvider provider, {ScheduleItem? item, int? index, int? insertAtIndex}) {
     if (!provider.isAdmin) return;
 
     final TextEditingController _timeController = TextEditingController(text: item?.time ?? "");
@@ -33,32 +33,37 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(item == null ? '일정 추가' : '일정 수정', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          item == null ? (insertAtIndex != null ? '사이에 일정 삽입' : '새 일정 추가') : '일정 수정',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: _timeController,
-              decoration: const InputDecoration(labelText: '시간 (예: 08:00)', hintText: '00:00'),
+              decoration: const InputDecoration(labelText: '시간 (예: 08:00)', hintStyle: TextStyle(fontSize: 12)),
               keyboardType: TextInputType.datetime,
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: _descController,
-              decoration: const InputDecoration(labelText: '내용', hintText: '장비 점검 및 집합'),
+              decoration: const InputDecoration(labelText: '내용', hintText: '활동 내용을 입력하세요'),
             ),
           ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-          if (item != null)
+          if (item != null && index != null)
             TextButton(
               onPressed: () {
-                provider.deleteScheduleItem(_dates[_selectedDateIndex]['id']!, index!);
+                provider.deleteScheduleItem(_dates[_selectedDateIndex]['id']!, index);
                 Navigator.pop(context);
               },
               child: const Text('삭제', style: TextStyle(color: Colors.red)),
             ),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               if (_timeController.text.isEmpty || _descController.text.isEmpty) return;
 
@@ -67,10 +72,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 description: _descController.text,
               );
 
+              final dayId = _dates[_selectedDateIndex]['id']!;
               if (item == null) {
-                provider.addScheduleItem(_dates[_selectedDateIndex]['id']!, newItem);
+                provider.saveScheduleItem(dayId, newItem, atIndex: insertAtIndex);
               } else {
-                provider.updateScheduleItem(_dates[_selectedDateIndex]['id']!, index!, newItem);
+                provider.updateScheduleItem(dayId, index!, newItem);
               }
               Navigator.pop(context);
             },
@@ -86,7 +92,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final provider = Provider.of<EquipmentProvider>(context);
     final currentId = _dates[_selectedDateIndex]['id']!;
 
-    // 현재 날짜의 일정 가져오기
     final dailySchedule = provider.schedules.firstWhere(
           (s) => s.id == currentId,
       orElse: () => DailySchedule(id: currentId, items: []),
@@ -98,57 +103,111 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         title: const Text('📅 원정 일정', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        actions: [
+          if (provider.isAdmin && dailySchedule.items.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(child: Text('길게 눌러 이동', style: TextStyle(fontSize: 11, color: Colors.blue))),
+            )
+        ],
       ),
       body: Column(
         children: [
-          // 상단 날짜 선택 바
+          // 💡 상단 날짜 바 UI 개선
           Container(
-            height: 65,
+            height: 90, // 높이를 조금 더 확보하여 여유를 줌
             color: Colors.white,
-            child: SingleChildScrollView(
+            child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: List.generate(_dates.length, (index) {
-                  bool isSelected = _selectedDateIndex == index;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ChoiceChip(
-                      label: Text(_dates[index]['label']!),
-                      selected: isSelected,
-                      onSelected: (val) {
-                        if (val) setState(() => _selectedDateIndex = index);
-                      },
-                      selectedColor: Colors.blue[700],
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              itemCount: _dates.length,
+              itemBuilder: (context, index) {
+                bool isSelected = _selectedDateIndex == index;
+                return GestureDetector(
+                  onTap: () => setState(() => _selectedDateIndex = index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 130,
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? Colors.blue[800] : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? Colors.blue[800]! : Colors.grey[200]!,
+                        width: 1.5,
                       ),
-                      showCheckmark: false,
+                      boxShadow: isSelected
+                          ? [BoxShadow(color: Colors.blue[800]!.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
+                          : [],
                     ),
-                  );
-                }),
-              ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _dates[index]['date']!,
+                          style: TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 0.5,
+                            color: isSelected ? Colors.white.withOpacity(0.8) : Colors.black45,
+                            fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _dates[index]['title']!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isSelected ? Colors.white : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           const Divider(height: 1),
           // 일정 리스트
           Expanded(
             child: dailySchedule.items.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.event_note, size: 48, color: Colors.grey[300]),
-                  const SizedBox(height: 16),
-                  const Text('등록된 일정이 없습니다.', style: TextStyle(color: Colors.grey)),
-                  if (provider.isAdmin)
-                    const Text('하단 버튼을 눌러 추가해 보세요.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                ],
-              ),
+                ? _buildEmptyState()
+                : provider.isAdmin
+                ? ReorderableListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
+              itemCount: dailySchedule.items.length,
+              onReorder: (oldIndex, newIndex) {
+                setState(() {
+                  if (newIndex > oldIndex) newIndex -= 1;
+                  final item = dailySchedule.items.removeAt(oldIndex);
+                  dailySchedule.items.insert(newIndex, item);
+                  provider.updateDailySchedule(dailySchedule);
+                });
+              },
+              proxyDecorator: (child, index, animation) {
+                return Material(
+                  elevation: 5,
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  child: child,
+                );
+              },
+              itemBuilder: (context, index) {
+                final item = dailySchedule.items[index];
+                return Column(
+                  key: ValueKey('${item.time}_${item.description}_$index'),
+                  children: [
+                    _buildTimelineItem(context, provider, item, index),
+                    if (index < dailySchedule.items.length - 1)
+                      _buildInsertPoint(context, provider, index + 1),
+                  ],
+                );
+              },
             )
                 : ListView.builder(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
               itemCount: dailySchedule.items.length,
               itemBuilder: (context, index) {
                 final item = dailySchedule.items[index];
@@ -159,12 +218,44 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         ],
       ),
       floatingActionButton: provider.isAdmin
-          ? FloatingActionButton(
+          ? FloatingActionButton.extended(
         onPressed: () => _showItemDialog(context, provider),
         backgroundColor: Colors.blue[800],
-        child: const Icon(Icons.add, color: Colors.white),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('일정 추가', style: TextStyle(color: Colors.white)),
       )
           : null,
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.event_note, size: 48, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          const Text('등록된 일정이 없습니다.', style: TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsertPoint(BuildContext context, EquipmentProvider provider, int atIndex) {
+    return Row(
+      children: [
+        const SizedBox(width: 5),
+        Container(width: 2, height: 30, color: Colors.blue[100]),
+        const SizedBox(width: 10),
+        IconButton(
+          onPressed: () => _showItemDialog(context, provider, insertAtIndex: atIndex),
+          icon: Icon(Icons.add_circle, color: Colors.blue[200], size: 24),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          visualDensity: VisualDensity.compact,
+        ),
+        const Expanded(child: Divider(color: Colors.transparent)),
+      ],
     );
   }
 
@@ -172,7 +263,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     return IntrinsicHeight(
       child: Row(
         children: [
-          // 타임라인 장식
           Column(
             children: [
               Container(
@@ -186,12 +276,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ],
           ),
           const SizedBox(width: 20),
-          // 내용 카드
           Expanded(
             child: GestureDetector(
               onTap: provider.isAdmin ? () => _showItemDialog(context, provider, item: item, index: index) : null,
               child: Container(
-                margin: const EdgeInsets.only(bottom: 20),
+                margin: const EdgeInsets.only(bottom: 10, top: 2),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -200,18 +289,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      item.time,
-                      style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.time,
+                            style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.description,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF212121)),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.description,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF212121)),
-                    ),
+                    if (provider.isAdmin)
+                      const Icon(Icons.drag_indicator, color: Colors.grey, size: 20),
                   ],
                 ),
               ),
