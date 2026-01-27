@@ -14,10 +14,13 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   final ScrollController _headerHController = ScrollController();
   final ScrollController _bodyHController = ScrollController();
 
-  static const double noWidth = 20.0;
-  static const double nameWidth = 60.0;
-  static const double cellWidth = 60.0;
+  // 1. 개인 체크 상태 저장 변수
+  final Map<String, bool> _personalChecks = {};
+  final List<String> gearKeys = ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'];
 
+  static const double noWidth = 30.0;
+  static const double nameWidth = 70.0;
+  static const double cellWidth = 60.0;
   static const double dataRowHeight = 40.0;
   static const double oxRowHeight = 40.0;
   static const double headerHeight = 40.0;
@@ -26,6 +29,11 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   @override
   void initState() {
     super.initState();
+    // 개인 체크 변수 초기화
+    for (var key in gearKeys) {
+      _personalChecks[key] = false;
+    }
+
     _headerHController.addListener(() {
       if (_bodyHController.hasClients && _bodyHController.offset != _headerHController.offset) {
         _bodyHController.jumpTo(_headerHController.offset);
@@ -46,7 +54,7 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   void _showResetDialog(EquipmentProvider provider) {
-    if (!provider.isAdmin) return; // 권한 체크
+    if (!provider.isAdmin) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -69,24 +77,19 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<EquipmentProvider>(context);
-    final gearKeys = ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'];
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('✅ 장비 체크 현황', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
         elevation: 0.5,
         actions: [
-          // 💡 관리자만 초기화 버튼 노출
           if (provider.isAdmin)
             IconButton(
               icon: const Icon(Icons.refresh, color: Colors.blue),
               onPressed: () => _showResetDialog(provider),
-              tooltip: '전체 초기화',
             ),
-          const SizedBox(width: 8),
         ],
       ),
       body: Column(
@@ -99,84 +102,42 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // --- 왼쪽 고정 열 (순번, 이름) ---
                   Container(
                     width: noWidth + nameWidth + fixedBorderWidth,
                     decoration: BoxDecoration(
                       border: Border(right: BorderSide(color: Colors.grey[400]!, width: fixedBorderWidth)),
                     ),
                     child: Column(
-                      children: List.generate(provider.data.length, (index) {
-                        final member = provider.data[index];
-                        return Container(
-                          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5))),
-                          child: Column(
-                            children: [
-                              Container(
-                                height: dataRowHeight,
-                                color: Colors.white,
-                                child: Row(
-                                  children: [
-                                    _dataCell(Text('${index + 1}', style: const TextStyle(fontSize: 11, color: Colors.grey)), noWidth),
-                                    _dataCell(Text(member.name.isEmpty ? '-' : member.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), nameWidth),
-                                  ],
-                                ),
-                              ),
-                              Container(height: oxRowHeight, color: const Color(0xFFF8F9FA)),
-                            ],
-                          ),
-                        );
-                      }),
+                      children: [
+                        // 💡 [신규] "나"의 개인 체크 행 왼쪽 라벨
+                        _buildFixedRowLabel("My", "개인 체크", Colors.blue[50]!),
+
+                        // 대원들 리스트 라벨
+                        ...List.generate(provider.data.length, (index) {
+                          final member = provider.data[index];
+                          return _buildFixedRowLabel('${index + 1}', member.name, Colors.white);
+                        }),
+                      ],
                     ),
                   ),
+
+                  // --- 오른쪽 스크롤 데이터 영역 ---
                   Expanded(
                     child: SingleChildScrollView(
                       controller: _bodyHController,
                       scrollDirection: Axis.horizontal,
                       child: Column(
-                        children: List.generate(provider.data.length, (index) {
-                          final member = provider.data[index];
-                          return Container(
-                            decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5))),
-                            child: Row(
-                              children: gearKeys.map((key) {
-                                final gear = member.gears[key]!;
-                                return GestureDetector(
-                                  // 💡 관리자 인증이 된 경우에만 토글 가능
-                                  onTap: provider.isAdmin
-                                      ? () => provider.toggleCheck(member.id, key)
-                                      : () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('데이터를 수정하려면 관리자 인증이 필요합니다.'), duration: Duration(seconds: 1)),
-                                    );
-                                  },
-                                  child: Container(
-                                    width: cellWidth,
-                                    decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[200]!, width: 0.5))),
-                                    child: Column(
-                                      children: [
-                                        Container(
-                                          height: dataRowHeight,
-                                          alignment: Alignment.center,
-                                          color: Colors.white,
-                                          child: Text(gear.value.isEmpty ? '-' : gear.value, style: const TextStyle(fontSize: 11, color: Colors.black87)),
-                                        ),
-                                        Container(
-                                          height: oxRowHeight,
-                                          alignment: Alignment.center,
-                                          color: gear.checked ? const Color(0xFFE8F5E9) : const Color(0xFFFFF5F5),
-                                          child: Text(
-                                            gear.checked ? 'O' : 'X',
-                                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: gear.checked ? Colors.green : Colors.red[300]),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          );
-                        }),
+                        children: [
+                          // 💡 [신규] "나"의 개인 체크 데이터 행 (토글 가능)
+                          _buildPersonalDataRow(),
+
+                          // 대원들 데이터 행
+                          ...List.generate(provider.data.length, (index) {
+                            final member = provider.data[index];
+                            return _buildMemberDataRow(member, provider);
+                          }),
+                        ],
                       ),
                     ),
                   ),
@@ -185,6 +146,118 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // 💡 고정 라벨 행 빌더
+  Widget _buildFixedRowLabel(String no, String name, Color bgColor) {
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            height: dataRowHeight,
+            child: Row(
+              children: [
+                _dataCell(Text(no, style: const TextStyle(fontSize: 10, color: Colors.grey)), noWidth),
+                _dataCell(Text(name.isEmpty ? '-' : name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), nameWidth),
+              ],
+            ),
+          ),
+          Container(height: oxRowHeight),
+        ],
+      ),
+    );
+  }
+
+  // 💡 개인용 체크 데이터 행 (터치 시 로컬 상태 변경)
+  Widget _buildPersonalDataRow() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.blue[50]!.withOpacity(0.3),
+        border: Border(bottom: BorderSide(color: Colors.blue[100]!, width: 1)),
+      ),
+      child: Row(
+        children: gearKeys.map((key) {
+          final isChecked = _personalChecks[key] ?? false;
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _personalChecks[key] = !isChecked;
+              });
+            },
+            child: Container(
+              width: cellWidth,
+              decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[200]!, width: 0.5))),
+              child: Column(
+                children: [
+                  Container(
+                    height: dataRowHeight,
+                    alignment: Alignment.center,
+                    child: const Text('내꺼', style: TextStyle(fontSize: 10, color: Colors.blue)),
+                  ),
+                  Container(
+                    height: oxRowHeight,
+                    alignment: Alignment.center,
+                    color: isChecked ? Colors.green[50] : Colors.white,
+                    child: Icon(
+                      isChecked ? Icons.check_box : Icons.check_box_outline_blank,
+                      color: isChecked ? Colors.green : Colors.grey,
+                      size: 24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // 💡 대원용 데이터 행 빌더
+  Widget _buildMemberDataRow(MemberEquipment member, EquipmentProvider provider) {
+    return Container(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5))),
+      child: Row(
+        children: gearKeys.map((key) {
+          final gear = member.gears[key]!;
+          return GestureDetector(
+            onTap: provider.isAdmin
+                ? () => provider.toggleCheck(member.id, key)
+                : () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('관리자만 수정할 수 있습니다.'), duration: Duration(seconds: 1)),
+              );
+            },
+            child: Container(
+              width: cellWidth,
+              decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[200]!, width: 0.5))),
+              child: Column(
+                children: [
+                  Container(
+                    height: dataRowHeight,
+                    alignment: Alignment.center,
+                    child: Text(gear.value.isEmpty ? '-' : gear.value, style: const TextStyle(fontSize: 11)),
+                  ),
+                  Container(
+                    height: oxRowHeight,
+                    alignment: Alignment.center,
+                    color: gear.checked ? const Color(0xFFE8F5E9) : const Color(0xFFFFF5F5),
+                    child: Text(
+                      gear.checked ? 'O' : 'X',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: gear.checked ? Colors.green : Colors.red[300]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -218,13 +291,15 @@ class _ChecklistScreenState extends State<ChecklistScreen> {
   }
 
   Widget _headerCell(String text, double width) => Container(
-    width: width, alignment: Alignment.center,
+    width: width,
+    alignment: Alignment.center,
     decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[300]!))),
-    child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF495057))),
+    child: Text(text, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
   );
 
   Widget _dataCell(Widget child, double width) => Container(
-    width: width, alignment: Alignment.center,
+    width: width,
+    alignment: Alignment.center,
     decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[200]!))),
     child: child,
   );

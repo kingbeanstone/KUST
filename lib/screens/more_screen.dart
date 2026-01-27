@@ -390,7 +390,7 @@ class _MoreScreenState extends State<MoreScreen> {
                   ),
 
                   const SizedBox(height: 40),
-                  const Center(child: Text('버전 정보 v1.7.0', style: TextStyle(color: Colors.grey, fontSize: 11))),
+                  const Center(child: Text('버전 정보 v2.7.0', style: TextStyle(color: Colors.grey, fontSize: 11))),
                   const SizedBox(height: 20),
                 ],
               ),

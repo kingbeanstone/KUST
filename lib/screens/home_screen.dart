@@ -75,7 +75,7 @@ class HomeScreen extends StatelessWidget {
                     target: const InputScreen()),
 
                 _buildMenuCard(context,
-                    title: '체크리스트', subtitle: '최종 준비 확인',
+                    title: '장비 체크', subtitle: '최종 준비 확인',
                     icon: Icons.checklist_rtl_rounded, color: Colors.green,
                     target: const ChecklistScreen()),
 
