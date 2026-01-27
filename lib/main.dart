@@ -11,6 +11,7 @@ import 'providers/meal_plan_provider.dart';
 import 'providers/notice_provider.dart';
 import 'providers/executive_checklist_provider.dart';
 import 'providers/member_provider.dart';
+import 'providers/buddy_provider.dart';
 
 // Screens
 import 'screens/home_screen.dart';
@@ -20,6 +21,7 @@ import 'screens/meal_plan_screen.dart';
 import 'screens/more_screen.dart';
 import 'screens/executive_checklist_screen.dart';
 import 'screens/member_management_screen.dart';
+import 'screens/buddy_screen.dart';
 
 
 
@@ -75,6 +77,7 @@ void main() async {
         ChangeNotifierProvider(create: (context) => NoticeProvider()), // 이 줄이 있어야 합니다!
         ChangeNotifierProvider(create: (context) => ExecutiveChecklistProvider()),
         ChangeNotifierProvider(create: (context) => MemberProvider()),
+        ChangeNotifierProvider(create: (context) => BuddyProvider()),
       ],
       child: KustApp(isInitialized: isFirebaseInitialized),
     ),

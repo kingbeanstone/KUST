@@ -8,14 +8,14 @@ import 'search_screen.dart';
 import 'checklist_screen.dart';
 import 'qna_screen.dart';
 import 'executive_checklist_screen.dart';
-import 'member_management_screen.dart'; // 💡 멤버 관리 화면 임포트
+import 'member_management_screen.dart';
+import 'buddy_screen.dart'; // 💡 신규 버디 화면 임포트
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // 권한 정보와 공지 정보를 각각의 프로바이더에서 가져옵니다.
     final equipmentProvider = Provider.of<EquipmentProvider>(context);
     final noticeProvider = Provider.of<NoticeProvider>(context);
 
@@ -24,7 +24,6 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
-      // 💡 오른쪽 사이드 바 정의 (멤버 관리 포함)
       endDrawer: _buildSideBar(context, equipmentProvider, isAdmin),
       appBar: AppBar(
         title: const Text('KUST 동계 원정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
@@ -32,17 +31,13 @@ class HomeScreen extends StatelessWidget {
         elevation: 0,
         centerTitle: false,
         actions: [
-          // 기존 프로필/관리자 아이콘
           IconButton(
             icon: Icon(
               isAdmin ? Icons.admin_panel_settings : Icons.person_outline,
               color: isAdmin ? Colors.blue : Colors.black87,
             ),
-            onPressed: () {
-              // 필요 시 특정 화면 이동
-            },
+            onPressed: () {},
           ),
-          // 3줄 메뉴 버튼
           Builder(
             builder: (context) => IconButton(
               icon: const Icon(Icons.menu, color: Colors.black87),
@@ -62,12 +57,10 @@ class HomeScreen extends StatelessWidget {
             const Text('오늘의 장비 점검을 잊지 마세요.', style: TextStyle(color: Colors.black54)),
             const SizedBox(height: 24),
 
-            // 실시간 공지사항 퀵 카드를 버튼 위로 이동
             _buildQuickNoticeCard(context, noticeProvider, isAdmin, homeNotice),
 
             const SizedBox(height: 24),
 
-            // 💡 메인 메뉴 그리드 (2x3 구성을 유지하며 버디 시스템 배치)
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -91,11 +84,11 @@ class HomeScreen extends StatelessWidget {
                     icon: Icons.search_rounded, color: Colors.orange,
                     target: const SearchScreen()),
 
-                // 💡 [변경] 버디 시스템을 다시 홈 화면 그리드에 배치 (나중에 구현 예정)
+                // 💡 [변경 완료] Placeholder를 지우고 실제 BuddyScreen으로 연결했습니다.
                 _buildMenuCard(context,
                     title: '버디 시스템', subtitle: '다이빙 짝꿍 확인',
                     icon: Icons.people_outline_rounded, color: Colors.teal,
-                    target: const PlaceholderScreen(title: '버디 시스템')),
+                    target: const BuddyScreen()),
 
                 _buildMenuCard(context,
                     title: '임단 체크', subtitle: '임원진 전용 관리',
@@ -111,7 +104,6 @@ class HomeScreen extends StatelessWidget {
                     target: const QnaScreen()),
               ],
             ),
-
             const SizedBox(height: 20),
           ],
         ),
@@ -119,7 +111,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // 💡 사이드 바 UI 빌더 (멤버 관리 메뉴 추가)
   Widget _buildSideBar(BuildContext context, EquipmentProvider provider, bool isAdmin) {
     return Drawer(
       child: Column(
@@ -133,8 +124,6 @@ class HomeScreen extends StatelessWidget {
               child: Icon(isAdmin ? Icons.admin_panel_settings : Icons.person, color: Colors.blue[800], size: 40),
             ),
           ),
-
-          // 💡 [추가] 사이드바에 멤버 관리 버튼 배치
           ListTile(
             leading: Icon(isAdmin ? Icons.people_alt_outlined : Icons.lock_outline, color: Colors.black87),
             title: const Text('원정 멤버 관리', style: TextStyle(fontWeight: FontWeight.w500)),
@@ -146,19 +135,17 @@ class HomeScreen extends StatelessWidget {
                 );
                 return;
               }
-              Navigator.pop(context); // 사이드바 닫기
+              Navigator.pop(context);
               Navigator.push(context, MaterialPageRoute(builder: (context) => const MemberManagementScreen()));
             },
           ),
-
           const Spacer(),
-
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('v1.8.3', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const Text('v1.8.4', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 if (isAdmin)
                   TextButton.icon(
                     onPressed: () {
