@@ -9,7 +9,7 @@ import 'checklist_screen.dart';
 import 'qna_screen.dart';
 import 'executive_checklist_screen.dart';
 import 'member_management_screen.dart';
-import 'buddy_screen.dart'; // 💡 신규 버디 화면 임포트
+import 'buddy_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -57,60 +57,66 @@ class HomeScreen extends StatelessWidget {
             const Text('오늘의 장비 점검을 잊지 마세요.', style: TextStyle(color: Colors.black54)),
             const SizedBox(height: 24),
 
-            _buildQuickNoticeCard(context, noticeProvider, isAdmin, homeNotice),
-
-            const SizedBox(height: 24),
-
+            // 💡 3행 2열 그리드 구성
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              childAspectRatio: 1.15,
+              // 💡 부제목이 빠져서 높이를 줄이기 위해 비율 조정 (1.15 -> 1.4)
+              childAspectRatio: 1.4,
               children: [
+                // 1행: 장비 목록, 장비 체크
                 _buildMenuCard(context,
-                    title: '장비 목록', subtitle: '대원 정보 입력',
+                    title: '장비 목록',
                     icon: Icons.assignment_outlined, color: Colors.blue,
-                    target: const InputScreen()),
-
+                    target: const InputScreen(),
+                    isAdminRequired: false,
+                    isAdmin: isAdmin),
                 _buildMenuCard(context,
-                    title: '장비 체크', subtitle: '최종 준비 확인',
+                    title: '장비 체크',
                     icon: Icons.checklist_rtl_rounded, color: Colors.green,
                     target: const ChecklistScreen()),
 
+                // 2행: 장비 검색, 버디 시스템
                 _buildMenuCard(context,
-                    title: '장비 검색', subtitle: '품목별 빠른 찾기',
+                    title: '장비 검색',
                     icon: Icons.search_rounded, color: Colors.orange,
                     target: const SearchScreen()),
-
-                // 💡 [변경 완료] Placeholder를 지우고 실제 BuddyScreen으로 연결했습니다.
                 _buildMenuCard(context,
-                    title: '버디 시스템', subtitle: '다이빙 짝꿍 확인',
+                    title: '버디 시스템',
                     icon: Icons.people_outline_rounded, color: Colors.teal,
                     target: const BuddyScreen()),
 
+                // 3행: 임단 체크, QnA
                 _buildMenuCard(context,
-                    title: '임단 체크', subtitle: '임원진 전용 관리',
+                    title: '임단 체크',
                     icon: isAdmin ? Icons.verified_user_outlined : Icons.lock_outline,
                     color: isAdmin ? Colors.indigo : Colors.grey,
                     target: const ExecutiveChecklistScreen(),
                     isAdminRequired: true,
                     isAdmin: isAdmin),
-
                 _buildMenuCard(context,
-                    title: 'QnA', subtitle: '궁금한 점 문의',
+                    title: 'QnA',
                     icon: Icons.question_answer_outlined, color: Colors.purple,
                     target: const QnaScreen()),
               ],
             ),
-            const SizedBox(height: 20),
+
+            const SizedBox(height: 32),
+
+            // 💡 알림 배너 (버튼들 아래 위치)
+            _buildQuickNoticeCard(context, noticeProvider, isAdmin, homeNotice),
+
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
+  // 사이드바 구성
   Widget _buildSideBar(BuildContext context, EquipmentProvider provider, bool isAdmin) {
     return Drawer(
       child: Column(
@@ -124,28 +130,41 @@ class HomeScreen extends StatelessWidget {
               child: Icon(isAdmin ? Icons.admin_panel_settings : Icons.person, color: Colors.blue[800], size: 40),
             ),
           ),
-          ListTile(
-            leading: Icon(isAdmin ? Icons.people_alt_outlined : Icons.lock_outline, color: Colors.black87),
-            title: const Text('원정 멤버 관리', style: TextStyle(fontWeight: FontWeight.w500)),
-            subtitle: const Text('대원 명단 및 정보 수정', style: TextStyle(fontSize: 11)),
-            onTap: () {
-              if (!isAdmin) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('관리자 인증이 필요한 메뉴입니다.'), backgroundColor: Colors.redAccent),
-                );
-                return;
-              }
-              Navigator.pop(context);
-              Navigator.push(context, MaterialPageRoute(builder: (context) => const MemberManagementScreen()));
-            },
+
+          _drawerItem(
+            context,
+            icon: isAdmin ? Icons.people_alt_outlined : Icons.lock_outline,
+            title: '원정 멤버 관리',
+            subtitle: '대원 명단 및 정보 수정',
+            isAdmin: isAdmin,
+            target: const MemberManagementScreen(),
           ),
+
+          _drawerItem(
+            context,
+            icon: isAdmin ? Icons.assignment_outlined : Icons.lock_outline,
+            title: '장비 목록 관리',
+            subtitle: '대원별 장비 정보 입력/수정',
+            isAdmin: isAdmin,
+            target: const InputScreen(),
+          ),
+
+          _drawerItem(
+            context,
+            icon: isAdmin ? Icons.verified_user_outlined : Icons.lock_outline,
+            title: '임원단 체크리스트',
+            subtitle: '임원진 전용 업무 관리',
+            isAdmin: isAdmin,
+            target: const ExecutiveChecklistScreen(),
+          ),
+
           const Spacer(),
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('v1.8.4', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const Text('v1.8.8', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 if (isAdmin)
                   TextButton.icon(
                     onPressed: () {
@@ -163,9 +182,34 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuCard(BuildContext context, {
+  // 사이드바 아이템 공통 위젯
+  Widget _drawerItem(BuildContext context, {
+    required IconData icon,
     required String title,
     required String subtitle,
+    required bool isAdmin,
+    required Widget target
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.black87),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 11)),
+      onTap: () {
+        if (!isAdmin) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('관리자 인증이 필요한 메뉴입니다.'), backgroundColor: Colors.redAccent),
+          );
+          return;
+        }
+        Navigator.pop(context);
+        Navigator.push(context, MaterialPageRoute(builder: (context) => target));
+      },
+    );
+  }
+
+  // 💡 메뉴 카드 위젯 (제목만 표시하도록 수정)
+  Widget _buildMenuCard(BuildContext context, {
+    required String title,
     required IconData icon,
     required Color color,
     required Widget target,
@@ -203,20 +247,22 @@ class HomeScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-                child: Icon(icon, color: color, size: 28)
+                child: Icon(icon, color: color, size: 26)
             ),
-            const SizedBox(height: 12),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            const SizedBox(height: 4),
-            Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.black38)),
+            const SizedBox(height: 10),
+            Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)
+            ),
           ],
         ),
       ),
     );
   }
 
+  // 💡 알림 배너 카드
   Widget _buildQuickNoticeCard(BuildContext context, NoticeProvider noticeProvider, bool isAdmin, NoticeItem? notice) {
     final bool isPinned = notice?.isPinned ?? false;
 
@@ -270,6 +316,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  // 공지사항 빠른 수정 다이얼로그
   void _showQuickEditDialog(BuildContext context, NoticeProvider noticeProvider, NoticeItem? existingNotice) {
     final titleController = TextEditingController(text: existingNotice?.title ?? '');
     final contentController = TextEditingController(text: existingNotice?.content ?? '');
@@ -277,6 +324,7 @@ class HomeScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(existingNotice == null ? '새 공지 등록' : '공지 내용 수정'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -305,28 +353,6 @@ class HomeScreen extends StatelessWidget {
             child: const Text('저장'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class PlaceholderScreen extends StatelessWidget {
-  final String title;
-  const PlaceholderScreen({super.key, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.construction, size: 64, color: Colors.grey[300]),
-            const SizedBox(height: 16),
-            Text('$title 기능 준비 중입니다.', style: const TextStyle(color: Colors.grey)),
-          ],
-        ),
       ),
     );
   }

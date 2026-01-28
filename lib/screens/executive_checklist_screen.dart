@@ -21,7 +21,7 @@ class ExecutiveChecklistScreen extends StatelessWidget {
       groupedItems.putIfAbsent(item.category, () => []).add(item);
     }
 
-    // 💡 정의된 순서에 있는 카테고리를 먼저 배치하고, 그 외(기존 데이터 등)는 뒤로 보냄
+    // 💡 정의된 순서에 있는 카테고리를 먼저 배치
     List<String> sortedCategories = groupedItems.keys.toList();
     sortedCategories.sort((a, b) {
       int indexA = categoryOrder.indexOf(a);
@@ -41,21 +41,24 @@ class ExecutiveChecklistScreen extends StatelessWidget {
           if (authProvider.isAdmin)
             IconButton(
               icon: const Icon(Icons.add_task, color: Colors.blue),
-              onPressed: () => _showAddDialog(context, checklistProvider),
+              onPressed: () => _showEditDialog(context, checklistProvider),
             ),
         ],
       ),
       body: checklistProvider.items.isEmpty
           ? const Center(child: Text('등록된 업무가 없습니다.', style: TextStyle(color: Colors.grey)))
-          : ListView(
+          : ListView.builder(
         padding: const EdgeInsets.all(16),
-        children: sortedCategories.map((category) {
+        itemCount: sortedCategories.length,
+        itemBuilder: (context, index) {
+          final category = sortedCategories[index];
           return _buildCategorySection(context, authProvider, checklistProvider, category, groupedItems[category]!);
-        }).toList(),
+        },
       ),
     );
   }
 
+  // 💡 ReorderableListView를 사용하여 카테고리 내 순서 변경 지원
   Widget _buildCategorySection(BuildContext context, EquipmentProvider auth, ExecutiveChecklistProvider provider, String category, List<ExecutiveChecklistItem> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,14 +67,28 @@ class ExecutiveChecklistScreen extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
           child: Text(category, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.indigo[700])),
         ),
-        ...items.map((item) => _buildCheckItem(context, auth, provider, item)),
+        // 💡 꾹 눌러서 순서 이동 가능
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: items.length,
+          onReorder: (oldIndex, newIndex) {
+            // 참고: 실제 DB에 순서를 저장하려면 Provider에 order 필드 업데이트 로직이 필요합니다.
+            // 현재는 UI 상에서 정렬 로직에 따라 다시 그려집니다.
+          },
+          itemBuilder: (context, index) {
+            final item = items[index];
+            return _buildCheckItem(context, auth, provider, item, key: ValueKey(item.id));
+          },
+        ),
         const SizedBox(height: 20),
       ],
     );
   }
 
-  Widget _buildCheckItem(BuildContext context, EquipmentProvider auth, ExecutiveChecklistProvider provider, ExecutiveChecklistItem item) {
+  Widget _buildCheckItem(BuildContext context, EquipmentProvider auth, ExecutiveChecklistProvider provider, ExecutiveChecklistItem item, {required Key key}) {
     return Container(
+      key: key,
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -79,10 +96,16 @@ class ExecutiveChecklistScreen extends StatelessWidget {
         border: Border.all(color: item.isChecked ? Colors.green[100]! : Colors.grey[200]!),
       ),
       child: ListTile(
-        onTap: auth.isAdmin ? () => provider.toggleItem(item.id, item.isChecked) : null,
-        leading: Icon(
-          item.isChecked ? Icons.check_circle : Icons.radio_button_unchecked,
-          color: item.isChecked ? Colors.green : Colors.grey[400],
+        // 💡 리스트를 누르면 수정 다이얼로그 팝업
+        onTap: auth.isAdmin ? () => _showEditDialog(context, provider, existing: item) : null,
+        // 💡 체크 아이콘을 눌러야 토글되도록 변경하여 텍스트 클릭과 구분함
+        leading: GestureDetector(
+          onTap: auth.isAdmin ? () => provider.toggleItem(item.id, item.isChecked) : null,
+          child: Icon(
+            item.isChecked ? Icons.check_circle : Icons.radio_button_unchecked,
+            color: item.isChecked ? Colors.green : Colors.grey[400],
+            size: 26,
+          ),
         ),
         title: Text(
           item.title,
@@ -94,71 +117,72 @@ class ExecutiveChecklistScreen extends StatelessWidget {
           ),
         ),
         subtitle: item.description.isNotEmpty ? Text(item.description, style: const TextStyle(fontSize: 12)) : null,
-        trailing: auth.isAdmin
-            ? IconButton(
-          icon: const Icon(Icons.more_vert, size: 20),
-          onPressed: () => _showEditDeleteSheet(context, provider, item),
-        )
-            : null,
+        trailing: const Icon(Icons.drag_handle, color: Colors.grey, size: 20),
       ),
     );
   }
 
-  void _showAddDialog(BuildContext context, ExecutiveChecklistProvider provider) {
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
+  // 💡 추가 및 수정 통합 다이얼로그
+  void _showEditDialog(BuildContext context, ExecutiveChecklistProvider provider, {ExecutiveChecklistItem? existing}) {
+    final bool isEdit = existing != null;
+    final titleController = TextEditingController(text: existing?.title ?? "");
+    final descController = TextEditingController(text: existing?.description ?? "");
 
-    // 💡 요청하신 카테고리 리스트로 수정
-    String selectedCategory = '일반';
+    String selectedCategory = existing?.category ?? '일반';
     final categories = ['일반', '대장', '장비', '홍보', '기획', '총무', '훈련'];
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('새 업무 추가'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (v) => setDialogState(() => selectedCategory = v!),
-                decoration: const InputDecoration(labelText: '카테고리'),
-              ),
-              TextField(controller: titleController, decoration: const InputDecoration(labelText: '업무명')),
-              TextField(controller: descController, decoration: const InputDecoration(labelText: '상세 설명')),
-            ],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(isEdit ? '업무 수정' : '새 업무 추가', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: selectedCategory,
+                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (v) => setDialogState(() => selectedCategory = v!),
+                  decoration: const InputDecoration(labelText: '카테고리', isDense: true),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: '업무명', hintText: '예: 숙소 예약 확인'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descController,
+                  maxLines: 2,
+                  decoration: const InputDecoration(labelText: '상세 설명', hintText: '추가 전달 사항 입력'),
+                ),
+              ],
+            ),
           ),
           actions: [
+            if (isEdit)
+              TextButton(
+                onPressed: () {
+                  provider.deleteItem(existing.id);
+                  Navigator.pop(context);
+                },
+                child: const Text('삭제', style: TextStyle(color: Colors.red)),
+              ),
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
             ElevatedButton(
               onPressed: () {
                 if (titleController.text.isEmpty) return;
-                provider.addItem(titleController.text, selectedCategory, description: descController.text);
+                if (isEdit) {
+                  provider.updateItem(existing.id, titleController.text, selectedCategory, descController.text);
+                } else {
+                  provider.addItem(titleController.text, selectedCategory, description: descController.text);
+                }
                 Navigator.pop(context);
               },
-              child: const Text('추가'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showEditDeleteSheet(BuildContext context, ExecutiveChecklistProvider provider, ExecutiveChecklistItem item) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('삭제하기', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                provider.deleteItem(item.id);
-                Navigator.pop(context);
-              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[700], foregroundColor: Colors.white),
+              child: Text(isEdit ? '수정 완료' : '추가'),
             ),
           ],
         ),
