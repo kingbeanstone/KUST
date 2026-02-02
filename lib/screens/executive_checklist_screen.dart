@@ -9,19 +9,17 @@ class ExecutiveChecklistScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<EquipmentProvider>(context);
-    final checklistProvider = Provider.of<ExecutiveChecklistProvider>(context);
+    // 💡 에러 이미지에 나온 변수명 불일치를 예방하기 위해 명확히 선언
+    final equipProv = Provider.of<EquipmentProvider>(context);
+    final checklistProv = Provider.of<ExecutiveChecklistProvider>(context);
 
-    // 💡 정의된 업무 순서대로 정렬하기 위한 리스트
     const categoryOrder = ['일반', '대장', '장비', '홍보', '기획', '총무', '훈련'];
 
-    // 카테고리별로 데이터 분류
     Map<String, List<ExecutiveChecklistItem>> groupedItems = {};
-    for (var item in checklistProvider.items) {
+    for (var item in checklistProv.items) {
       groupedItems.putIfAbsent(item.category, () => []).add(item);
     }
 
-    // 💡 정의된 순서에 있는 카테고리를 먼저 배치
     List<String> sortedCategories = groupedItems.keys.toList();
     sortedCategories.sort((a, b) {
       int indexA = categoryOrder.indexOf(a);
@@ -38,27 +36,26 @@ class ExecutiveChecklistScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          if (authProvider.isAdmin)
+          if (equipProv.isAdmin)
             IconButton(
               icon: const Icon(Icons.add_task, color: Colors.blue),
-              onPressed: () => _showEditDialog(context, checklistProvider),
+              onPressed: () => _showEditDialog(context, checklistProv),
             ),
         ],
       ),
-      body: checklistProvider.items.isEmpty
+      body: checklistProv.items.isEmpty
           ? const Center(child: Text('등록된 업무가 없습니다.', style: TextStyle(color: Colors.grey)))
           : ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: sortedCategories.length,
         itemBuilder: (context, index) {
           final category = sortedCategories[index];
-          return _buildCategorySection(context, authProvider, checklistProvider, category, groupedItems[category]!);
+          return _buildCategorySection(context, equipProv, checklistProv, category, groupedItems[category]!);
         },
       ),
     );
   }
 
-  // 💡 ReorderableListView를 사용하여 카테고리 내 순서 변경 지원
   Widget _buildCategorySection(BuildContext context, EquipmentProvider auth, ExecutiveChecklistProvider provider, String category, List<ExecutiveChecklistItem> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,14 +64,27 @@ class ExecutiveChecklistScreen extends StatelessWidget {
           padding: const EdgeInsets.only(left: 4, bottom: 12, top: 8),
           child: Text(category, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.indigo[700])),
         ),
-        // 💡 꾹 눌러서 순서 이동 가능
+        // 💡 ReorderableListView 로직 완성
         ReorderableListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: items.length,
-          onReorder: (oldIndex, newIndex) {
-            // 참고: 실제 DB에 순서를 저장하려면 Provider에 order 필드 업데이트 로직이 필요합니다.
-            // 현재는 UI 상에서 정렬 로직에 따라 다시 그려집니다.
+          onReorder: (oldIndex, newIndex) async {
+            // 관리자가 아닐 경우 조작 방지
+            if (!auth.isAdmin) return;
+
+            // 💡 [핵심] 드래그 앤 드롭 인덱스 보정
+            if (newIndex > oldIndex) {
+              newIndex -= 1;
+            }
+
+            // 데이터 순서 변경
+            final List<ExecutiveChecklistItem> updatedList = List.from(items);
+            final movedItem = updatedList.removeAt(oldIndex);
+            updatedList.insert(newIndex, movedItem);
+
+            // 💡 Provider를 통해 Firestore의 'order' 필드 일괄 업데이트
+            await provider.updateItemsOrder(category, updatedList);
           },
           itemBuilder: (context, index) {
             final item = items[index];
@@ -96,9 +106,7 @@ class ExecutiveChecklistScreen extends StatelessWidget {
         border: Border.all(color: item.isChecked ? Colors.green[100]! : Colors.grey[200]!),
       ),
       child: ListTile(
-        // 💡 리스트를 누르면 수정 다이얼로그 팝업
         onTap: auth.isAdmin ? () => _showEditDialog(context, provider, existing: item) : null,
-        // 💡 체크 아이콘을 눌러야 토글되도록 변경하여 텍스트 클릭과 구분함
         leading: GestureDetector(
           onTap: auth.isAdmin ? () => provider.toggleItem(item.id, item.isChecked) : null,
           child: Icon(
@@ -122,7 +130,6 @@ class ExecutiveChecklistScreen extends StatelessWidget {
     );
   }
 
-  // 💡 추가 및 수정 통합 다이얼로그
   void _showEditDialog(BuildContext context, ExecutiveChecklistProvider provider, {ExecutiveChecklistItem? existing}) {
     final bool isEdit = existing != null;
     final titleController = TextEditingController(text: existing?.title ?? "");

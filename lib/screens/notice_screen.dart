@@ -5,14 +5,15 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import '../providers/auth_provider.dart';
+// 💡 새로운 Provider와 Model 임포트
+import '../providers/equipment_provider.dart';
 import '../providers/notice_provider.dart';
 import '../models/notice_model.dart';
 
 class NoticeScreen extends StatelessWidget {
   const NoticeScreen({super.key});
 
-  // --- 공지 작성/수정 다이얼로그 ---
+  // --- 공지 작성/수정 다이얼로그 (NoticeProvider 연동) ---
   void _showNoticeDialog(BuildContext context, NoticeProvider noticeProvider, {NoticeItem? existingNotice}) {
     final bool isEdit = existingNotice != null;
     final titleController = TextEditingController(text: existingNotice?.title ?? "");
@@ -154,7 +155,7 @@ class NoticeScreen extends StatelessWidget {
               onPressed: isUploading ? null : () async {
                 if (titleController.text.isNotEmpty && contentController.text.isNotEmpty) {
                   setDialogState(() => isUploading = true);
-                  // 💡 NoticeProvider의 메서드 이름 uploadImages로 수정 완료
+                  // 💡 NoticeProvider의 이미지 업로드 함수 호출
                   List<String> newUrls = await noticeProvider.uploadImages(pickedImages);
                   List<String> finalUrls = [...existingUrls, ...newUrls];
 
@@ -175,13 +176,13 @@ class NoticeScreen extends StatelessWidget {
     );
   }
 
-  // --- 푸시 알림 전송 ---
-  void _showPushConfirmDialog(BuildContext context, AuthProvider auth, NoticeProvider noticeProv, NoticeItem notice) {
+  // --- 푸시 알림 전송 (NoticeProvider 연동) ---
+  void _showPushConfirmDialog(BuildContext context, EquipmentProvider equip, NoticeProvider noticeProv, NoticeItem notice) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('푸시 알림 전송'),
-        content: Text("'${notice.title}' 공지를 모든 대원에게 보낼까요?"),
+        content: Text("'${notice.title}' 공지를 모든 대원에게 알림으로 보낼까요?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           ElevatedButton(
@@ -189,11 +190,13 @@ class NoticeScreen extends StatelessWidget {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🚀 알림 발송을 시작합니다. 로그를 확인하세요.')));
 
+              // 💡 NoticeProvider의 전송 기능을 실행하며, 로그는 EquipmentProvider의 콘솔에 기록하게 함
               await noticeProv.sendNoticePush(
                 notice,
-                logger: auth.addLog,
+                logger: equip.addLog,
               );
             },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
             child: const Text('지금 전송'),
           ),
         ],
@@ -231,8 +234,8 @@ class NoticeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final noticeProvider = context.watch<NoticeProvider>();
+    final equipProvider = Provider.of<EquipmentProvider>(context);
+    final noticeProvider = Provider.of<NoticeProvider>(context);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -241,7 +244,7 @@ class NoticeScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          if (auth.isAdmin)
+          if (equipProvider.isAdmin)
             IconButton(
               icon: const Icon(Icons.add_comment_outlined, color: Colors.blue),
               onPressed: () => _showNoticeDialog(context, noticeProvider),
@@ -255,14 +258,15 @@ class NoticeScreen extends StatelessWidget {
         itemCount: noticeProvider.notices.length,
         itemBuilder: (context, index) {
           final notice = noticeProvider.notices[index];
-          return _buildNoticeCard(context, auth, noticeProvider, notice);
+          return _buildNoticeCard(context, equipProvider, noticeProvider, notice);
         },
       ),
     );
   }
 
-  Widget _buildNoticeCard(BuildContext context, AuthProvider auth, NoticeProvider noticeProvider, NoticeItem notice) {
+  Widget _buildNoticeCard(BuildContext context, EquipmentProvider equipmentProvider, NoticeProvider noticeProvider, NoticeItem notice) {
     final String dateStr = DateFormat('yyyy.MM.dd HH:mm').format(notice.timestamp);
+    int currentImgIndex = 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -272,6 +276,14 @@ class NoticeScreen extends StatelessWidget {
         border: Border.all(color: notice.isPinned ? Colors.blue[300]! : Colors.grey[200]!, width: notice.isPinned ? 2 : 1),
       ),
       child: ExpansionTile(
+        onExpansionChanged: (bool expanded) {
+          // 💡 리스트가 펼쳐질 때 모든 이미지를 메모리에 미리 로드합니다.
+          if (expanded) {
+            for (var url in notice.imageUrls) {
+              precacheImage(NetworkImage(url), context);
+            }
+          }
+        },
         leading: CircleAvatar(
           backgroundColor: notice.isPinned ? Colors.blue : Colors.grey[100],
           child: Icon(notice.isPinned ? Icons.push_pin : Icons.campaign_outlined,
@@ -280,50 +292,82 @@ class NoticeScreen extends StatelessWidget {
         title: Text(notice.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text(dateStr, style: const TextStyle(fontSize: 11, color: Colors.grey)),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Divider(),
-                if (notice.imageUrls.isNotEmpty) ...[
-                  SizedBox(
-                    height: 200,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: notice.imageUrls.length,
-                      itemBuilder: (context, idx) => Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: GestureDetector(
-                            onTap: () => _showFullImage(context, notice.imageUrls[idx]),
-                            child: Image.network(notice.imageUrls[idx], fit: BoxFit.cover, width: 200),
+          StatefulBuilder(builder: (context, setCardState) {
+            final PageController pageController = PageController();
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Divider(),
+                  if (notice.imageUrls.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    AspectRatio(
+                      aspectRatio: 1.2,
+                      child: PageView(
+                        controller: pageController,
+                        allowImplicitScrolling: true, // 옆 페이지 미리 렌더링
+                        onPageChanged: (index) {
+                          setCardState(() {
+                            currentImgIndex = index;
+                          });
+                        },
+                        // 💡 builder 대신 children을 사용하여 모든 이미지 위젯을 즉시 초기화
+                        children: notice.imageUrls.map((url) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: GestureDetector(
+                              onTap: () => _showFullImage(context, url),
+                              child: Image.network(
+                                url,
+                                fit: BoxFit.cover,
+                                gaplessPlayback: true, // 끊김 없는 재생 보장
+                              ),
+                            ),
+                          ),
+                        )).toList(),
+                      ),
+                    ),
+                    if (notice.imageUrls.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              "${currentImgIndex + 1} / ${notice.imageUrls.length}",
+                              style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                       ),
+                  ],
+                  const SizedBox(height: 12),
+                  Text(notice.content, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6)),
+                  const SizedBox(height: 16),
+                  if (equipmentProvider.isAdmin)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        _actionButton(onPressed: () => noticeProvider.pinNotice(notice.id), icon: Icons.home_outlined, label: notice.isPinned ? '게시 중' : '홈 게시', color: notice.isPinned ? Colors.blue : Colors.grey),
+                        const SizedBox(width: 12),
+                        _actionButton(onPressed: () => _showPushConfirmDialog(context, equipmentProvider, noticeProvider, notice), icon: Icons.notifications_active_outlined, label: '알림', color: Colors.orange),
+                        const SizedBox(width: 12),
+                        _actionButton(onPressed: () => _showNoticeDialog(context, noticeProvider, existingNotice: notice), icon: Icons.edit_outlined, label: '수정', color: Colors.blueGrey),
+                        const SizedBox(width: 12),
+                        _actionButton(onPressed: () => _showDeleteConfirmDialog(context, noticeProvider, notice.id), icon: Icons.delete_outline, label: '삭제', color: Colors.redAccent),
+                      ],
                     ),
-                  ),
                 ],
-                const SizedBox(height: 12),
-                Text(notice.content, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6)),
-                const SizedBox(height: 16),
-                if (auth.isAdmin)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      _actionButton(onPressed: () => noticeProvider.pinNotice(notice.id), icon: Icons.home_outlined, label: notice.isPinned ? '게시 중' : '홈 게시', color: notice.isPinned ? Colors.blue : Colors.grey),
-                      const SizedBox(width: 12),
-                      _actionButton(onPressed: () => _showPushConfirmDialog(context, auth, noticeProvider, notice), icon: Icons.notifications_active_outlined, label: '알림', color: Colors.orange),
-                      const SizedBox(width: 12),
-                      _actionButton(onPressed: () => _showNoticeDialog(context, noticeProvider, existingNotice: notice), icon: Icons.edit_outlined, label: '수정', color: Colors.blueGrey),
-                      const SizedBox(width: 12),
-                      _actionButton(onPressed: () => _showDeleteConfirmDialog(context, noticeProvider, notice.id), icon: Icons.delete_outline, label: '삭제', color: Colors.redAccent),
-                    ],
-                  ),
-              ],
-            ),
-          ),
+              ),
+            );
+          }),
         ],
       ),
     );
