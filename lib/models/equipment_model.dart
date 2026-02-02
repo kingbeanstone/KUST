@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-
 class GearStatus {
   String value;
   bool checked;
@@ -43,47 +42,7 @@ class MemberEquipment {
   MemberEquipment copy() => MemberEquipment(id: id, name: name, order: order, gears: gears.map((key, value) => MapEntry(key, value.copy())));
 }
 
-// 💡 임원단 모델 (한 줄 소개 필드 포함)
-class ExecutiveItem {
-  String id;
-  String gender; // 'male' 또는 'female'
-  String name;
-  String generation; // 기수
-  String position; // 직책
-  String phone;
-  String intro; // 💡 한 줄 소개
-
-  ExecutiveItem({
-    required this.id,
-    required this.gender,
-    required this.name,
-    required this.generation,
-    required this.position,
-    required this.phone,
-    this.intro = '',
-  });
-
-  Map<String, dynamic> toMap() => {
-    'gender': gender,
-    'name': name,
-    'generation': generation,
-    'position': position,
-    'phone': phone,
-    'intro': intro,
-  };
-
-  factory ExecutiveItem.fromMap(String id, Map<String, dynamic> map) => ExecutiveItem(
-    id: id,
-    gender: map['gender'] ?? 'male',
-    name: map['name'] ?? '',
-    generation: map['generation'] ?? '',
-    position: map['position'] ?? '',
-    phone: map['phone'] ?? '',
-    intro: map['intro'] ?? '',
-  );
-}
-
-// 💡 고유 번호 없는 공용 장비 모델 (수량 조절용)
+// 고유 번호 없는 공용 장비 모델 (수량 조절용)
 class GeneralGearItem {
   String id; // 장비 이름 (Key: 슈트, 마스크 등)
   int count;
@@ -103,7 +62,7 @@ class GeneralGearItem {
   );
 }
 
-// 💡 BCD 독립 모델
+// BCD 독립 모델
 class BcdItem {
   String id; // BCD 번호 (Key)
   String name;
@@ -113,7 +72,7 @@ class BcdItem {
   factory BcdItem.fromMap(String id, Map<String, dynamic> map) => BcdItem(id: id, name: map['name'] ?? '', memo: map['memo'] ?? '');
 }
 
-// 💡 호흡기 독립 모델
+// 호흡기 독립 모델
 class RegulatorItem {
   String id; // 호흡기 번호 (Key)
   String name;
@@ -121,31 +80,4 @@ class RegulatorItem {
   RegulatorItem({required this.id, required this.name, required this.memo});
   Map<String, dynamic> toMap() => {'name': name, 'memo': memo};
   factory RegulatorItem.fromMap(String id, Map<String, dynamic> map) => RegulatorItem(id: id, name: map['name'] ?? '', memo: map['memo'] ?? '');
-}
-
-
-// 💡 Q&A 답변 모델
-class QnaReply {
-  String id; String author; String content; DateTime timestamp;
-  QnaReply({required this.id, required this.author, required this.content, required this.timestamp});
-  factory QnaReply.fromMap(String id, Map<String, dynamic> map) => QnaReply(
-    id: id,
-    author: map['author'] ?? '익명',
-    content: map['content'] ?? '',
-    timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
-  );
-}
-
-// 💡 Q&A 게시글 모델
-class QnaPost {
-  String id; String title; String content; String author; DateTime timestamp; List<QnaReply> replies;
-  QnaPost({required this.id, required this.title, required this.content, required this.author, required this.timestamp, this.replies = const []});
-  factory QnaPost.fromMap(String id, Map<String, dynamic> map, {List<QnaReply> replies = const []}) => QnaPost(
-    id: id,
-    title: map['title'] ?? '',
-    content: map['content'] ?? '',
-    author: map['author'] ?? '익명',
-    timestamp: DateTime.parse(map['timestamp'] ?? DateTime.now().toIso8601String()),
-    replies: replies,
-  );
 }

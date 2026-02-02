@@ -5,15 +5,14 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-// 💡 새로운 Provider와 Model 임포트
-import '../providers/equipment_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/notice_provider.dart';
 import '../models/notice_model.dart';
 
 class NoticeScreen extends StatelessWidget {
   const NoticeScreen({super.key});
 
-  // --- 공지 작성/수정 다이얼로그 (NoticeProvider 연동) ---
+  // --- 공지 작성/수정 다이얼로그 ---
   void _showNoticeDialog(BuildContext context, NoticeProvider noticeProvider, {NoticeItem? existingNotice}) {
     final bool isEdit = existingNotice != null;
     final titleController = TextEditingController(text: existingNotice?.title ?? "");
@@ -155,8 +154,8 @@ class NoticeScreen extends StatelessWidget {
               onPressed: isUploading ? null : () async {
                 if (titleController.text.isNotEmpty && contentController.text.isNotEmpty) {
                   setDialogState(() => isUploading = true);
-                  // 💡 NoticeProvider의 이미지 업로드 함수 호출
-                  List<String> newUrls = await noticeProvider.uploadNoticeImages(pickedImages);
+                  // 💡 NoticeProvider의 메서드 이름 uploadImages로 수정 완료
+                  List<String> newUrls = await noticeProvider.uploadImages(pickedImages);
                   List<String> finalUrls = [...existingUrls, ...newUrls];
 
                   if (isEdit) {
@@ -176,25 +175,25 @@ class NoticeScreen extends StatelessWidget {
     );
   }
 
-  // --- 푸시 알림 전송 (NoticeProvider 연동) ---
-  void _showPushConfirmDialog(BuildContext context, NoticeProvider noticeProvider, NoticeItem notice) {
+  // --- 푸시 알림 전송 ---
+  void _showPushConfirmDialog(BuildContext context, AuthProvider auth, NoticeProvider noticeProv, NoticeItem notice) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('푸시 알림 전송'),
-        content: Text("'${notice.title}' 공지를 모든 대원에게 알림으로 보낼까요?"),
+        content: Text("'${notice.title}' 공지를 모든 대원에게 보낼까요?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
-              // 💡 NoticeProvider의 전송 함수 호출
-              await noticeProvider.sendNoticePush(notice.title, notice.content);
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('알림 전송 프로세스가 시작되었습니다.')));
-              }
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('🚀 알림 발송을 시작합니다. 로그를 확인하세요.')));
+
+              await noticeProv.sendNoticePush(
+                notice,
+                logger: auth.addLog,
+              );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white),
             child: const Text('지금 전송'),
           ),
         ],
@@ -232,9 +231,8 @@ class NoticeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 💡 두 Provider를 동시에 가져옵니다.
-    final equipmentProvider = Provider.of<EquipmentProvider>(context);
-    final noticeProvider = Provider.of<NoticeProvider>(context);
+    final auth = context.watch<AuthProvider>();
+    final noticeProvider = context.watch<NoticeProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -243,7 +241,7 @@ class NoticeScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          if (equipmentProvider.isAdmin)
+          if (auth.isAdmin)
             IconButton(
               icon: const Icon(Icons.add_comment_outlined, color: Colors.blue),
               onPressed: () => _showNoticeDialog(context, noticeProvider),
@@ -257,16 +255,14 @@ class NoticeScreen extends StatelessWidget {
         itemCount: noticeProvider.notices.length,
         itemBuilder: (context, index) {
           final notice = noticeProvider.notices[index];
-          return _buildNoticeCard(context, equipmentProvider, noticeProvider, notice);
+          return _buildNoticeCard(context, auth, noticeProvider, notice);
         },
       ),
     );
   }
 
-  Widget _buildNoticeCard(BuildContext context, EquipmentProvider equipmentProvider, NoticeProvider noticeProvider, NoticeItem notice) {
+  Widget _buildNoticeCard(BuildContext context, AuthProvider auth, NoticeProvider noticeProvider, NoticeItem notice) {
     final String dateStr = DateFormat('yyyy.MM.dd HH:mm').format(notice.timestamp);
-    final PageController pageController = PageController();
-    int currentPage = 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -284,55 +280,50 @@ class NoticeScreen extends StatelessWidget {
         title: Text(notice.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text(dateStr, style: const TextStyle(fontSize: 11, color: Colors.grey)),
         children: [
-          StatefulBuilder(builder: (context, setState) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Divider(),
-                  if (notice.imageUrls.isNotEmpty) ...[
-                    AspectRatio(
-                      aspectRatio: 1.0,
-                      child: PageView.builder(
-                        controller: pageController,
-                        onPageChanged: (index) => setState(() => currentPage = index),
-                        itemCount: notice.imageUrls.length,
-                        itemBuilder: (context, idx) => Padding(
-                          padding: const EdgeInsets.all(4.0),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: GestureDetector(
-                              onTap: () => _showFullImage(context, notice.imageUrls[idx]),
-                              child: Image.network(notice.imageUrls[idx], fit: BoxFit.cover),
-                            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Divider(),
+                if (notice.imageUrls.isNotEmpty) ...[
+                  SizedBox(
+                    height: 200,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: notice.imageUrls.length,
+                      itemBuilder: (context, idx) => Padding(
+                        padding: const EdgeInsets.all(4.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: GestureDetector(
+                            onTap: () => _showFullImage(context, notice.imageUrls[idx]),
+                            child: Image.network(notice.imageUrls[idx], fit: BoxFit.cover, width: 200),
                           ),
                         ),
                       ),
                     ),
-                    if (notice.imageUrls.length > 1)
-                      Center(child: Text("${currentPage + 1} / ${notice.imageUrls.length}", style: const TextStyle(fontSize: 10, color: Colors.grey))),
-                  ],
-                  const SizedBox(height: 12),
-                  Text(notice.content, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6)),
-                  const SizedBox(height: 16),
-                  if (equipmentProvider.isAdmin)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        _actionButton(onPressed: () => noticeProvider.pinNotice(notice.id), icon: Icons.home_outlined, label: notice.isPinned ? '게시 중' : '홈 게시', color: notice.isPinned ? Colors.blue : Colors.grey),
-                        const SizedBox(width: 12),
-                        _actionButton(onPressed: () => _showPushConfirmDialog(context, noticeProvider, notice), icon: Icons.notifications_active_outlined, label: '알림', color: Colors.orange),
-                        const SizedBox(width: 12),
-                        _actionButton(onPressed: () => _showNoticeDialog(context, noticeProvider, existingNotice: notice), icon: Icons.edit_outlined, label: '수정', color: Colors.blueGrey),
-                        const SizedBox(width: 12),
-                        _actionButton(onPressed: () => _showDeleteConfirmDialog(context, noticeProvider, notice.id), icon: Icons.delete_outline, label: '삭제', color: Colors.redAccent),
-                      ],
-                    ),
+                  ),
                 ],
-              ),
-            );
-          }),
+                const SizedBox(height: 12),
+                Text(notice.content, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.6)),
+                const SizedBox(height: 16),
+                if (auth.isAdmin)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _actionButton(onPressed: () => noticeProvider.pinNotice(notice.id), icon: Icons.home_outlined, label: notice.isPinned ? '게시 중' : '홈 게시', color: notice.isPinned ? Colors.blue : Colors.grey),
+                      const SizedBox(width: 12),
+                      _actionButton(onPressed: () => _showPushConfirmDialog(context, auth, noticeProvider, notice), icon: Icons.notifications_active_outlined, label: '알림', color: Colors.orange),
+                      const SizedBox(width: 12),
+                      _actionButton(onPressed: () => _showNoticeDialog(context, noticeProvider, existingNotice: notice), icon: Icons.edit_outlined, label: '수정', color: Colors.blueGrey),
+                      const SizedBox(width: 12),
+                      _actionButton(onPressed: () => _showDeleteConfirmDialog(context, noticeProvider, notice.id), icon: Icons.delete_outline, label: '삭제', color: Colors.redAccent),
+                    ],
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );

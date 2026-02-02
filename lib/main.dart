@@ -4,7 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-// Providers
+// ✅ 모든 Provider Import
 import 'providers/equipment_provider.dart';
 import 'providers/schedule_provider.dart';
 import 'providers/meal_plan_provider.dart';
@@ -12,18 +12,22 @@ import 'providers/notice_provider.dart';
 import 'providers/executive_checklist_provider.dart';
 import 'providers/member_provider.dart';
 import 'providers/buddy_provider.dart';
+import 'providers/qna_provider.dart';
+import 'providers/executive_provider.dart';
+import 'providers/auth_provider.dart';
 
-// Screens
+
+// ✅ 모든 Screen Import
 import 'screens/home_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/notice_screen.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/more_screen.dart';
+// 아래 화면들은 탭에는 없지만 내비게이션으로 이동할 때 필요할 수 있어 import 해둡니다.
 import 'screens/executive_checklist_screen.dart';
 import 'screens/member_management_screen.dart';
 import 'screens/buddy_screen.dart';
-
-
+import 'screens/qna_screen.dart';
 
 // 💡 백그라운드 메시지 핸들러
 @pragma('vm:entry-point')
@@ -34,15 +38,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 void main() async {
-  // 1. 바인딩 초기화
   WidgetsFlutterBinding.ensureInitialized();
-
   bool isFirebaseInitialized = false;
 
-  // 2. 파이어베이스 초기화
   try {
     if (kIsWeb) {
-      // 💡 웹/PWA 환경 명시적 옵션 설정
       await Firebase.initializeApp(
         options: const FirebaseOptions(
           apiKey: "AIzaSyAZnDCZeKVdUBC1eM6e6X-tYvUXZz6kUfU",
@@ -60,46 +60,57 @@ void main() async {
     isFirebaseInitialized = true;
     debugPrint("파이어베이스 초기화 성공");
 
-    // 💡 3. 알림 및 웹 푸시(VAPID) 설정 호출
     _setupNotifications();
-
   } catch (e) {
     debugPrint("파이어베이스 초기화 에러: $e");
   }
 
   runApp(
-    // 💡 MultiProvider를 사용하여 여러 Provider를 등록합니다.
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => EquipmentProvider()),
-        ChangeNotifierProvider(create: (context) => ScheduleProvider()),
-        ChangeNotifierProvider(create: (context) => MealPlanProvider()), // 이 줄이 있어야 합니다!
-        ChangeNotifierProvider(create: (context) => NoticeProvider()), // 이 줄이 있어야 합니다!
-        ChangeNotifierProvider(create: (context) => ExecutiveChecklistProvider()),
-        ChangeNotifierProvider(create: (context) => MemberProvider()),
-        ChangeNotifierProvider(create: (context) => BuddyProvider()),
+        // 1. 장비 및 기본 설정 관리
+        ChangeNotifierProvider(create: (_) => EquipmentProvider()),
+
+        // 2. 일정 관리
+        ChangeNotifierProvider(create: (_) => ScheduleProvider()),
+
+        // 3. 식단 관리
+        ChangeNotifierProvider(create: (_) => MealPlanProvider()),
+
+        // 4. 공지사항 관리
+        ChangeNotifierProvider(create: (_) => NoticeProvider()),
+
+        // 5. 임원 체크리스트
+        ChangeNotifierProvider(create: (_) => ExecutiveChecklistProvider()),
+
+        // 6. 대원 관리 (명단 등)
+        ChangeNotifierProvider(create: (_) => MemberProvider()),
+
+        // 7. 버디/탱크 관리
+        ChangeNotifierProvider(create: (_) => BuddyProvider()),
+
+        // 8. QnA 게시판
+        ChangeNotifierProvider(create: (_) => QnaProvider()),
+
+        // 9. 임원진 소개 관리
+        ChangeNotifierProvider(create: (_) => ExecutiveProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()), // 👈 반드시 추가되어야 함
       ],
       child: KustApp(isInitialized: isFirebaseInitialized),
     ),
   );
 }
 
-// 💡 알림 권한 및 웹 푸시(VAPID) 설정
+// 💡 알림 설정
 Future<void> _setupNotifications() async {
   try {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
-
-    // 권한 요청 (알림 허용 팝업)
     NotificationSettings settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
+      alert: true, badge: true, sound: true,
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       debugPrint('알림 권한 허용됨');
-
-      // 💡 아이폰 PWA 환경에서 푸시를 받으려면 VAPID 키가 반드시 필요합니다.
       if (kIsWeb) {
         String? token = await messaging.getToken(
             vapidKey: "BMkK18nQuhq3wGivZk_2HfDiQ9ojEW6U9WT3c0F-_6zn-8O0XNFYjdJ1eHopIR65gBQGzhq_0xnzLkxyxjvm9bU"
@@ -118,7 +129,6 @@ class KustApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 파이어베이스 초기화 실패 시 방어 화면
     if (!isInitialized) {
       return MaterialApp(
         home: Scaffold(
@@ -129,7 +139,6 @@ class KustApp extends StatelessWidget {
                 Icon(Icons.error_outline, color: Colors.red, size: 50),
                 SizedBox(height: 16),
                 Text("서버 연결에 실패했습니다."),
-                Text("인터넷 연결을 확인하고 다시 실행해주세요."),
               ],
             ),
           ),
@@ -146,8 +155,8 @@ class KustApp extends StatelessWidget {
         fontFamily: 'Pretendard',
       ),
       builder: (context, child) {
+        // 시스템 폰트 크기 설정 무시 (레이아웃 깨짐 방지)
         return MediaQuery(
-          // 시스템 폰트 크기 무시 (UI 깨짐 방지)
           data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
           child: child!,
         );
@@ -167,6 +176,7 @@ class MainTabScreen extends StatefulWidget {
 class _MainTabScreenState extends State<MainTabScreen> {
   int _selectedIndex = 0;
 
+  // 💡 메인 탭에 들어갈 화면들
   final List<Widget> _screens = [
     const HomeScreen(),
     const ScheduleScreen(),
@@ -178,20 +188,12 @@ class _MainTabScreenState extends State<MainTabScreen> {
   @override
   void initState() {
     super.initState();
-
-    // 앱 실행 중(포그라운드) 메시지 수신 시 처리
+    // 포그라운드 메시지 리스너
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(message.notification!.title ?? '알림', style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(message.notification!.body ?? ''),
-              ],
-            ),
+            content: Text(message.notification!.title ?? '알림'),
             backgroundColor: Colors.blue[800],
             behavior: SnackBarBehavior.floating,
           ),
@@ -221,7 +223,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '공지'),
           BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: '식단'),
           BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
-
         ],
       ),
     );

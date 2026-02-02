@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
-import '../models/equipment_model.dart';
+import '../providers/executive_provider.dart';
+import '../providers/qna_provider.dart';
+import '../providers/notice_provider.dart';
+import '../models/executive_model.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -14,7 +18,7 @@ class MoreScreen extends StatefulWidget {
 class _MoreScreenState extends State<MoreScreen> {
   bool _rememberMe = false;
   bool _isSettingUp = false;
-  bool _showDebugConsole = false; // 디버그 콘솔 표시 여부
+  bool _showDebugConsole = false;
 
   // 💡 알림 권한 상태를 뱃지 형태로 표시
   Widget _buildStatusBadge(AuthorizationStatus status) {
@@ -54,7 +58,6 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  // 💡 토스트(SnackBar) 스타일 알림 표시 함수
   void _showToast(String message, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -69,29 +72,314 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  // 💡 실시간 알림 설정 처리
-  void _handleNotificationSetup(BuildContext context, EquipmentProvider provider) async {
-    setState(() => _isSettingUp = true);
-    final success = await provider.setupNotifications();
-    if (mounted) setState(() => _isSettingUp = false);
+  @override
+  Widget build(BuildContext context) {
+    // 💡 모든 프로바이더를 구독하여 실시간 권한 변화를 감지합니다.
+    final auth = context.watch<AuthProvider>();
+    final equipProv = context.watch<EquipmentProvider>();
+    final noticeProv = context.watch<NoticeProvider>();
+    final execProv = context.watch<ExecutiveProvider>();
+    final qnaProv = context.watch<QnaProvider>();
 
-    if (success) {
-      _showToast("✅ 실시간 알림 설정이 완료되었습니다!");
-    } else {
-      _showToast("❌ 설정 실패. 권한을 확인해 주세요.", isError: true);
-    }
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        title: const Text('더보기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 1. 관리자 카드 (인증 및 해제 핵심부)
+                  _buildAdminCard(auth, equipProv, noticeProv, execProv, qnaProv),
+
+                  // 2. 실시간 알림 설정
+                  _buildSettingTile(noticeProv),
+
+                  // 3. 👥 임원단 소개 섹션
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('👥 임원단 소개', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        if (auth.isAdmin)
+                          IconButton(
+                              onPressed: () => _showExecutiveDialog(context, execProv),
+                              icon: const Icon(Icons.person_add_alt_1, color: Colors.blue, size: 20)
+                          ),
+                      ],
+                    ),
+                  ),
+                  _buildExecutiveList(execProv, auth.isAdmin),
+
+                  // 4. 📱 앱 정보 섹션 (정보 삭제 기능 포함)
+                  _buildAppInfoSection(context, auth, equipProv, noticeProv, execProv, qnaProv),
+
+                  const SizedBox(height: 40),
+                  const Center(child: Text('버전 정보 v3.2.2', style: TextStyle(color: Colors.grey, fontSize: 11))),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
+          ),
+          // 5. 💡 시스템 로그 콘솔
+          if (_showDebugConsole) _buildDebugConsole(auth),
+        ],
+      ),
+    );
   }
 
-  // 💡 관리자 인증 다이얼로그
-  void _showAdminAuthDialog(BuildContext context, EquipmentProvider provider) async {
-    if (provider.isPasswordSaved) {
-      await provider.authenticate("779");
-      _showToast("자동 인증되었습니다.");
-      return;
+  Widget _buildAdminCard(AuthProvider auth, EquipmentProvider equip, NoticeProvider notice, ExecutiveProvider exec, QnaProvider qna) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: auth.isAdmin ? Colors.blue[50] : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: auth.isAdmin ? Colors.blue[200]! : Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          Icon(auth.isAdmin ? Icons.admin_panel_settings : Icons.lock_outline, color: auth.isAdmin ? Colors.blue : Colors.grey, size: 32),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(auth.isAdmin ? '관리자 모드 활성' : '일반 사용자 모드', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                Text(auth.isAdmin ? '모든 탭에서 데이터를 수정할 수 있습니다.' : '데이터 수정 권한이 없습니다.', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: auth.isAdmin
+                ? () {
+              // 관리자 해제 (비밀번호 기억 설정은 유지됨)
+              auth.logout();
+              equip.setAdminStatus(false);
+              notice.setAdminStatus(false);
+              exec.setAdminStatus(false);
+              qna.setAdminStatus(false);
+              _showToast("🔓 관리자 모드가 해제되었습니다.");
+            }
+                : () async {
+              // 💡 [핵심] 기억하기가 되어있다면 다이얼로그 건너뛰고 즉시 인증
+              if (auth.isPasswordSaved) {
+                final success = await auth.authenticate("779", remember: true);
+                if (success) {
+                  equip.setAdminStatus(true);
+                  notice.setAdminStatus(true);
+                  exec.setAdminStatus(true);
+                  qna.setAdminStatus(true);
+                  _showToast("✅ 자동 인증되었습니다.");
+                }
+              } else {
+                _showAdminAuthDialog(auth, equip, notice, exec, qna);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: auth.isAdmin ? Colors.white : Colors.blue,
+                foregroundColor: auth.isAdmin ? Colors.blue : Colors.white,
+                elevation: 0
+            ),
+            child: Text(auth.isAdmin ? '해제' : '인증'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingTile(NoticeProvider provider) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+      child: ListTile(
+        leading: _isSettingUp
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.notifications_active_outlined, color: Colors.orange),
+        title: const Text('실시간 알림 설정', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        subtitle: const Text('공지사항 푸시 알림을 받습니다.', style: TextStyle(fontSize: 11)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildStatusBadge(provider.notificationStatus),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
+        onTap: _isSettingUp ? null : () async {
+          setState(() => _isSettingUp = true);
+          final success = await provider.setupNotifications();
+          if (mounted) setState(() => _isSettingUp = false);
+          if (success) _showToast("✅ 실시간 알림 설정 완료!");
+        },
+      ),
+    );
+  }
+
+  Widget _buildExecutiveList(ExecutiveProvider provider, bool isAdmin) {
+    if (provider.executives.isEmpty) {
+      return const Center(child: Padding(padding: EdgeInsets.all(16), child: Text('등록된 임원단이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13))));
     }
 
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: provider.executives.map((ex) {
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(ex.gender == "male" ? "👦" : "👧", style: const TextStyle(fontSize: 24)),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            const SizedBox(width: 6),
+                            Text(ex.generation, style: const TextStyle(fontSize: 12, color: Colors.blueGrey))
+                          ]),
+                          const SizedBox(height: 2),
+                          Text(ex.position, style: const TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(ex.phone, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                        if (isAdmin)
+                          GestureDetector(
+                              onTap: () => _showExecutiveDialog(context, provider, existing: ex),
+                              child: const Padding(
+                                  padding: EdgeInsets.only(top: 4.0),
+                                  child: Text('수정', style: TextStyle(color: Colors.grey, fontSize: 11, decoration: TextDecoration.underline))
+                              )
+                          )
+                      ],
+                    ),
+                  ],
+                ),
+                if (ex.intro.isNotEmpty) ...[
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Divider(height: 1, thickness: 0.5)),
+                  Row(children: [
+                    const Icon(Icons.format_quote, size: 14, color: Colors.grey),
+                    const SizedBox(width: 4),
+                    Expanded(child: Text(ex.intro, style: const TextStyle(fontSize: 13, color: Colors.black54, fontStyle: FontStyle.italic)))
+                  ])
+                ]
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildAppInfoSection(BuildContext context, AuthProvider auth, EquipmentProvider equip, NoticeProvider notice, ExecutiveProvider exec, QnaProvider qna) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+            padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+            child: Text('📱 앱 정보', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))
+        ),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.info_outline, color: Colors.blue),
+                title: const Text('KUST 앱 소개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () => _showAppIntro(context),
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              ListTile(
+                leading: const Icon(Icons.bug_report_outlined, color: Colors.blueGrey),
+                title: const Text('디버그 로그 보기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                trailing: Switch(
+                  value: _showDebugConsole,
+                  onChanged: (val) => setState(() => _showDebugConsole = val),
+                ),
+              ),
+              // 💡 저장된 비밀번호 정보를 삭제할 수 있는 관리자용 옵션
+              if (auth.isPasswordSaved) ...[
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  leading: const Icon(Icons.no_accounts_outlined, color: Colors.redAccent),
+                  title: const Text('관리자 인증 정보 삭제', style: TextStyle(fontSize: 14, color: Colors.redAccent)),
+                  onTap: () async {
+                    await auth.forgetAdminSetting();
+                    equip.setAdminStatus(false);
+                    notice.setAdminStatus(false);
+                    exec.setAdminStatus(false);
+                    qna.setAdminStatus(false);
+                    _showToast("저장된 인증 정보가 삭제되었습니다.");
+                  },
+                ),
+              ]
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDebugConsole(AuthProvider auth) {
+    return Container(
+      height: 180, width: double.infinity, color: const Color(0xFF1E1E1E),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: Colors.black,
+            child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('SYSTEM LOGS', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
+                  GestureDetector(
+                      onTap: () => setState(() => _showDebugConsole = false),
+                      child: const Icon(Icons.close, color: Colors.white, size: 14)
+                  )
+                ]
+            ),
+          ),
+          Expanded(
+              child: ListView.builder(
+                  padding: const EdgeInsets.all(8),
+                  itemCount: auth.debugLogs.length,
+                  itemBuilder: (context, index) => Text(
+                      auth.debugLogs[index],
+                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace')
+                  )
+              )
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAdminAuthDialog(AuthProvider auth, EquipmentProvider equip, NoticeProvider notice, ExecutiveProvider exec, QnaProvider qna) {
     final TextEditingController pwdController = TextEditingController();
-    if (!mounted) return;
+    // 다이얼로그 열릴 때 체크박스 상태 초기화
+    _rememberMe = auth.isPasswordSaved;
 
     showDialog(
       context: context,
@@ -104,26 +392,18 @@ class _MoreScreenState extends State<MoreScreen> {
               const Text('비밀번호 3자리를 입력하세요.', style: TextStyle(fontSize: 13)),
               const SizedBox(height: 16),
               TextField(
-                controller: pwdController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                maxLength: 3,
-                textAlign: TextAlign.center,
+                controller: pwdController, keyboardType: TextInputType.number, obscureText: true, maxLength: 3, textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 24, letterSpacing: 10),
                 decoration: const InputDecoration(border: OutlineInputBorder(), counterText: ''),
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  SizedBox(
-                    height: 24, width: 24,
-                    child: Checkbox(
+                  Checkbox(
                       value: _rememberMe,
-                      onChanged: (val) => setDialogState(() => _rememberMe = val ?? false),
-                    ),
+                      onChanged: (val) => setDialogState(() => _rememberMe = val ?? false)
                   ),
-                  const SizedBox(width: 8),
-                  const Text('비밀번호 기억하기', style: TextStyle(fontSize: 13, color: Colors.black87)),
+                  const Text('비밀번호 기억하기', style: TextStyle(fontSize: 13)),
                 ],
               ),
             ],
@@ -132,13 +412,19 @@ class _MoreScreenState extends State<MoreScreen> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
             TextButton(
               onPressed: () async {
-                final success = await provider.authenticate(pwdController.text, remember: _rememberMe);
-                if (!mounted) return;
-                Navigator.pop(context);
+                final success = await auth.authenticate(pwdController.text, remember: _rememberMe);
                 if (success) {
-                  _showToast("인증 성공!");
+                  // 💡 모든 데이터 Provider의 권한 상태 일괄 동기화
+                  equip.setAdminStatus(true);
+                  notice.setAdminStatus(true);
+                  exec.setAdminStatus(true);
+                  qna.setAdminStatus(true);
+
+                  if (!mounted) return;
+                  Navigator.pop(context);
+                  _showToast("✅ 관리자 권한이 활성화되었습니다.");
                 } else {
-                  _showToast("비밀번호가 틀렸습니다.", isError: true);
+                  _showToast("❌ 비밀번호가 틀렸습니다.", isError: true);
                 }
               },
               child: const Text('확인'),
@@ -149,8 +435,7 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  // 💡 임원 정보 수정 다이얼로그
-  void _showExecutiveDialog(BuildContext context, EquipmentProvider provider, {ExecutiveItem? existing}) {
+  void _showExecutiveDialog(BuildContext context, ExecutiveProvider provider, {ExecutiveItem? existing}) {
     final bool isEdit = existing != null;
     final nameController = TextEditingController(text: existing?.name ?? "");
     final genController = TextEditingController(text: existing?.generation ?? "");
@@ -191,23 +476,11 @@ class _MoreScreenState extends State<MoreScreen> {
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-            if (isEdit)
-              TextButton(
-                onPressed: () { provider.deleteExecutive(existing.id); Navigator.pop(context); },
-                child: const Text('삭제', style: TextStyle(color: Colors.red)),
-              ),
+            if (isEdit) TextButton(onPressed: () { provider.deleteExecutive(existing.id); Navigator.pop(context); }, child: const Text('삭제', style: TextStyle(color: Colors.red))),
             ElevatedButton(
               onPressed: () {
                 if (nameController.text.isEmpty) return;
-                final item = ExecutiveItem(
-                  id: existing?.id ?? "",
-                  gender: selectedGender,
-                  name: nameController.text,
-                  generation: genController.text,
-                  position: posController.text,
-                  phone: phoneController.text,
-                  intro: introController.text,
-                );
+                final item = ExecutiveItem(id: existing?.id ?? "", gender: selectedGender, name: nameController.text, generation: genController.text, position: posController.text, phone: phoneController.text, intro: introController.text);
                 isEdit ? provider.updateExecutive(item) : provider.addExecutive(item);
                 Navigator.pop(context);
               },
@@ -224,17 +497,12 @@ class _MoreScreenState extends State<MoreScreen> {
       onTap: () => setDialogState(() => onSelect(value)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.blue[50] : Colors.grey[100],
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? Colors.blue : Colors.transparent),
-        ),
+        decoration: BoxDecoration(color: isSelected ? Colors.blue[50] : Colors.grey[100], borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? Colors.blue : Colors.transparent)),
         child: Text(label, style: TextStyle(color: isSelected ? Colors.blue : Colors.black54, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
       ),
     );
   }
 
-  // 💡 앱 소개 상세 화면
   void _showAppIntro(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -246,44 +514,25 @@ class _MoreScreenState extends State<MoreScreen> {
         child: Column(
           children: [
             Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-             Expanded(
+            Expanded(
               child: SingleChildScrollView(
-                padding: EdgeInsets.all(24),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     const Text('KUST 앱 소개', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 16),
-                    // 💡 요청하신 이미지 로직 복구
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Image.asset(
-                        'assets/images/best.png',
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          height: 200,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 40),
-                              SizedBox(height: 8),
-                              Text('이미지를 불러올 수 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                            ],
-                          ),
-                        ),
+                        'assets/images/best.png', width: double.infinity, fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(height: 200, width: double.infinity, color: Colors.grey[100], child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 40)),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    Text('안녕하세요! KUST 동계 원정 앱입니다.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
-                    SizedBox(height: 12),
-                    Text(
+                    const Text('안녕하세요! KUST 동계 원정 앱입니다.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+                    const SizedBox(height: 12),
+                    const Text(
                       '본 애플리케이션은 경북대학교 스킨스쿠버 동아리 KUST 동계 원정에서 대원들의 원활한 장비 관리와 정보 공유를 위해 제작되었습니다.\n\n'
                           '주요 기능:\n'
                           '• 공용 장비 실시간 현황 확인\n'
@@ -298,194 +547,6 @@ class _MoreScreenState extends State<MoreScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = Provider.of<EquipmentProvider>(context);
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(title: const Text('더보기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildAdminCard(provider),
-
-                  // 🔔 서비스 설정 섹션
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    //child: Text('🔔 서비스 설정', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-                    child: ListTile(
-                      leading: _isSettingUp
-                          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.notifications_active_outlined, color: Colors.orange),
-                      title: const Text('실시간 알림 설정', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      subtitle: const Text('공지사항 푸시 알림을 받습니다.', style: TextStyle(fontSize: 11)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildStatusBadge(provider.notificationStatus),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.chevron_right, size: 20),
-                        ],
-                      ),
-                      onTap: _isSettingUp ? null : () => _handleNotificationSetup(context, provider),
-                    ),
-                  ),
-
-                  // 🛠 시스템 진단 도구
-
-
-                  // 👥 임원단 소개 섹션
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('👥 임원단 소개', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        if (provider.isAdmin) IconButton(onPressed: () => _showExecutiveDialog(context, provider), icon: const Icon(Icons.person_add_alt_1, color: Colors.blue, size: 20)),
-                      ],
-                    ),
-                  ),
-                  _buildExecutiveList(provider),
-
-                  // 📱 앱 정보 섹션
-                  const Padding(padding: EdgeInsets.fromLTRB(16, 24, 16, 8), child: Text('📱 앱 정보', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-                    child: ListTile(
-                      leading: const Icon(Icons.info_outline, color: Colors.blue),
-                      title: const Text('KUST 앱 소개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      trailing: const Icon(Icons.chevron_right, size: 20),
-                      onTap: () => _showAppIntro(context),
-                    ),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(16, 6, 16,8),
-                    //child: Text('🛠 시스템 진단', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-                    child: ListTile(
-                      leading: const Icon(Icons.bug_report_outlined, color: Colors.blueGrey),
-                      title: const Text('디버그 로그 보기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      trailing: Switch(
-                        value: _showDebugConsole,
-                        onChanged: (val) => setState(() => _showDebugConsole = val),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-                  const Center(child: Text('버전 정보 v3.1.0', style: TextStyle(color: Colors.grey, fontSize: 11))),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-          ),
-
-          // 💡 하단 디버그 로그 창
-          if (_showDebugConsole) _buildDebugConsole(provider),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdminCard(EquipmentProvider provider) {
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: provider.isAdmin ? Colors.blue[50] : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: provider.isAdmin ? Colors.blue[200]! : Colors.grey[200]!),
-      ),
-      child: Row(
-        children: [
-          Icon(provider.isAdmin ? Icons.admin_panel_settings : Icons.lock_outline, color: provider.isAdmin ? Colors.blue : Colors.grey, size: 32),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(provider.isAdmin ? '관리자 모드 활성' : '일반 사용자 모드', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                Text(provider.isAdmin ? '모든 데이터를 수정할 수 있습니다.' : '데이터 수정 권한이 없습니다.', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            onPressed: provider.isAdmin ? () => provider.logoutAdmin() : () => _showAdminAuthDialog(context, provider),
-            style: ElevatedButton.styleFrom(backgroundColor: provider.isAdmin ? Colors.white : Colors.blue, foregroundColor: provider.isAdmin ? Colors.blue : Colors.white, elevation: 0),
-            child: Text(provider.isAdmin ? '해제' : '인증'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExecutiveList(EquipmentProvider provider) {
-    if (provider.executives.isEmpty) return const Center(child: Padding(padding: EdgeInsets.all(16), child: Text('등록된 임원단이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13))));
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: provider.executives.length,
-      itemBuilder: (context, index) {
-        final ex = provider.executives[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(ex.gender == "male" ? "👦" : "👧", style: const TextStyle(fontSize: 24)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)), const SizedBox(width: 6), Text(ex.generation, style: const TextStyle(fontSize: 12, color: Colors.blueGrey))]),
-                        const SizedBox(height: 2),
-                        Text(ex.position, style: const TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.w500)),
-                      ],
-                    ),
-                  ),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [Text(ex.phone, style: const TextStyle(fontSize: 12, color: Colors.black87)), if (provider.isAdmin) GestureDetector(onTap: () => _showExecutiveDialog(context, provider, existing: ex), child: const Padding(padding: EdgeInsets.only(top: 4.0), child: Text('수정', style: TextStyle(color: Colors.grey, fontSize: 11, decoration: TextDecoration.underline))))]),
-                ],
-              ),
-              if (ex.intro.isNotEmpty) ...[const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Divider(height: 1, thickness: 0.5)), Row(children: [const Icon(Icons.format_quote, size: 14, color: Colors.grey), const SizedBox(width: 4), Expanded(child: Text(ex.intro, style: const TextStyle(fontSize: 13, color: Colors.black54, fontStyle: FontStyle.italic)))])]
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDebugConsole(EquipmentProvider provider) {
-    return Container(
-      height: 180, width: double.infinity, color: const Color(0xFF1E1E1E),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4), color: Colors.black, child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('SYSTEM LOGS', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')), GestureDetector(onTap: () => setState(() => _showDebugConsole = false), child: const Icon(Icons.close, color: Colors.white, size: 14))])),
-          Expanded(child: ListView.builder(padding: const EdgeInsets.all(8), itemCount: provider.debugLogs.length, itemBuilder: (context, index) => Text(provider.debugLogs[index], style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace')))),
-        ],
       ),
     );
   }

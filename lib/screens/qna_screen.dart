@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../providers/equipment_provider.dart';
-import '../models/equipment_model.dart';
+import '../providers/equipment_provider.dart'; // 인증 확인용
+import '../providers/qna_provider.dart';       // 💡 데이터용 (추가됨)
+import '../models/qna_model.dart';
 
 class QnaScreen extends StatelessWidget {
   const QnaScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // 💡 context.watch를 사용하여 데이터 변경 시 즉시 리빌드되도록 함
-    final provider = context.watch<EquipmentProvider>();
+    // 💡 Provider 2개를 각각 가져옵니다.
+    final authProvider = context.watch<EquipmentProvider>(); // 관리자 여부 확인
+    final qnaProvider = context.watch<QnaProvider>(); // QnA 데이터
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -19,14 +21,11 @@ class QnaScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0.5,
       ),
-      // 💡 수동 새로고침 기능을 추가하여 동기화 지연 시 대응
       body: RefreshIndicator(
         onRefresh: () async {
-          // Provider에 강제 새로고침 로직이 있다면 호출, 없다면 리스너가 재작동하도록 유도
-          // 여기서는 리스너가 살아있다는 전제하에 UI만 다시 그리는 트리거 역할
-          provider.notifyListeners();
+          qnaProvider.notifyListeners();
         },
-        child: provider.qnaPosts.isEmpty
+        child: qnaProvider.qnaPosts.isEmpty
             ? const Center(
           child: SingleChildScrollView(
             physics: AlwaysScrollableScrollPhysics(),
@@ -34,55 +33,43 @@ class QnaScreen extends StatelessWidget {
           ),
         )
             : ListView.builder(
-          physics: const AlwaysScrollableScrollPhysics(), // 리스트가 짧아도 당겨서 새로고침 가능하게 함
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
-          itemCount: provider.qnaPosts.length,
+          itemCount: qnaProvider.qnaPosts.length, // 💡 qnaProvider 사용
           itemBuilder: (context, index) {
-            final post = provider.qnaPosts[index];
-            // 💡 고유한 ValueKey를 사용하여 삭제 시 리스트가 올바르게 재정렬되도록 함
-            return _buildQnaCard(context, post, provider, ValueKey(post.id));
+            final post = qnaProvider.qnaPosts[index];
+            // 💡 Card 빌드 시 두 Provider 모두 전달
+            return _buildQnaCard(context, post, qnaProvider, authProvider.isAdmin, ValueKey(post.id));
           },
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showWriteDialog(context, provider),
+        onPressed: () => _showWriteDialog(context, qnaProvider),
         backgroundColor: Colors.blue[800],
         child: const Icon(Icons.create, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildQnaCard(BuildContext context, QnaPost post, EquipmentProvider provider, Key key) {
+  // 💡 Provider와 isAdmin 플래그를 인자로 받음
+  Widget _buildQnaCard(BuildContext context, QnaPost post, QnaProvider provider, bool isAdmin, Key key) {
     final dateStr = DateFormat('MM/dd HH:mm').format(post.timestamp);
     final replyCount = post.replies.length;
 
     return Container(
       key: key,
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey[200]!)),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         shape: const RoundedRectangleBorder(side: BorderSide.none),
-        leading: CircleAvatar(
-          backgroundColor: Colors.blue[50],
-          child: const Text('Q', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-        ),
+        leading: CircleAvatar(backgroundColor: Colors.blue[50], child: const Text('Q', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold))),
         title: Text(post.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text('${post.author} • $dateStr', style: const TextStyle(fontSize: 11, color: Colors.grey)),
         trailing: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: replyCount > 0 ? Colors.green[50] : Colors.grey[100],
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            '답변 $replyCount',
-            style: TextStyle(fontSize: 10, color: replyCount > 0 ? Colors.green[700] : Colors.grey[600], fontWeight: FontWeight.bold),
-          ),
+          decoration: BoxDecoration(color: replyCount > 0 ? Colors.green[50] : Colors.grey[100], borderRadius: BorderRadius.circular(12)),
+          child: Text('답변 $replyCount', style: TextStyle(fontSize: 10, color: replyCount > 0 ? Colors.green[700] : Colors.grey[600], fontWeight: FontWeight.bold)),
         ),
         children: [
           Padding(
@@ -97,31 +84,21 @@ class QnaScreen extends StatelessWidget {
                 const Text('답변 목록', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
                 const SizedBox(height: 8),
                 if (post.replies.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8.0),
-                    child: Text('아직 답변이 없습니다.', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  )
+                  const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Text('아직 답변이 없습니다.', style: TextStyle(fontSize: 12, color: Colors.grey)))
                 else
-                  ...post.replies.map((reply) => _buildReplyItem(context, provider, post.id, reply)).toList(),
+                  ...post.replies.map((reply) => _buildReplyItem(context, provider, post.id, reply, isAdmin)).toList(),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: () => _showReplyDialog(context, provider, post.id),
                   icon: const Icon(Icons.reply, size: 16),
                   label: const Text('답변 달기'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[100],
-                    foregroundColor: Colors.blue[800],
-                    elevation: 0,
-                    minimumSize: const Size(double.infinity, 36),
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[100], foregroundColor: Colors.blue[800], elevation: 0, minimumSize: const Size(double.infinity, 36)),
                 ),
-                if (provider.isAdmin)
+                if (isAdmin)
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
-                      onPressed: () => _showDeleteConfirm(context, () async {
-                        await provider.deleteQnaPost(post.id);
-                      }, '게시글'),
+                      onPressed: () => _showDeleteConfirm(context, () async { await provider.deleteQnaPost(post.id); }, '게시글'),
                       icon: const Icon(Icons.delete_outline, size: 14, color: Colors.red),
                       label: const Text('게시글 삭제', style: TextStyle(color: Colors.red, fontSize: 12)),
                     ),
@@ -134,7 +111,7 @@ class QnaScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildReplyItem(BuildContext context, EquipmentProvider provider, String postId, QnaReply reply) {
+  Widget _buildReplyItem(BuildContext context, QnaProvider provider, String postId, QnaReply reply, bool isAdmin) {
     final dateStr = DateFormat('MM/dd HH:mm').format(reply.timestamp);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -150,12 +127,10 @@ class QnaScreen extends StatelessWidget {
               Row(
                 children: [
                   Text(dateStr, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                  if (provider.isAdmin) ...[
+                  if (isAdmin) ...[
                     const SizedBox(width: 8),
                     GestureDetector(
-                      onTap: () => _showDeleteConfirm(context, () async {
-                        await provider.deleteQnaReply(postId, reply.id);
-                      }, '답변'),
+                      onTap: () => _showDeleteConfirm(context, () async { await provider.deleteQnaReply(postId, reply.id); }, '답변'),
                       child: const Icon(Icons.close, size: 14, color: Colors.redAccent),
                     ),
                   ]
@@ -180,8 +155,8 @@ class QnaScreen extends StatelessWidget {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context); // 다이얼로그 먼저 닫기
-              await onConfirm(); // 삭제 실행 대기
+              Navigator.pop(context);
+              await onConfirm();
             },
             child: const Text('삭제', style: TextStyle(color: Colors.red)),
           ),
@@ -190,7 +165,7 @@ class QnaScreen extends StatelessWidget {
     );
   }
 
-  void _showWriteDialog(BuildContext context, EquipmentProvider provider) {
+  void _showWriteDialog(BuildContext context, QnaProvider provider) {
     final titleController = TextEditingController();
     final authorController = TextEditingController();
     final contentController = TextEditingController();
@@ -206,21 +181,11 @@ class QnaScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: authorController,
-                  decoration: const InputDecoration(labelText: '작성자 이름', border: OutlineInputBorder()),
-                ),
+                TextField(controller: authorController, decoration: const InputDecoration(labelText: '작성자 이름', border: OutlineInputBorder())),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: '제목', border: OutlineInputBorder()),
-                ),
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: '제목', border: OutlineInputBorder())),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: contentController,
-                  maxLines: 10,
-                  decoration: const InputDecoration(labelText: '내용', border: OutlineInputBorder(), alignLabelWithHint: true),
-                ),
+                TextField(controller: contentController, maxLines: 10, decoration: const InputDecoration(labelText: '내용', border: OutlineInputBorder(), alignLabelWithHint: true)),
               ],
             ),
           ),
@@ -242,7 +207,7 @@ class QnaScreen extends StatelessWidget {
     );
   }
 
-  void _showReplyDialog(BuildContext context, EquipmentProvider provider, String postId) {
+  void _showReplyDialog(BuildContext context, QnaProvider provider, String postId) {
     final authorController = TextEditingController();
     final contentController = TextEditingController();
 
@@ -257,16 +222,9 @@ class QnaScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: authorController,
-                  decoration: const InputDecoration(labelText: '작성자 이름', border: OutlineInputBorder()),
-                ),
+                TextField(controller: authorController, decoration: const InputDecoration(labelText: '작성자 이름', border: OutlineInputBorder())),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: contentController,
-                  maxLines: 5,
-                  decoration: const InputDecoration(labelText: '답변 내용', border: OutlineInputBorder(), alignLabelWithHint: true),
-                ),
+                TextField(controller: contentController, maxLines: 5, decoration: const InputDecoration(labelText: '답변 내용', border: OutlineInputBorder(), alignLabelWithHint: true)),
               ],
             ),
           ),
