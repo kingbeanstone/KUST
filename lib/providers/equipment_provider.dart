@@ -214,8 +214,86 @@ class EquipmentProvider with ChangeNotifier {
   Future<void> toggleCheck(String id, String field) async {
     if (!_isAdmin) return;
     final member = _data.firstWhere((m) => m.id == id);
-    final bool currentStatus = member.gears[field]?.checked ?? false;
-    await _db.collection('members').doc(id).set({field: {'checked': !currentStatus}}, SetOptions(merge: true));
+    final bool next = !(member.gears[field]?.checked ?? false);
+
+    // 💡 짝과 함께 쓰는 장비는 한 개뿐이므로 두 사람의 체크가 따로 놀면 안 된다.
+    final targets = member.sharesGear(field) ? _pairMemberIds(member) : [id];
+
+    final batch = _db.batch();
+    for (final target in targets) {
+      batch.set(_db.collection('members').doc(target), {
+        field: {'checked': next}
+      }, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  // --- 장비 버디(2인 1조) 관리 ---
+
+  List<String> _pairMemberIds(MemberEquipment member) {
+    if (!member.hasPair) return [member.id];
+    return _data.where((m) => m.pairId == member.pairId).map((m) => m.id).toList();
+  }
+
+  /// 두 대원을 장비 버디로 묶는다. 이미 다른 짝이 있으면 먼저 풀린다.
+  Future<void> pairMembers(String idA, String idB) async {
+    if (!_isAdmin || idA == idB) return;
+    final pairId = 'pair_${DateTime.now().millisecondsSinceEpoch}';
+
+    final batch = _db.batch();
+    for (final id in [idA, idB]) {
+      final existing = _data.firstWhere((m) => m.id == id);
+      // 기존 짝의 상대방을 먼저 홀로 되돌린다.
+      if (existing.hasPair) {
+        for (final other in _data.where((m) => m.pairId == existing.pairId && m.id != id)) {
+          batch.set(_db.collection('members').doc(other.id),
+              {'pairId': '', 'sharedGears': <String>[]}, SetOptions(merge: true));
+        }
+      }
+      batch.set(_db.collection('members').doc(id),
+          {'pairId': pairId, 'sharedGears': <String>[]}, SetOptions(merge: true));
+    }
+    await batch.commit();
+    addLog('장비 버디 편성: $idA + $idB');
+  }
+
+  /// 짝을 해제하고 공유 설정도 함께 지운다.
+  Future<void> unpairMembers(String pairId) async {
+    if (!_isAdmin || pairId.isEmpty) return;
+    final batch = _db.batch();
+    for (final m in _data.where((m) => m.pairId == pairId)) {
+      batch.set(_db.collection('members').doc(m.id),
+          {'pairId': '', 'sharedGears': <String>[]}, SetOptions(merge: true));
+    }
+    await batch.commit();
+    addLog('장비 버디 해제: $pairId');
+  }
+
+  /// 짝이 특정 장비를 함께 쓰는지 여부를 뒤집는다.
+  /// 공유로 바꿀 때는 대표(순서가 앞선 대원)의 값으로 통일한다.
+  Future<void> toggleGearShare(String pairId, String gear) async {
+    if (!_isAdmin || pairId.isEmpty) return;
+
+    final members = _data.where((m) => m.pairId == pairId).toList()
+      ..sort((a, b) => a.order.compareTo(b.order));
+    if (members.length < 2) return;
+
+    final willShare = !members.first.sharedGears.contains(gear);
+    final leadGear = members.first.gears[gear];
+
+    final batch = _db.batch();
+    for (final m in members) {
+      final shared = List<String>.from(m.sharedGears);
+      willShare ? shared.add(gear) : shared.remove(gear);
+
+      final update = <String, dynamic>{'sharedGears': shared};
+      if (willShare) {
+        // 합쳐진 칸은 하나의 값만 가지므로 대표의 번호/체크로 맞춘다.
+        update[gear] = {'value': leadGear?.value ?? '', 'checked': leadGear?.checked ?? false};
+      }
+      batch.set(_db.collection('members').doc(m.id), update, SetOptions(merge: true));
+    }
+    await batch.commit();
   }
 
   Future<void> resetAllChecks() async {

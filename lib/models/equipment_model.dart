@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class GearStatus {
   String value;
   bool checked;
@@ -18,10 +16,34 @@ class MemberEquipment {
   int order;
   Map<String, GearStatus> gears;
 
-  MemberEquipment({required this.id, required this.name, required this.order, required this.gears});
+  /// 💡 장비 버디(2인 1조) 식별자. 빈 문자열이면 혼자 쓰는 대원.
+  /// 다이빙 버디(buddy_system)와는 별개로, 짐을 줄이려고 장비를 나눠 쓰는 짝이다.
+  String pairId;
+
+  /// 💡 짝과 실제로 '함께 쓰는' 장비 이름들. 같은 짝이어도 장비마다 공유 여부가 다르다.
+  /// (예: 가방·BCD는 공유하지만 마스크는 각자 챙기는 조)
+  List<String> sharedGears;
+
+  MemberEquipment({
+    required this.id,
+    required this.name,
+    required this.order,
+    required this.gears,
+    this.pairId = '',
+    this.sharedGears = const [],
+  });
+
+  bool get hasPair => pairId.isNotEmpty;
+  bool sharesGear(String gear) => hasPair && sharedGears.contains(gear);
 
   Map<String, dynamic> toMap() {
-    Map<String, dynamic> map = {'id': id, '이름': name, 'order': order};
+    Map<String, dynamic> map = {
+      'id': id,
+      '이름': name,
+      'order': order,
+      'pairId': pairId,
+      'sharedGears': sharedGears,
+    };
     gears.forEach((key, gear) => map[key] = gear.toMap());
     return map;
   }
@@ -36,10 +58,24 @@ class MemberEquipment {
         gearsMap[name] = GearStatus();
       }
     }
-    return MemberEquipment(id: id, name: map['이름']?.toString() ?? '', order: map['order'] is int ? map['order'] : 0, gears: gearsMap);
+    return MemberEquipment(
+      id: id,
+      name: map['이름']?.toString() ?? '',
+      order: map['order'] is int ? map['order'] : 0,
+      gears: gearsMap,
+      pairId: map['pairId']?.toString() ?? '',
+      sharedGears: map['sharedGears'] is List ? List<String>.from(map['sharedGears']) : const [],
+    );
   }
 
-  MemberEquipment copy() => MemberEquipment(id: id, name: name, order: order, gears: gears.map((key, value) => MapEntry(key, value.copy())));
+  MemberEquipment copy() => MemberEquipment(
+        id: id,
+        name: name,
+        order: order,
+        gears: gears.map((key, value) => MapEntry(key, value.copy())),
+        pairId: pairId,
+        sharedGears: List<String>.from(sharedGears),
+      );
 }
 
 // 고유 번호 없는 공용 장비 모델 (수량 조절용)

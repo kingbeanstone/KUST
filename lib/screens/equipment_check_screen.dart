@@ -1,34 +1,35 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/buddy_model.dart';
 import '../models/equipment_model.dart';
-import '../providers/buddy_provider.dart';
 import '../providers/equipment_provider.dart';
-import '../providers/schedule_provider.dart';
 
 const List<String> _gearKeys = [
   '가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'
 ];
 
-const Color _teamColor = Color(0xFF00796B);
-const Color _teamSoft = Color(0xFFDCEFEC);
+const Color _pairColor = Color(0xFF00796B);
+const Color _pairSoft = Color(0xFFDCEFEC);
 const Color _okColor = Color(0xFF2E7D32);
 const Color _okSoft = Color(0xFFE5F2E6);
 const Color _badColor = Color(0xFFD14842);
 const Color _badSoft = Color(0xFFFBE8E7);
+const Color _editSoft = Color(0xFFF0F8FF);
 
-/// 버디 조 단위로 묶인 대원 묶음.
-class _MemberGroup {
-  final String label; // 좌측 고정열에 들어갈 짧은 이름 (예: 1탱크 A)
-  final String caption; // 우측 밴드에 들어갈 부가 정보
+/// 표에 그려질 한 덩어리. 혼자 쓰는 대원은 1명, 장비 버디는 2명이 들어온다.
+class _Block {
   final List<MemberEquipment> members;
+  const _Block(this.members);
 
-  const _MemberGroup({required this.label, required this.caption, required this.members});
+  bool get isPair => members.length > 1;
+  String get pairId => members.first.pairId;
+
+  /// 짝이 이 장비를 함께 쓰는지. 대표(순서가 앞선 대원) 기준으로 판단한다.
+  bool sharesGear(String gear) => isPair && members.first.sharedGears.contains(gear);
 }
 
 /// 💡 v2: 장비 '목록'과 '체크'를 한 화면의 두 모드로 통합.
-///  - 보기 모드: 장비 번호 + O/X 체크 (O/X 탭하여 토글)
-///  - 수정 모드: O/X 행이 사라지고 장비 번호를 직접 편집
+///  - 보기 모드: 장비 번호 + O/X 체크
+///  - 수정 모드: O/X 대신 번호를 편집하고, 장비 버디 편성과 장비별 공유 여부를 지정
 class EquipmentCheckScreen extends StatefulWidget {
   const EquipmentCheckScreen({super.key});
 
@@ -37,7 +38,6 @@ class EquipmentCheckScreen extends StatefulWidget {
 }
 
 class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
-  int _selectedDayIndex = 0;
   bool _isEditMode = false;
 
   /// 수정 모드 진입 시 만들어지는 편집용 사본 (id -> 사본)
@@ -46,15 +46,17 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   final ScrollController _headerHController = ScrollController();
   final ScrollController _bodyHController = ScrollController();
 
-  static const double nameWidth = 72.0;
+  static const double nameWidth = 78.0;
   static const double colWidth = 56.0;
   static const double headerHeight = 38.0;
-  static const double groupHeight = 34.0;
-  static const double valueHeight = 32.0;
+  static const double bandHeight = 30.0;
+  static const double valueHeight = 34.0;
   static const double statusHeight = 26.0;
 
   double get _gearsWidth => _gearKeys.length * colWidth;
-  double get _memberHeight => valueHeight + (_isEditMode ? 0 : statusHeight);
+
+  /// 대원 한 명이 차지하는 세로 높이 (수정 모드에서는 O/X 행이 사라진다)
+  double get _slotHeight => valueHeight + (_isEditMode ? 0 : statusHeight);
 
   @override
   void initState() {
@@ -78,66 +80,38 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     super.dispose();
   }
 
-  // ---------------------------------------------------------------- 그룹 구성
+  // ------------------------------------------------------------- 블록 구성
 
-  MemberEquipment? _findByName(List<MemberEquipment> data, String name) {
-    final target = name.trim();
-    if (target.isEmpty) return null;
-    for (final m in data) {
-      if (m.name.trim() == target) return m;
-    }
-    return null;
-  }
+  /// 명단 순서대로 훑으면서 같은 pairId끼리 인접하게 묶는다.
+  List<_Block> _buildBlocks(List<MemberEquipment> data) {
+    final sorted = List<MemberEquipment>.from(data)..sort((a, b) => a.order.compareTo(b.order));
+    final blocks = <_Block>[];
+    final taken = <String>{};
 
-  /// 버디 편성표 순서대로 대원을 묶고, 편성에 없는 대원은 '미배정'으로 모은다.
-  List<_MemberGroup> _buildGroups(BuddyDay day, List<MemberEquipment> data) {
-    final used = <String>{};
-    final groups = <_MemberGroup>[];
+    for (final member in sorted) {
+      if (taken.contains(member.id)) continue;
 
-    for (final tank in day.tanks) {
-      final teams = <MapEntry<String, BuddyTeam>>[
-        MapEntry('A', tank.teamA),
-        MapEntry('B', tank.teamB),
-      ];
-      for (final entry in teams) {
-        final team = entry.value;
-        final names = <String>[team.leader, ...team.members];
-        final members = <MemberEquipment>[];
-
-        for (final name in names) {
-          final found = _findByName(data, name);
-          if (found != null && used.add(found.id)) members.add(found);
+      if (member.hasPair) {
+        final mates = sorted
+            .where((m) => m.pairId == member.pairId && !taken.contains(m.id))
+            .take(2)
+            .toList();
+        for (final m in mates) {
+          taken.add(m.id);
         }
-        if (members.isEmpty) continue;
-
-        final tankLabel = tank.tankName.isEmpty ? '탱크' : tank.tankName;
-        groups.add(_MemberGroup(
-          label: '$tankLabel ${entry.key}',
-          caption: team.leader.trim().isEmpty ? '리더 미지정' : '리더 ${team.leader.trim()}',
-          members: members,
-        ));
+        blocks.add(_Block(mates));
+      } else {
+        taken.add(member.id);
+        blocks.add(_Block([member]));
       }
     }
-
-    final rest = data.where((m) => !used.contains(m.id)).toList();
-    if (rest.isNotEmpty) {
-      groups.add(_MemberGroup(label: '미배정', caption: '버디 편성에 없는 대원', members: rest));
-    }
-    return groups;
+    return blocks;
   }
 
-  /// 그룹의 체크 완료 개수 / 전체 개수
-  String _groupScore(_MemberGroup group) {
-    int done = 0;
-    for (final m in group.members) {
-      for (final k in _gearKeys) {
-        if (m.gears[k]?.checked ?? false) done++;
-      }
-    }
-    return '$done/${group.members.length * _gearKeys.length}';
-  }
+  /// 편집 중이면 사본을, 아니면 원본을 돌려준다.
+  MemberEquipment _visible(MemberEquipment member) => _editing[member.id] ?? member;
 
-  // ---------------------------------------------------------------- 모드 전환
+  // ------------------------------------------------------------- 모드 전환
 
   void _enterEditMode(EquipmentProvider provider) {
     setState(() {
@@ -182,34 +156,17 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     );
   }
 
-  // ---------------------------------------------------------------- build
+  // ------------------------------------------------------------- build
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<EquipmentProvider>();
-    final buddyProvider = context.watch<BuddyProvider>();
-    final scheduleProvider = context.watch<ScheduleProvider>();
-
-    final dates = scheduleProvider.dates;
-    if (dates.isEmpty) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('장비 체크')),
-        body: const Center(child: Text('일정 정보를 먼저 등록해주세요.')),
-      );
-    }
-
-    final dayIndex = _selectedDayIndex.clamp(0, dates.length - 1);
-    final dayInfo = dates[dayIndex];
-    final buddyDay = buddyProvider.getDayOrDefault(
-      dayInfo['id']!,
-      '${dayInfo['title']}-${dayInfo['date']}',
-    );
-    final groups = _buildGroups(buddyDay, provider.data);
+    final blocks = _buildBlocks(provider.data);
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(_isEditMode ? '장비 목록 수정' : '장비 체크',
+        title: Text(_isEditMode ? '장비 수정' : '장비 체크',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -217,23 +174,22 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       ),
       body: Column(
         children: [
-          _buildDayTabs(dates, dayIndex),
-          if (_isEditMode) _buildEditBanner(),
+          if (_isEditMode) _buildEditGuide(),
           _buildHeader(),
           const Divider(height: 1, thickness: 1),
           Expanded(
-            child: groups.isEmpty
-                ? const Center(child: Text('표시할 대원이 없습니다.', style: TextStyle(color: Colors.grey)))
+            child: blocks.isEmpty
+                ? const Center(child: Text('등록된 대원이 없습니다.', style: TextStyle(color: Colors.grey)))
                 : SingleChildScrollView(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildFixedColumn(groups),
+                        _buildFixedColumn(blocks, provider),
                         Expanded(
                           child: SingleChildScrollView(
                             controller: _bodyHController,
                             scrollDirection: Axis.horizontal,
-                            child: _buildScrollableColumn(groups, provider),
+                            child: _buildScrollColumn(blocks, provider),
                           ),
                         ),
                       ],
@@ -270,51 +226,14 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     ];
   }
 
-  Widget _buildEditBanner() {
+  Widget _buildEditGuide() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      color: const Color(0xFFF0F8FF),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      color: _editSoft,
       child: const Text(
-        '수정 모드 · 장비 번호를 직접 입력하세요. 체크(O/X)는 완료 후 다시 표시됩니다.',
+        '이름 사이 🔗 를 눌러 장비 버디를 묶고, 묶인 조의 장비 칸을 눌러 공유 여부를 바꾸세요.',
         style: TextStyle(fontSize: 11, color: Colors.blue),
-      ),
-    );
-  }
-
-  Widget _buildDayTabs(List<Map<String, String>> dates, int dayIndex) {
-    return Container(
-      height: 46,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
-      ),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: dates.length,
-        itemBuilder: (context, index) {
-          final isSelected = dayIndex == index;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedDayIndex = index),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: isSelected ? Colors.blue : Colors.transparent, width: 2.5),
-                ),
-              ),
-              child: Text(
-                dates[index]['title'] ?? '',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  color: isSelected ? Colors.blue[800] : Colors.grey,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -328,9 +247,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           Container(
             width: nameWidth,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border(right: BorderSide(color: Colors.grey[400]!)),
-            ),
+            decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[400]!))),
             child: const Text('이름', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           ),
           Expanded(
@@ -346,8 +263,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                           decoration: BoxDecoration(
                             border: Border(right: BorderSide(color: Colors.grey[300]!)),
                           ),
-                          child: Text(k,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          child: Text(k, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ))
                     .toList(),
               ),
@@ -358,154 +274,316 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     );
   }
 
-  /// 행 구분선. 좌/우 영역이 정확히 같은 높이를 갖도록 양쪽에 동일하게 넣는다.
   Widget _separator(double width) => Container(width: width, height: 0.5, color: Colors.grey[300]);
 
-  /// 좌측 고정열: 그룹 라벨 + 대원 이름
-  Widget _buildFixedColumn(List<_MemberGroup> groups) {
+  // ------------------------------------------------------- 좌측 고정 이름열
+
+  Widget _buildFixedColumn(List<_Block> blocks, EquipmentProvider provider) {
     final cells = <Widget>[];
 
-    for (final group in groups) {
-      cells.add(Container(
-        width: nameWidth,
-        height: groupHeight,
-        alignment: Alignment.center,
-        color: _teamSoft,
-        child: Text(
-          group.label,
-          style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: _teamColor),
-        ),
-      ));
-      cells.add(_separator(nameWidth));
+    for (var i = 0; i < blocks.length; i++) {
+      final block = blocks[i];
 
-      for (final member in group.members) {
-        cells.add(SizedBox(
+      if (block.isPair) {
+        cells.add(Container(
           width: nameWidth,
-          height: _memberHeight,
-          child: Center(
-            child: Text(
-              member.name.isEmpty ? '-' : member.name,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
+          height: bandHeight,
+          alignment: Alignment.center,
+          color: _pairSoft,
+          child: _isEditMode
+              ? _pairBandButton(
+                  label: '🔗 해제',
+                  onTap: () => provider.unpairMembers(block.pairId),
+                )
+              : const Text('장비 버디',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _pairColor)),
+        ));
+        cells.add(_separator(nameWidth));
+      } else if (_isEditMode) {
+        // 혼자인 대원은 바로 아래 대원과 묶을 수 있도록 버튼을 띄운다.
+        final next = i + 1 < blocks.length ? blocks[i + 1] : null;
+        final canPair = next != null && !next.isPair;
+        cells.add(Container(
+          width: nameWidth,
+          height: bandHeight,
+          alignment: Alignment.center,
+          color: canPair ? _editSoft : Colors.white,
+          child: canPair
+              ? _pairBandButton(
+                  label: '🔗 아래와 묶기',
+                  onTap: () => provider.pairMembers(
+                    block.members.first.id,
+                    next.members.first.id,
+                  ),
+                )
+              : null,
         ));
         cells.add(_separator(nameWidth));
       }
+
+      // 💡 블록 안에서는 셀 '내부' 테두리로 구분선을 그린다.
+      //    바깥 구분선은 블록당 한 번만 — 우측 영역과 높이를 정확히 맞추기 위함.
+      for (var j = 0; j < block.members.length; j++) {
+        final member = block.members[j];
+        final isLast = j == block.members.length - 1;
+        cells.add(Container(
+          width: nameWidth,
+          height: _slotHeight,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: isLast
+                ? null
+                : Border(bottom: BorderSide(color: Colors.grey[200]!, width: 0.5)),
+          ),
+          child: Text(
+            member.name.isEmpty ? '-' : member.name,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ));
+      }
+      cells.add(_separator(nameWidth));
     }
 
     return Container(
-      decoration: BoxDecoration(
-        border: Border(right: BorderSide(color: Colors.grey[400]!)),
-      ),
+      decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[400]!))),
       child: Column(children: cells),
     );
   }
 
-  /// 우측 스크롤 영역: 그룹 밴드 + 장비 번호행(+ 보기 모드일 때 O/X행)
-  Widget _buildScrollableColumn(List<_MemberGroup> groups, EquipmentProvider provider) {
+  Widget _pairBandButton({required String label, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: _pairColor),
+        ),
+      ),
+    );
+  }
+
+  // --------------------------------------------------- 우측 가로 스크롤 영역
+
+  Widget _buildScrollColumn(List<_Block> blocks, EquipmentProvider provider) {
     final rows = <Widget>[];
 
-    for (final group in groups) {
-      rows.add(Container(
-        width: _gearsWidth,
-        height: groupHeight,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.centerLeft,
-        color: _teamSoft,
-        child: Row(
-          children: [
-            Text(group.caption,
-                style: const TextStyle(fontSize: 11, color: _teamColor, fontWeight: FontWeight.w600)),
-            const Spacer(),
-            if (!_isEditMode)
-              Text(_groupScore(group),
-                  style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.bold)),
-          ],
-        ),
-      ));
-      rows.add(_separator(_gearsWidth));
+    for (var i = 0; i < blocks.length; i++) {
+      final block = blocks[i];
 
-      for (final member in group.members) {
-        rows.add(_buildMemberRows(member, provider));
+      // 짝일 때만 장비별 공유 토글 줄을 띄운다. 열 위치가 아래 표와 정확히 맞는다.
+      if (block.isPair) {
+        rows.add(_buildShareBand(block, provider));
+        rows.add(_separator(_gearsWidth));
+      } else if (_isEditMode) {
+        rows.add(Container(width: _gearsWidth, height: bandHeight, color: Colors.white));
         rows.add(_separator(_gearsWidth));
       }
+
+      rows.add(_buildBlockBody(block, provider));
+      rows.add(_separator(_gearsWidth));
     }
 
     return Column(children: rows);
   }
 
-  Widget _buildMemberRows(MemberEquipment member, EquipmentProvider provider) {
-    final editable = _isEditMode ? _editing[member.id] : null;
+  /// 짝의 장비별 공유 여부 토글 줄.
+  Widget _buildShareBand(_Block block, EquipmentProvider provider) {
+    return Container(
+      width: _gearsWidth,
+      height: bandHeight,
+      color: _pairSoft,
+      child: Row(
+        children: _gearKeys.map((gear) {
+          final shared = block.sharesGear(gear);
+          final label = shared ? '공유' : '개인';
+
+          return GestureDetector(
+            onTap: _isEditMode ? () => provider.toggleGearShare(block.pairId, gear) : null,
+            child: Container(
+              width: colWidth,
+              height: bandHeight,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: Colors.white)),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: shared ? FontWeight.bold : FontWeight.normal,
+                  color: shared ? _pairColor : Colors.blueGrey,
+                  decoration: _isEditMode ? TextDecoration.underline : null,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// 한 덩어리(혼자 또는 짝)의 장비 칸들.
+  /// 공유 장비는 두 사람 높이를 하나로 합쳐서 그린다.
+  Widget _buildBlockBody(_Block block, EquipmentProvider provider) {
+    final blockHeight = _slotHeight * block.members.length;
 
     return SizedBox(
       width: _gearsWidth,
-      height: _memberHeight,
+      height: blockHeight,
+      child: Row(
+        children: _gearKeys.map((gear) {
+          if (block.sharesGear(gear)) {
+            return _mergedCell(block, gear, blockHeight, provider);
+          }
+          return SizedBox(
+            width: colWidth,
+            height: blockHeight,
+            child: Column(
+              children: List.generate(
+                block.members.length,
+                (j) => _memberCell(
+                  block.members[j],
+                  gear,
+                  provider,
+                  showDivider: j < block.members.length - 1,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// 짝이 함께 쓰는 장비 — 번호도 체크도 하나뿐이다.
+  Widget _mergedCell(_Block block, String gear, double height, EquipmentProvider provider) {
+    final lead = block.members.first;
+    final source = _visible(lead);
+    final value = source.gears[gear]?.value ?? '';
+    final checked = lead.gears[gear]?.checked ?? false;
+
+    return Container(
+      width: colWidth,
+      height: height,
+      decoration: BoxDecoration(
+        color: _pairSoft,
+        border: Border(right: BorderSide(color: Colors.grey[200]!)),
+      ),
       child: Column(
         children: [
-          // 장비 번호 행 (수정 모드에서는 입력 가능)
-          Row(
-            children: _gearKeys.map((key) {
-              final value = (editable ?? member).gears[key]?.value ?? '';
-              return Container(
-                width: colWidth,
-                height: valueHeight,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: _isEditMode ? const Color(0xFFF0F8FF) : Colors.transparent,
-                  border: Border(right: BorderSide(color: Colors.grey[200]!)),
-                ),
-                child: _isEditMode
-                    ? _GearValueField(
-                        key: ValueKey('${member.id}-$key'),
-                        initialValue: value,
-                        onChanged: (v) => editable?.gears[key]?.value = v,
-                      )
-                    : Text(value.isEmpty ? '-' : value,
-                        style: const TextStyle(fontSize: 11, color: Colors.black87)),
-              );
-            }).toList(),
+          Expanded(
+            child: Center(
+              child: _isEditMode
+                  ? _GearValueField(
+                      key: ValueKey('merged-${block.pairId}-$gear'),
+                      initialValue: value,
+                      onChanged: (v) {
+                        for (final m in block.members) {
+                          _editing[m.id]?.gears[gear]?.value = v;
+                        }
+                      },
+                    )
+                  : Text(value.isEmpty ? '-' : value,
+                      style: const TextStyle(fontSize: 11, color: Colors.black87)),
+            ),
           ),
-
-          // O/X 행 (수정 모드에서는 숨김)
           if (!_isEditMode)
-            Row(
-              children: _gearKeys.map((key) {
-                final checked = member.gears[key]?.checked ?? false;
-                return GestureDetector(
-                  onTap: () => _handleToggle(provider, member.id, key),
-                  child: Container(
-                    width: colWidth,
-                    height: statusHeight,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: checked ? _okSoft : _badSoft,
-                      border: Border(right: BorderSide(color: Colors.grey[200]!)),
-                    ),
-                    child: Text(
-                      checked ? 'O' : 'X',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: checked ? _okColor : _badColor,
-                      ),
-                    ),
+            GestureDetector(
+              onTap: () => _handleToggle(provider, lead.id, gear),
+              child: Container(
+                height: statusHeight,
+                width: colWidth,
+                alignment: Alignment.center,
+                color: checked ? _okSoft : _badSoft,
+                child: Text(
+                  checked ? 'O' : 'X',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: checked ? _okColor : _badColor,
                   ),
-                );
-              }).toList(),
+                ),
+              ),
             ),
         ],
       ),
     );
   }
 
-  void _handleToggle(EquipmentProvider provider, String memberId, String key) {
+  /// 각자 챙기는 장비 — 대원 한 명분의 번호 + O/X.
+  Widget _memberCell(
+    MemberEquipment member,
+    String gear,
+    EquipmentProvider provider, {
+    bool showDivider = false,
+  }) {
+    final value = _visible(member).gears[gear]?.value ?? '';
+    final checked = member.gears[gear]?.checked ?? false;
+
+    return Container(
+      width: colWidth,
+      height: _slotHeight,
+      decoration: BoxDecoration(
+        border: showDivider
+            ? Border(bottom: BorderSide(color: Colors.grey[200]!, width: 0.5))
+            : null,
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            child: Container(
+              width: colWidth,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: _isEditMode ? _editSoft : Colors.transparent,
+                border: Border(right: BorderSide(color: Colors.grey[200]!)),
+              ),
+              child: _isEditMode
+                  ? _GearValueField(
+                      key: ValueKey('${member.id}-$gear'),
+                      initialValue: value,
+                      onChanged: (v) => _editing[member.id]?.gears[gear]?.value = v,
+                    )
+                  : Text(value.isEmpty ? '-' : value,
+                      style: const TextStyle(fontSize: 11, color: Colors.black87)),
+            ),
+          ),
+          if (!_isEditMode)
+            GestureDetector(
+              onTap: () => _handleToggle(provider, member.id, gear),
+              child: Container(
+                width: colWidth,
+                height: statusHeight,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: checked ? _okSoft : _badSoft,
+                  border: Border(right: BorderSide(color: Colors.grey[200]!)),
+                ),
+                child: Text(
+                  checked ? 'O' : 'X',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: checked ? _okColor : _badColor,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _handleToggle(EquipmentProvider provider, String memberId, String gear) {
     if (!provider.isAdmin) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('관리자만 체크할 수 있습니다.'), duration: Duration(seconds: 1)),
       );
       return;
     }
-    provider.toggleCheck(memberId, key);
+    provider.toggleCheck(memberId, gear);
   }
 }
 
