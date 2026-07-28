@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/equipment_provider.dart';
-import 'checklist_screen.dart';
-import 'input_screen.dart';
+import 'equipment_check_screen.dart';
 import 'search_screen.dart';
 
 /// 💡 v2: 흩어져 있던 장비 기능(목록/체크/검색)의 단일 진입점.
@@ -12,8 +9,6 @@ class EquipmentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAdmin = context.watch<EquipmentProvider>().isAdmin;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -27,10 +22,10 @@ class EquipmentScreen extends StatelessWidget {
           _menuTile(
             context,
             title: '장비 체크',
-            subtitle: '대원별 장비 준비 현황 확인',
+            subtitle: '버디 조별 장비 현황 · 수정',
             icon: Icons.checklist_rtl_rounded,
             color: Colors.green,
-            target: const ChecklistScreen(),
+            target: const EquipmentCheckScreen(),
           ),
           const SizedBox(height: 12),
           _menuTile(
@@ -40,15 +35,6 @@ class EquipmentScreen extends StatelessWidget {
             icon: Icons.inventory_2_outlined,
             color: Colors.orange,
             target: const SearchScreen(),
-          ),
-          const SizedBox(height: 12),
-          _menuTile(
-            context,
-            title: '장비 목록 관리',
-            subtitle: isAdmin ? '대원별 장비 정보 입력/수정' : '관리자 인증이 필요합니다',
-            icon: isAdmin ? Icons.edit_note_rounded : Icons.lock_outline,
-            color: isAdmin ? Colors.blue : Colors.grey,
-            target: const InputScreen(),
           ),
         ],
       ),
