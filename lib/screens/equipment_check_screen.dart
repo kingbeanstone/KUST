@@ -9,6 +9,7 @@ const List<String> _gearKeys = [
 
 const Color _pairColor = Color(0xFF00796B);
 const Color _pairSoft = Color(0xFFDCEFEC);
+const Color _pairTint = Color(0xFFF0F7F6); // 조 블록 배경용 아주 옅은 초록
 const Color _okColor = Color(0xFF2E7D32);
 const Color _okSoft = Color(0xFFE5F2E6);
 const Color _badColor = Color(0xFFD14842);
@@ -193,7 +194,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildFixedColumn(blocks, provider),
+                        _buildFixedColumn(blocks),
                         Expanded(
                           child: SingleChildScrollView(
                             controller: _bodyHController,
@@ -244,7 +245,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         children: [
           const Expanded(
             child: Text(
-              '장비 번호를 입력하세요. 조의 공유/개인은 초록 줄의 칸을 탭해 바꿉니다.',
+              '장비 번호를 입력하세요. 조 상단의 공유/개인 버튼으로 장비별 공유를 바꿉니다.',
               style: TextStyle(fontSize: 11, color: Colors.blue),
             ),
           ),
@@ -461,34 +462,37 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     );
   }
 
-  Widget _separator(double width) => Container(width: width, height: 0.5, color: Colors.grey[300]);
+  /// 블록(조/혼자) 사이를 띄우는 간격. 얇은 선 대신 여백을 줘서 조가 한 덩어리로 읽힌다.
+  Widget _gap(double width) => Container(width: width, height: 8, color: const Color(0xFFF1F3F5));
 
   // ------------------------------------------------------- 좌측 고정 이름열
 
-  Widget _buildFixedColumn(List<_Block> blocks, EquipmentProvider provider) {
+  Widget _buildFixedColumn(List<_Block> blocks) {
     final cells = <Widget>[];
 
-    for (var i = 0; i < blocks.length; i++) {
-      final block = blocks[i];
+    for (final block in blocks) {
+      final inner = <Widget>[];
 
-      if (block.isPair) {
-        cells.add(Container(
+      // 수정 모드에서 공유 토글 줄과 높이를 맞추기 위한 라벨 칸
+      if (_isEditMode && block.isPair) {
+        inner.add(Container(
           width: nameWidth,
           height: bandHeight,
           alignment: Alignment.center,
-          color: _pairSoft,
-          child: const Text('장비 버디',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _pairColor)),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5)),
+          ),
+          child: const Text('공유 설정',
+              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: _pairColor)),
         ));
-        cells.add(_separator(nameWidth));
       }
 
       // 💡 블록 안에서는 셀 '내부' 테두리로 구분선을 그린다.
-      //    바깥 구분선은 블록당 한 번만 — 우측 영역과 높이를 정확히 맞추기 위함.
+      //    (Container의 border는 지정한 높이 안쪽에 그려지므로 좌우 높이가 어긋나지 않는다)
       for (var j = 0; j < block.members.length; j++) {
         final member = block.members[j];
         final isLast = j == block.members.length - 1;
-        cells.add(Container(
+        inner.add(Container(
           width: nameWidth,
           height: _slotHeight,
           alignment: Alignment.center,
@@ -503,7 +507,18 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           ),
         ));
       }
-      cells.add(_separator(nameWidth));
+
+      // 조는 초록 레일 + 옅은 배경으로 한 덩어리처럼 감싼다.
+      cells.add(Container(
+        decoration: block.isPair
+            ? const BoxDecoration(
+                color: _pairTint,
+                border: Border(left: BorderSide(color: _pairColor, width: 3)),
+              )
+            : null,
+        child: Column(children: inner),
+      ));
+      cells.add(_gap(nameWidth));
     }
 
     return Container(
@@ -517,49 +532,55 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   Widget _buildScrollColumn(List<_Block> blocks, EquipmentProvider provider) {
     final rows = <Widget>[];
 
-    for (var i = 0; i < blocks.length; i++) {
-      final block = blocks[i];
+    for (final block in blocks) {
+      final inner = <Widget>[];
 
-      // 짝일 때만 장비별 공유 토글 줄을 띄운다. 열 위치가 아래 표와 정확히 맞는다.
-      if (block.isPair) {
-        rows.add(_buildShareBand(block, provider));
-        rows.add(_separator(_gearsWidth));
+      // 💡 공유/개인 토글 줄은 수정 모드에서만 나타난다.
+      //    보기 모드에서는 '칸이 병합되어 있는 것' 자체가 공유 표시라 줄이 필요 없다.
+      if (_isEditMode && block.isPair) {
+        inner.add(_buildShareBand(block, provider));
       }
+      inner.add(_buildBlockBody(block, provider));
 
-      rows.add(_buildBlockBody(block, provider));
-      rows.add(_separator(_gearsWidth));
+      rows.add(Column(children: inner));
+      rows.add(_gap(_gearsWidth));
     }
 
     return Column(children: rows);
   }
 
-  /// 짝의 장비별 공유 여부 토글 줄.
+  /// 짝의 장비별 공유 여부 토글 줄 (수정 모드 전용).
   Widget _buildShareBand(_Block block, EquipmentProvider provider) {
     return Container(
       width: _gearsWidth,
       height: bandHeight,
-      color: _pairSoft,
+      decoration: BoxDecoration(
+        color: _pairTint,
+        border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5)),
+      ),
       child: Row(
         children: _gearKeys.map((gear) {
           final shared = block.sharesGear(gear);
-          final label = shared ? '공유' : '개인';
 
           return GestureDetector(
-            onTap: _isEditMode ? () => provider.toggleGearShare(block.pairId, gear) : null,
+            onTap: () => provider.toggleGearShare(block.pairId, gear),
             child: Container(
               width: colWidth,
-              height: bandHeight,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border(right: BorderSide(color: Colors.white)),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: shared ? FontWeight.bold : FontWeight.normal,
-                  color: shared ? _pairColor : Colors.blueGrey,
-                  decoration: _isEditMode ? TextDecoration.underline : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: shared ? _pairColor : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: shared ? _pairColor : Colors.grey[400]!, width: 0.8),
+                ),
+                child: Text(
+                  shared ? '공유' : '개인',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: shared ? Colors.white : Colors.grey[600],
+                  ),
                 ),
               ),
             ),
@@ -620,18 +641,27 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         children: [
           Expanded(
             child: Center(
-              child: _isEditMode
-                  ? _GearValueField(
-                      key: ValueKey('merged-${block.pairId}-$gear'),
-                      initialValue: value,
-                      onChanged: (v) {
-                        for (final m in block.members) {
-                          _editing[m.id]?.gears[gear]?.value = v;
-                        }
-                      },
-                    )
-                  : Text(value.isEmpty ? '-' : value,
-                      style: const TextStyle(fontSize: 11, color: Colors.black87)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 병합 칸임을 알리는 표시 — "둘이 하나를 같이 쓴다"
+                  const Icon(Icons.link_rounded, size: 13, color: _pairColor),
+                  const SizedBox(height: 2),
+                  _isEditMode
+                      ? _GearValueField(
+                          key: ValueKey('merged-${block.pairId}-$gear'),
+                          initialValue: value,
+                          onChanged: (v) {
+                            for (final m in block.members) {
+                              _editing[m.id]?.gears[gear]?.value = v;
+                            }
+                          },
+                        )
+                      : Text(value.isEmpty ? '-' : value,
+                          style: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
+                ],
+              ),
             ),
           ),
           if (!_isEditMode)
