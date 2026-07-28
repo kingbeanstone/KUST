@@ -3,11 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/notice_provider.dart';
 import '../models/notice_model.dart';
-import 'input_screen.dart';
-import 'search_screen.dart';
-import 'checklist_screen.dart';
-import 'qna_screen.dart';
-import 'executive_checklist_screen.dart';
+import 'equipment_screen.dart';
 import 'member_management_screen.dart';
 import 'buddy_screen.dart';
 
@@ -57,50 +53,23 @@ class HomeScreen extends StatelessWidget {
             const Text('오늘의 장비 점검을 잊지 마세요.', style: TextStyle(color: Colors.black54)),
             const SizedBox(height: 24),
 
-            // 💡 3행 2열 그리드 구성
+            // 💡 v2: 장비 3분할을 하나로 통합하여 1행 2열로 단순화
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: 2,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              // 💡 부제목이 빠져서 높이를 줄이기 위해 비율 조정 (1.15 -> 1.4)
               childAspectRatio: 1.4,
               children: [
-                // 1행: 장비 목록, 장비 체크
                 _buildMenuCard(context,
-                    title: '장비 목록',
-                    icon: Icons.assignment_outlined, color: Colors.blue,
-                    target: const InputScreen(),
-                    isAdminRequired: false,
-                    isAdmin: isAdmin),
+                    title: '장비',
+                    icon: Icons.backpack_outlined, color: Colors.blue,
+                    target: const EquipmentScreen()),
                 _buildMenuCard(context,
-                    title: '장비 체크',
-                    icon: Icons.checklist_rtl_rounded, color: Colors.green,
-                    target: const ChecklistScreen()),
-
-                // 2행: 장비 검색, 버디 시스템
-                _buildMenuCard(context,
-                    title: '장비 검색',
-                    icon: Icons.search_rounded, color: Colors.orange,
-                    target: const SearchScreen()),
-                _buildMenuCard(context,
-                    title: '버디 시스템',
+                    title: '버디',
                     icon: Icons.people_outline_rounded, color: Colors.teal,
                     target: const BuddyScreen()),
-
-                // 3행: 임단 체크, QnA
-                _buildMenuCard(context,
-                    title: '임단 체크',
-                    icon: isAdmin ? Icons.verified_user_outlined : Icons.lock_outline,
-                    color: isAdmin ? Colors.indigo : Colors.grey,
-                    target: const ExecutiveChecklistScreen(),
-                    isAdminRequired: true,
-                    isAdmin: isAdmin),
-                _buildMenuCard(context,
-                    title: 'QnA',
-                    icon: Icons.question_answer_outlined, color: Colors.purple,
-                    target: const QnaScreen()),
               ],
             ),
 
@@ -140,31 +109,13 @@ class HomeScreen extends StatelessWidget {
             target: const MemberManagementScreen(),
           ),
 
-          _drawerItem(
-            context,
-            icon: isAdmin ? Icons.assignment_outlined : Icons.lock_outline,
-            title: '장비 목록 관리',
-            subtitle: '대원별 장비 정보 입력/수정',
-            isAdmin: isAdmin,
-            target: const InputScreen(),
-          ),
-
-          _drawerItem(
-            context,
-            icon: isAdmin ? Icons.verified_user_outlined : Icons.lock_outline,
-            title: '임원단 체크리스트',
-            subtitle: '임원진 전용 업무 관리',
-            isAdmin: isAdmin,
-            target: const ExecutiveChecklistScreen(),
-          ),
-
           const Spacer(),
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('v1.8.8', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const Text('v2.0.0', style: TextStyle(color: Colors.grey, fontSize: 12)),
                 if (isAdmin)
                   TextButton.icon(
                     onPressed: () {

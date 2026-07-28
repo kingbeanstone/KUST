@@ -20,14 +20,8 @@ import 'providers/auth_provider.dart';
 // ✅ 모든 Screen Import
 import 'screens/home_screen.dart';
 import 'screens/schedule_screen.dart';
-import 'screens/notice_screen.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/more_screen.dart';
-// 아래 화면들은 탭에는 없지만 내비게이션으로 이동할 때 필요할 수 있어 import 해둡니다.
-import 'screens/executive_checklist_screen.dart';
-import 'screens/member_management_screen.dart';
-import 'screens/buddy_screen.dart';
-import 'screens/qna_screen.dart';
 
 // 💡 백그라운드 메시지 핸들러
 @pragma('vm:entry-point')
@@ -180,7 +174,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const ScheduleScreen(),
-    const NoticeScreen(),
     const MealPlanScreen(),
     const MoreScreen(),
   ];
@@ -220,7 +213,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: '홈'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '일정'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: '공지'),
           BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: '식단'),
           BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
         ],
