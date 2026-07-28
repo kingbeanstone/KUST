@@ -132,6 +132,15 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   Future<void> _saveEdits(EquipmentProvider provider) async {
     FocusManager.instance.primaryFocus?.unfocus();
     await Future.delayed(const Duration(milliseconds: 100));
+    // 💡 편집 도중 버디 편성이 바뀌었을 수 있으므로, 사본의 pairId/sharedGears를
+    //    최신 데이터로 갱신한 뒤 저장한다. (안 하면 저장 시 편성이 과거로 되돌아감)
+    for (final m in provider.data) {
+      final copy = _editing[m.id];
+      if (copy != null) {
+        copy.pairId = m.pairId;
+        copy.sharedGears = List<String>.from(m.sharedGears);
+      }
+    }
     await provider.saveBulkChanges(_editing.values.toList());
     if (mounted) _exitEditMode();
   }
@@ -229,11 +238,189 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   Widget _buildEditGuide() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.fromLTRB(14, 4, 8, 4),
       color: _editSoft,
-      child: const Text(
-        '이름 사이 🔗 를 눌러 장비 버디를 묶고, 묶인 조의 장비 칸을 눌러 공유 여부를 바꾸세요.',
-        style: TextStyle(fontSize: 11, color: Colors.blue),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              '장비 번호를 입력하세요. 조의 공유/개인은 초록 줄의 칸을 탭해 바꿉니다.',
+              style: TextStyle(fontSize: 11, color: Colors.blue),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: _showPairSheet,
+            icon: const Icon(Icons.group_add_outlined, size: 16, color: _pairColor),
+            label: const Text('버디 편성',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _pairColor)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 💡 멤버 버튼을 두 번 탭해서 장비 버디를 묶는 바텀시트.
+  ///    편성 결과는 Firestore에 바로 반영되고 뒤의 표도 자동으로 다시 그려진다.
+  void _showPairSheet() {
+    String? firstPickId;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Consumer<EquipmentProvider>(
+          builder: (ctx2, provider, _) {
+            final sorted = List<MemberEquipment>.from(provider.data)
+              ..sort((a, b) => a.order.compareTo(b.order));
+
+            // 짝이 온전히 2명인 조와, 나머지(혼자) 대원을 나눈다.
+            final byPair = <String, List<MemberEquipment>>{};
+            for (final m in sorted.where((m) => m.hasPair)) {
+              byPair.putIfAbsent(m.pairId, () => []).add(m);
+            }
+            final pairs = byPair.values.where((l) => l.length >= 2).toList();
+            final pairedIds = pairs.expand((l) => l).map((m) => m.id).toSet();
+            final solos = sorted.where((m) => !pairedIds.contains(m.id)).toList();
+
+            String displayName(MemberEquipment m) => m.name.isEmpty ? '(이름없음)' : m.name;
+            final firstPickName = firstPickId == null
+                ? null
+                : displayName(sorted.firstWhere((m) => m.id == firstPickId));
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.75,
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const Text('장비 버디 편성',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(
+                      firstPickId == null
+                          ? '묶을 두 명을 차례로 탭하세요.'
+                          : '$firstPickName 님과 묶을 대원을 탭하세요.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: firstPickId == null ? Colors.grey : _pairColor,
+                        fontWeight: firstPickId == null ? FontWeight.normal : FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // --- 편성된 조 목록 ---
+                            if (pairs.isNotEmpty) ...[
+                              ...pairs.map((pair) => Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                                    decoration: BoxDecoration(
+                                      color: _pairSoft,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.link, size: 15, color: _pairColor),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            '${displayName(pair[0])}  ·  ${displayName(pair[1])}',
+                                            style: const TextStyle(
+                                                fontSize: 13, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => provider.unpairMembers(pair.first.pairId),
+                                          child: const Text('해제',
+                                              style: TextStyle(fontSize: 12, color: _badColor)),
+                                        ),
+                                      ],
+                                    ),
+                                  )),
+                              const SizedBox(height: 8),
+                              Divider(color: Colors.grey[200], height: 1),
+                              const SizedBox(height: 12),
+                            ],
+
+                            // --- 아직 혼자인 대원 버튼 ---
+                            if (solos.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Text('모든 대원이 편성되었습니다.',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              )
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: solos.map((m) {
+                                  final isPicked = firstPickId == m.id;
+                                  return GestureDetector(
+                                    onTap: () {
+                                      if (firstPickId == null) {
+                                        setSheetState(() => firstPickId = m.id);
+                                      } else if (firstPickId == m.id) {
+                                        setSheetState(() => firstPickId = null);
+                                      } else {
+                                        provider.pairMembers(firstPickId!, m.id);
+                                        setSheetState(() => firstPickId = null);
+                                      }
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 9),
+                                      decoration: BoxDecoration(
+                                        color: isPicked ? _pairColor : Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: isPicked ? _pairColor : Colors.grey[300]!,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        displayName(m),
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight:
+                                              isPicked ? FontWeight.bold : FontWeight.w500,
+                                          color: isPicked ? Colors.white : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -290,33 +477,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           height: bandHeight,
           alignment: Alignment.center,
           color: _pairSoft,
-          child: _isEditMode
-              ? _pairBandButton(
-                  label: '🔗 해제',
-                  onTap: () => provider.unpairMembers(block.pairId),
-                )
-              : const Text('장비 버디',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _pairColor)),
-        ));
-        cells.add(_separator(nameWidth));
-      } else if (_isEditMode) {
-        // 혼자인 대원은 바로 아래 대원과 묶을 수 있도록 버튼을 띄운다.
-        final next = i + 1 < blocks.length ? blocks[i + 1] : null;
-        final canPair = next != null && !next.isPair;
-        cells.add(Container(
-          width: nameWidth,
-          height: bandHeight,
-          alignment: Alignment.center,
-          color: canPair ? _editSoft : Colors.white,
-          child: canPair
-              ? _pairBandButton(
-                  label: '🔗 아래와 묶기',
-                  onTap: () => provider.pairMembers(
-                    block.members.first.id,
-                    next.members.first.id,
-                  ),
-                )
-              : null,
+          child: const Text('장비 버디',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _pairColor)),
         ));
         cells.add(_separator(nameWidth));
       }
@@ -350,20 +512,6 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     );
   }
 
-  Widget _pairBandButton({required String label, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: _pairColor),
-        ),
-      ),
-    );
-  }
-
   // --------------------------------------------------- 우측 가로 스크롤 영역
 
   Widget _buildScrollColumn(List<_Block> blocks, EquipmentProvider provider) {
@@ -375,9 +523,6 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       // 짝일 때만 장비별 공유 토글 줄을 띄운다. 열 위치가 아래 표와 정확히 맞는다.
       if (block.isPair) {
         rows.add(_buildShareBand(block, provider));
-        rows.add(_separator(_gearsWidth));
-      } else if (_isEditMode) {
-        rows.add(Container(width: _gearsWidth, height: bandHeight, color: Colors.white));
         rows.add(_separator(_gearsWidth));
       }
 
