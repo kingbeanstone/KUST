@@ -136,7 +136,6 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   static const double headerHeight = 38.0;
   static const double bandHeight = 30.0;
   static const double valueHeight = 36.0;
-  static const double stripWidth = 5.0; // 칸 좌측 상태 띠 (초록=완료, 빨강=미완료)
   static const double groupHeaderHeight = 30.0;
   static const Color groupHeaderColor = Color(0xFF455A64);
 
@@ -1317,42 +1316,34 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         width: colWidth,
         height: height,
         decoration: BoxDecoration(
-          color: _isEditMode ? _editSoft : null,
+          // 💡 칸 전체 배경으로 상태 표시: 연초록=쌌음, 연분홍=아직, 흰색=관리 외
+          color: _isEditMode
+              ? _editSoft
+              : (needsCheck ? (checked ? _okSoft : _badSoft) : null),
           border: Border(right: BorderSide(color: Colors.grey[200]!)),
         ),
-        child: Row(
-          children: [
-            // 좌측 상태 띠: 초록=쌌음, 빨강=아직 (관리 외 칸은 없음)
-            Container(
-              width: stripWidth,
-              color: needsCheck ? (checked ? _okSoft : _badSoft) : Colors.transparent,
-            ),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // 병합 칸임을 알리는 표시 — "둘이 하나를 같이 쓴다"
-                    const Icon(Icons.link_rounded, size: 13, color: _pairColor),
-                    const SizedBox(height: 2),
-                    _isEditMode
-                        ? _GearValueField(
-                            key: ValueKey('merged-${block.pairId}-$gear'),
-                            initialValue: value,
-                            onChanged: (v) {
-                              for (final m in block.members) {
-                                _editing[m.id]?.gears[gear]?.value = v;
-                              }
-                            },
-                          )
-                        : Text(value.isEmpty ? '-' : value,
-                            style: const TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
-                  ],
-                ),
-              ),
-            ),
-          ],
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 병합 칸임을 알리는 표시 — "둘이 하나를 같이 쓴다"
+              const Icon(Icons.link_rounded, size: 13, color: _pairColor),
+              const SizedBox(height: 2),
+              _isEditMode
+                  ? _GearValueField(
+                      key: ValueKey('merged-${block.pairId}-$gear'),
+                      initialValue: value,
+                      onChanged: (v) {
+                        for (final m in block.members) {
+                          _editing[m.id]?.gears[gear]?.value = v;
+                        }
+                      },
+                    )
+                  : Text(value.isEmpty ? '-' : value,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
+            ],
+          ),
         ),
       ),
     );
@@ -1375,8 +1366,12 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       child: Container(
         width: colWidth,
         height: _slotHeight,
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: _isEditMode ? _editSoft : Colors.transparent,
+          // 💡 칸 전체 배경으로 상태 표시: 연초록=쌌음, 연분홍=아직, 흰색=관리 외
+          color: _isEditMode
+              ? _editSoft
+              : (needsCheck ? (checked ? _okSoft : _badSoft) : Colors.transparent),
           border: Border(
             right: BorderSide(color: Colors.grey[200]!),
             bottom: showDivider
@@ -1384,27 +1379,14 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                 : BorderSide.none,
           ),
         ),
-        child: Row(
-          children: [
-            // 좌측 상태 띠: 초록=쌌음, 빨강=아직 (관리 외 칸은 없음)
-            Container(
-              width: stripWidth,
-              color: needsCheck ? (checked ? _okSoft : _badSoft) : Colors.transparent,
-            ),
-            Expanded(
-              child: Center(
-                child: _isEditMode
-                    ? _GearValueField(
-                        key: ValueKey('${member.id}-$gear'),
-                        initialValue: value,
-                        onChanged: (v) => _editing[member.id]?.gears[gear]?.value = v,
-                      )
-                    : Text(value.isEmpty ? '-' : value,
-                        style: const TextStyle(fontSize: 11, color: Colors.black87)),
-              ),
-            ),
-          ],
-        ),
+        child: _isEditMode
+            ? _GearValueField(
+                key: ValueKey('${member.id}-$gear'),
+                initialValue: value,
+                onChanged: (v) => _editing[member.id]?.gears[gear]?.value = v,
+              )
+            : Text(value.isEmpty ? '-' : value,
+                style: const TextStyle(fontSize: 11, color: Colors.black87)),
       ),
     );
   }
