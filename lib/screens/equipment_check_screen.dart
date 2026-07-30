@@ -402,7 +402,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         children: [
           const Expanded(
             child: Text(
-              '번호 입력 · 공유/개인 버튼으로 전환',
+              '번호 입력 · 공유/각자 버튼으로 전환',
               style: TextStyle(fontSize: 11, color: Colors.blue),
             ),
           ),
@@ -756,6 +756,23 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                               : FontWeight.bold,
                         ),
                       ),
+                      // 💡 명시적인 그룹 삭제 버튼 (선택된 그룹이 있을 때)
+                      if (selectedGroupId != null &&
+                          groups.any((g) => g.id == selectedGroupId))
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: () {
+                              final g = groups
+                                  .firstWhere((g) => g.id == selectedGroupId);
+                              _confirmDeleteGroup(ctx, provider, g.id, g.name);
+                            },
+                            icon: const Icon(Icons.delete_outline,
+                                size: 15, color: _badColor),
+                            label: const Text('선택한 그룹 삭제',
+                                style: TextStyle(fontSize: 12, color: _badColor)),
+                          ),
+                        ),
                     ],
                     const SizedBox(height: 12),
                     Divider(color: Colors.grey[200], height: 1),
@@ -1336,7 +1353,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                   border: Border.all(color: shared ? _pairColor : Colors.grey[400]!, width: 0.8),
                 ),
                 child: Text(
-                  shared ? '공유' : '개인',
+                  // 💡 '개인'은 개인 소유 장비와 헷갈려서 '각자'로 표기
+                  shared ? '공유' : '각자',
                   style: TextStyle(
                     fontSize: 9,
                     fontWeight: FontWeight.bold,
