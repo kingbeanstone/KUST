@@ -366,7 +366,11 @@ class _BuddyScreenState extends State<BuddyScreen> {
                             },
                             isPaired: partner != null,
                             isInstructor: participantProvider.isInstructor(member.id),
-                            roleEmoji: participantProvider.roleEmojiOf(member.id),
+                            // 💡 편성 판단에 필요한 대장만 표시 (그 외 직책은 생략)
+                            roleEmoji:
+                                participantProvider.staffRoleOf(member.id) == 'leader'
+                                    ? kStaffRoleEmoji['leader']!
+                                    : '',
                           ),
                         );
                       }).toList(),
