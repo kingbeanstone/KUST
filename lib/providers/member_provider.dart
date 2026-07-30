@@ -8,7 +8,21 @@ class MemberProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   List<MemberItem> _members = [];
 
-  List<MemberItem> get members => _members;
+  /// 💡 항상 정렬된 목록을 돌려준다: 기수 오름차순("3기" < "12기") → 이름순,
+  ///    기수 미입력은 맨 뒤. 읽는 시점에 정렬하므로 데이터가 언제 왔든 순서가 보장된다.
+  List<MemberItem> get members {
+    int genKey(MemberItem m) {
+      final match = RegExp(r'\d+').firstMatch(m.generation);
+      return match == null ? 1 << 30 : int.parse(match.group(0)!);
+    }
+
+    final sorted = List<MemberItem>.from(_members);
+    sorted.sort((a, b) {
+      final cmp = genKey(a).compareTo(genKey(b));
+      return cmp != 0 ? cmp : a.name.compareTo(b.name);
+    });
+    return sorted;
+  }
 
   MemberProvider() {
     _listenToMembers();
@@ -19,19 +33,6 @@ class MemberProvider with ChangeNotifier {
       _members = snapshot.docs
           .map((doc) => MemberItem.fromMap(doc.id, doc.data()))
           .toList();
-
-      // 💡 기수 오름차순 정렬 (숫자를 뽑아 비교해 "3기" < "12기"가 올바르게),
-      //    기수가 같으면 이름순, 기수 없는 대원은 맨 뒤
-      int genKey(MemberItem m) {
-        final match = RegExp(r'\d+').firstMatch(m.generation);
-        return match == null ? 1 << 30 : int.parse(match.group(0)!);
-      }
-
-      _members.sort((a, b) {
-        final cmp = genKey(a).compareTo(genKey(b));
-        return cmp != 0 ? cmp : a.name.compareTo(b.name);
-      });
-
       notifyListeners();
     });
   }
