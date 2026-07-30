@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/member_model.dart';
 
 /// 💡 현재 원정의 참가자 목록.
 /// expeditions/{expId}/participants/{clubMemberId} — 문서 ID 자체가
@@ -42,16 +43,34 @@ class ParticipantProvider with ChangeNotifier {
     });
   }
 
-  /// 참가 여부 토글: 있으면 빼고, 없으면 맨 뒤 순서로 추가.
-  Future<void> toggle(String clubMemberId) async {
+  /// 참가 여부 토글. 장비 표(members) 행도 함께 생성/삭제해서
+  /// 참가자 명단과 장비 표가 항상 같은 사람을 가리키게 한다.
+  Future<void> toggle(MemberItem clubMember) async {
     if (_expeditionId == null) return;
-    if (_idSet.contains(clubMemberId)) {
-      await _col.doc(clubMemberId).delete();
+
+    final expRef = _db.collection('expeditions').doc(_expeditionId!);
+    final partRef = _col.doc(clubMember.id);
+    // 💡 장비 행의 문서 ID = 동아리원 ID (외래키). 이름 타이핑이 필요 없어진다.
+    final gearRef = expRef.collection('members').doc(clubMember.id);
+
+    final batch = _db.batch();
+    if (_idSet.contains(clubMember.id)) {
+      // 참가 취소: 장비 행도 함께 제거 (기록된 장비 번호/체크 포함)
+      batch.delete(partRef);
+      batch.delete(gearRef);
     } else {
-      await _col.doc(clubMemberId).set({
+      batch.set(partRef, {
         'order': _ids.length,
         'addedAt': FieldValue.serverTimestamp(),
       });
+      // 장비 행 자동 생성 — 표에는 참가 순서대로 뒤에 붙는다.
+      // merge라서 같은 ID의 과거 장비 데이터가 남아있으면 보존된다.
+      batch.set(gearRef, {
+        'id': clubMember.id,
+        '이름': clubMember.name,
+        'order': DateTime.now().millisecondsSinceEpoch,
+      }, SetOptions(merge: true));
     }
+    await batch.commit();
   }
 }

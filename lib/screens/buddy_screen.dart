@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/schedule_provider.dart';
 import '../providers/member_provider.dart';
+import '../providers/participant_provider.dart';
 import '../providers/buddy_provider.dart';
 import '../models/buddy_model.dart';
 import '../models/member_model.dart'; // MemberItem 타입을 명시적으로 사용하기 위해 추가
@@ -224,9 +225,29 @@ class _BuddyScreenState extends State<BuddyScreen> {
   }
 
   Widget _buildMemberPicker(MemberProvider memberProvider, BuddyDay dayData, BuddyProvider buddyProvider) {
-    // 💡 화면 표시를 위해 이름 순으로 정렬된 리스트 생성
-    final List<MemberItem> sortedMembers = List.from(memberProvider.members);
-    sortedMembers.sort((a, b) => a.name.compareTo(b.name));
+    // 💡 v2: 동아리원 전체가 아니라 '이번 원정 참가자'만 노출한다
+    final participantProvider = context.watch<ParticipantProvider>();
+    final List<MemberItem> sortedMembers = memberProvider.members
+        .where((m) => participantProvider.isParticipant(m.id))
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    if (sortedMembers.isEmpty) {
+      return Container(
+        height: 120,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2))],
+        ),
+        child: const Text(
+          '이번 원정 참가자가 없습니다.\n홈 사이드바 [원정 참가자 관리]에서 먼저 등록해주세요.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 12.5, color: Colors.grey),
+        ),
+      );
+    }
 
     Set<String> assignedInCurrentTank = {};
     if (_selectedTankIdx != null) {
@@ -250,7 +271,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('대원 선택 (이름 순)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
+              const Text('참가자 선택 (이름 순)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
               if (_selectedTankIdx != null)
                 Text('${_selectedTankIdx! + 1}탱크 ${_selectedTeam}팀 수정 중', style: const TextStyle(fontSize: 11, color: Colors.grey)),
             ],

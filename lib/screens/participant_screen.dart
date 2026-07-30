@@ -92,7 +92,7 @@ class ParticipantScreen extends StatelessWidget {
                               m,
                               selected: true,
                               onTap: isAdmin
-                                  ? () => participantProvider.toggle(m.id)
+                                  ? () => participantProvider.toggle(m)
                                   : null,
                             ))
                         .toList(),
@@ -123,7 +123,7 @@ class ParticipantScreen extends StatelessWidget {
                                 m,
                                 selected: false,
                                 onTap: isAdmin
-                                    ? () => participantProvider.toggle(m.id)
+                                    ? () => participantProvider.toggle(m)
                                     : null,
                               ))
                           .toList(),
@@ -141,7 +141,7 @@ class ParticipantScreen extends StatelessWidget {
                                 m,
                                 selected: false,
                                 onTap: isAdmin
-                                    ? () => participantProvider.toggle(m.id)
+                                    ? () => participantProvider.toggle(m)
                                     : null,
                               ))
                           .toList(),
