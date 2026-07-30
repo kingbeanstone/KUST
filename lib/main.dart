@@ -98,8 +98,11 @@ void main() async {
         ChangeNotifierProvider(create: (_) => MemberProvider()),
 
         // 6-1. 원정 참가자 (원정별, 동아리원 ID 참조)
+        // 💡 lazy: false — 화면이 안 열려도 앱 시작 시 바로 구독을 시작해야
+        //    참가자↔장비 행 자동 보충(자가 치유)이 동작한다
         ChangeNotifierProxyProvider<ExpeditionProvider, ParticipantProvider>(
           create: (_) => ParticipantProvider(),
+          lazy: false,
           update: (_, expedition, participant) =>
               participant!..setExpedition(expedition.selectedId),
         ),

@@ -20,13 +20,31 @@ class _SearchScreenState extends State<SearchScreen> {
 
   final TextEditingController _memoController = TextEditingController();
 
+  /// 💡 v2: 이 번호를 쓰는 사람은 현재 원정 장비 표에서 파생한다.
+  /// (예: BCD 14 → 장비 표에서 BCD 값에 14가 적힌 대원들)
+  /// 원정을 바꾸면 사용자도 자동으로 바뀐다 — 손으로 입력하지 않는다.
+  String _assignedUsers(EquipmentProvider provider, String gearKey, String number) {
+    final target = int.tryParse(number);
+    if (target == null) return '';
+
+    final users = <String>[];
+    for (final m in provider.data) {
+      final value = m.gears[gearKey]?.value ?? '';
+      final nums = RegExp(r'\d+')
+          .allMatches(value)
+          .map((x) => int.parse(x.group(0)!))
+          .toSet();
+      if (nums.contains(target) && m.name.isNotEmpty) users.add(m.name);
+    }
+    return users.toSet().toList().join(', ');
+  }
+
   void _showAddEditDialog(BuildContext context, EquipmentProvider provider, {dynamic existingItem}) {
     // 💡 안전장치: 관리자가 아니면 함수 실행 즉시 종료
     if (!provider.isAdmin) return;
 
     final bool isEdit = existingItem != null;
     final idController = TextEditingController(text: isEdit ? existingItem.id : "");
-    final nameController = TextEditingController(text: isEdit ? existingItem.name : "");
     final memoController = TextEditingController(text: isEdit ? existingItem.memo : "");
 
     showDialog(
@@ -44,13 +62,13 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             if (!isEdit) const SizedBox(height: 12),
             TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: '사용자 이름', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            TextField(
               controller: memoController,
               decoration: const InputDecoration(labelText: '기타 (상태 등)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '사용자는 장비 체크 표에 적힌 번호에서 자동으로 표시됩니다.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
             ),
           ],
         ),
@@ -59,18 +77,19 @@ class _SearchScreenState extends State<SearchScreen> {
           ElevatedButton(
             onPressed: () async {
               if (idController.text.isEmpty) return;
+              final keptName = isEdit ? (existingItem.name as String) : '';
 
               if (_currentTab == 'BCD') {
                 if (isEdit) {
-                  await provider.updateBcd(idController.text, nameController.text, memoController.text);
+                  await provider.updateBcd(idController.text, keptName, memoController.text);
                 } else {
-                  await provider.addBcd(idController.text, nameController.text, memoController.text);
+                  await provider.addBcd(idController.text, keptName, memoController.text);
                 }
               } else {
                 if (isEdit) {
-                  await provider.updateRegulator(idController.text, nameController.text, memoController.text);
+                  await provider.updateRegulator(idController.text, keptName, memoController.text);
                 } else {
-                  await provider.addRegulator(idController.text, nameController.text, memoController.text);
+                  await provider.addRegulator(idController.text, keptName, memoController.text);
                 }
               }
               if (context.mounted) Navigator.pop(context);
@@ -175,7 +194,8 @@ class _SearchScreenState extends State<SearchScreen> {
       itemCount: provider.bcds.length,
       itemBuilder: (context, index) {
         final item = provider.bcds[index];
-        return _buildInventoryTile(context, provider, 'BCD', item.id, item.name, item.memo, item);
+        final users = _assignedUsers(provider, 'BCD', item.id);
+        return _buildInventoryTile(context, provider, 'BCD', item.id, users, item.memo, item);
       },
     );
   }
@@ -187,7 +207,8 @@ class _SearchScreenState extends State<SearchScreen> {
       itemCount: provider.regulators.length,
       itemBuilder: (context, index) {
         final item = provider.regulators[index];
-        return _buildInventoryTile(context, provider, '호흡기', item.id, item.name, item.memo, item);
+        final users = _assignedUsers(provider, '호흡기', item.id);
+        return _buildInventoryTile(context, provider, '호흡기', item.id, users, item.memo, item);
       },
     );
   }
@@ -318,7 +339,7 @@ class _SearchScreenState extends State<SearchScreen> {
     ),
   );
 
-  Widget _buildInventoryTile(BuildContext context, EquipmentProvider provider, String type, String no, String name, String memo, dynamic item) {
+  Widget _buildInventoryTile(BuildContext context, EquipmentProvider provider, String type, String no, String users, String memo, dynamic item) {
     return GestureDetector(
       // 💡 관리자 모드일 때만 수정 다이얼로그 호출, 아닐 경우 안내 메시지 표시
       onTap: provider.isAdmin
@@ -341,10 +362,21 @@ class _SearchScreenState extends State<SearchScreen> {
             Text('$type : ', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
             SizedBox(width: 30, child: Text(no, style: const TextStyle(fontWeight: FontWeight.bold))),
             const SizedBox(width: 10),
-            const Text('이름 : ', style: TextStyle(color: Colors.grey, fontSize: 13)),
-            Expanded(child: Text(name.isEmpty ? '(미지정)' : name, style: const TextStyle(fontSize: 14))),
+            const Text('사용 : ', style: TextStyle(color: Colors.grey, fontSize: 13)),
+            Expanded(
+              flex: 3,
+              child: Text(
+                users.isEmpty ? '(미배정)' : users,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: users.isEmpty ? Colors.grey : Colors.black87,
+                  fontWeight: users.isEmpty ? FontWeight.normal : FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const Text('기타 : ', style: TextStyle(color: Colors.grey, fontSize: 13)),
-            Expanded(child: Text(memo.isEmpty ? '-' : memo, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis)),
+            Expanded(flex: 2, child: Text(memo.isEmpty ? '-' : memo, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis)),
             // 💡 관리자일 때만 편집 아이콘 노출
             if (provider.isAdmin) const Icon(Icons.edit, size: 14, color: Colors.grey),
           ],
