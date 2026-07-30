@@ -53,10 +53,16 @@ int _compareByGeneration(Map<String, MemberItem> club, MemberEquipment a, Member
   return cmp != 0 ? cmp : a.name.compareTo(b.name);
 }
 
-/// 기수·이름 순으로 훑으면서 같은 pairId끼리 인접하게 묶는다.
+/// 💡 표시 순서: 저장된 order(드래그로 변경 가능) 우선, 같으면 기수→이름.
+int _compareRows(Map<String, MemberItem> club, MemberEquipment a, MemberEquipment b) {
+  final cmp = a.order.compareTo(b.order);
+  return cmp != 0 ? cmp : _compareByGeneration(club, a, b);
+}
+
+/// 저장된 순서대로 훑으면서 같은 pairId끼리 인접하게 묶는다.
 List<_Block> _buildBlocks(List<MemberEquipment> data, Map<String, MemberItem> club) {
   final sorted = List<MemberEquipment>.from(data)
-    ..sort((a, b) => _compareByGeneration(club, a, b));
+    ..sort((a, b) => _compareRows(club, a, b));
   final blocks = <_Block>[];
   final taken = <String>{};
 
@@ -152,12 +158,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   /// 그룹 순서대로 섹션을 만든다. 그룹이 하나도 없으면 헤더 없는 단일 섹션.
   /// 그룹에 속하지 않은 대원은 맨 아래 '미지정' 섹션으로.
-  /// 동아리원 명단(기수 조인용) — id → MemberItem
-  Map<String, MemberItem> _clubById() =>
-      {for (final m in context.watch<MemberProvider>().members) m.id: m};
-
-  List<_Section> _buildSections(EquipmentProvider provider) {
-    final club = _clubById();
+  List<_Section> _buildSections(EquipmentProvider provider, Map<String, MemberItem> club) {
     final groups = provider.groups;
     if (groups.isEmpty) {
       return [_Section(key: '__all__', title: null, blocks: _buildBlocks(provider.data, club))];
@@ -269,7 +270,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<EquipmentProvider>();
-    final sections = _buildSections(provider);
+    final club = {for (final m in context.watch<MemberProvider>().members) m.id: m};
+    final sections = _buildSections(provider, club);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -343,9 +345,16 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         children: [
           const Expanded(
             child: Text(
-              '번호 입력 · 공유/개인 버튼으로 장비별 공유 전환',
+              '번호 입력 · 공유/개인 버튼으로 전환',
               style: TextStyle(fontSize: 11, color: Colors.blue),
             ),
+          ),
+          TextButton.icon(
+            onPressed: _showOrderSheet,
+            icon: const Icon(Icons.swap_vert, size: 15, color: Colors.blueGrey),
+            label: const Text('순서',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
           ),
           TextButton.icon(
             onPressed: _showGroupSheet,
@@ -361,6 +370,168 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _pairColor)),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 💡 행 순서를 드래그(≡ 핸들)로 바꾸는 바텀시트.
+  ///    버디 조는 한 덩어리로 움직이고, 이동은 같은 그룹 안에서만 가능하다.
+  ///    [완료]를 눌러야 저장된다.
+  void _showOrderSheet() {
+    final provider = context.read<EquipmentProvider>();
+    final club = {for (final m in context.read<MemberProvider>().members) m.id: m};
+    final sections = _buildSections(provider, club)
+        .where((s) => s.blocks.isNotEmpty)
+        .toList();
+
+    // 시트 안에서만 쓰는 로컬 편집 상태 (완료 시 일괄 저장)
+    final localTitles = [for (final s in sections) s.title];
+    final localBlocks = [for (final s in sections) List<_Block>.of(s.blocks)];
+
+    String blockLabel(_Block b) =>
+        b.members.map((m) => m.name.isEmpty ? '(이름없음)' : m.name).join(' · ');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, setSheetState) => SafeArea(
+          child: Container(
+            height: MediaQuery.of(ctx).size.height * 0.8,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    const Text('행 순서 변경',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => setSheetState(() {
+                        for (final blocks in localBlocks) {
+                          blocks.sort((a, b) => _compareByGeneration(
+                              club, a.members.first, b.members.first));
+                        }
+                      }),
+                      icon: const Icon(Icons.sort, size: 15),
+                      label: const Text('기수순 정렬', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+                const Text('≡ 핸들을 눌러 끌면 순서가 바뀝니다. 버디 조는 함께 움직입니다.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var s = 0; s < localBlocks.length; s++) ...[
+                          if (localTitles[s] != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6, bottom: 6),
+                              child: Text(localTitles[s]!,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black54)),
+                            ),
+                          ReorderableListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            buildDefaultDragHandles: false,
+                            itemCount: localBlocks[s].length,
+                            onReorder: (oldIndex, newIndex) => setSheetState(() {
+                              if (newIndex > oldIndex) newIndex -= 1;
+                              final item = localBlocks[s].removeAt(oldIndex);
+                              localBlocks[s].insert(newIndex, item);
+                            }),
+                            itemBuilder: (context, index) {
+                              final block = localBlocks[s][index];
+                              return Container(
+                                key: ValueKey(block.members.first.id),
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 11),
+                                decoration: BoxDecoration(
+                                  color: block.isPair ? _pairTint : Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.grey[200]!),
+                                ),
+                                child: Row(
+                                  children: [
+                                    ReorderableDragStartListener(
+                                      index: index,
+                                      child: const Icon(Icons.drag_handle,
+                                          size: 20, color: Colors.blueGrey),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    if (block.isPair) ...[
+                                      const Icon(Icons.link,
+                                          size: 13, color: _pairColor),
+                                      const SizedBox(width: 5),
+                                    ],
+                                    Expanded(
+                                      child: Text(
+                                        blockLabel(block),
+                                        style: const TextStyle(
+                                            fontSize: 13, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final ids = <String>[];
+                      for (final blocks in localBlocks) {
+                        for (final b in blocks) {
+                          ids.addAll(b.members.map((m) => m.id));
+                        }
+                      }
+                      await provider.saveRowOrder(ids);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[800],
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                    ),
+                    child: const Text('완료',
+                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -657,7 +828,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
             final club =
                 {for (final m in ctx2.watch<MemberProvider>().members) m.id: m};
             final sorted = List<MemberEquipment>.from(provider.data)
-              ..sort((a, b) => _compareByGeneration(club, a, b));
+              ..sort((a, b) => _compareRows(club, a, b));
 
             // 짝이 온전히 2명인 조와, 나머지(혼자) 대원을 나눈다.
             final byPair = <String, List<MemberEquipment>>{};

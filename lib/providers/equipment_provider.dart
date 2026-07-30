@@ -277,6 +277,18 @@ class EquipmentProvider with ChangeNotifier {
     await batch.commit();
   }
 
+  /// 💡 드래그로 정한 행 순서를 저장한다. (10, 20, 30… 간격으로 재부여)
+  Future<void> saveRowOrder(List<String> orderedIds) async {
+    if (!_isAdmin || _expeditionId == null) return;
+    final batch = _db.batch();
+    for (var i = 0; i < orderedIds.length; i++) {
+      batch.set(_membersCol.doc(orderedIds[i]), {'order': (i + 1) * 10},
+          SetOptions(merge: true));
+    }
+    await batch.commit();
+    addLog('장비 행 순서 저장 (${orderedIds.length}명)');
+  }
+
   // --- 장비 그룹(교육 1팀 등 자유 라벨) 관리 ---
 
   Future<void> _saveGroups(List<EquipmentGroup> groups) async {
