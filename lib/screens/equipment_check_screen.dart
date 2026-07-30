@@ -115,7 +115,11 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   final ScrollController _bodyHController = ScrollController();
 
   static const double nameWidth = 78.0;
+  static const double noWidth = 26.0; // 순번(가방 번호) 열
   static const double colWidth = 56.0;
+
+  /// 좌측 고정 영역 전체 폭 (No + 이름)
+  double get _fixedWidth => noWidth + nameWidth;
   static const double headerHeight = 38.0;
   static const double bandHeight = 30.0;
   static const double valueHeight = 34.0;
@@ -188,26 +192,37 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     });
   }
 
-  /// 섹션 헤더 우측에 붙는 요약 (보기: 완료 수 / 수정: 인원수)
-  String _sectionSummary(_Section section) {
-    final members = section.allMembers;
-    if (_isEditMode) return '${members.length}명';
-    int done = 0;
-    int total = 0;
-    for (final block in section.blocks) {
-      for (final gear in _gearKeys) {
-        if (block.sharesGear(gear)) {
-          total += 1;
-          if (block.members.first.gears[gear]?.checked ?? false) done += 1;
-        } else {
-          for (final m in block.members) {
-            total += 1;
-            if (m.gears[gear]?.checked ?? false) done += 1;
-          }
+  /// 💡 한 덩어리(=가방)가 다 싸졌는지.
+  /// 값이 있는 칸만 대상으로 하고, 'X'(해당 없음)와 빈 칸은 제외한다.
+  /// 값이 하나도 없는 블록은 아직 아무것도 안 싼 것이므로 미완료로 본다.
+  bool _isBlockComplete(_Block block) {
+    var needed = 0;
+    for (final gear in _gearKeys) {
+      if (block.sharesGear(gear)) {
+        final status = block.members.first.gears[gear];
+        final value = (status?.value ?? '').trim();
+        if (value.isEmpty || value.toUpperCase() == 'X') continue;
+        needed++;
+        if (!(status?.checked ?? false)) return false;
+      } else {
+        for (final m in block.members) {
+          final status = m.gears[gear];
+          final value = (status?.value ?? '').trim();
+          if (value.isEmpty || value.toUpperCase() == 'X') continue;
+          needed++;
+          if (!(status?.checked ?? false)) return false;
         }
       }
     }
-    return '$done/$total';
+    return needed > 0;
+  }
+
+  /// 섹션 헤더 우측 요약 — 장비 부장은 '가방 몇 개 중 몇 개 완료'로 생각한다.
+  String _sectionSummary(_Section section) {
+    if (_isEditMode) return '${section.allMembers.length}명';
+    final total = section.blocks.length;
+    final done = section.blocks.where(_isBlockComplete).length;
+    return '$done/$total 가방';
   }
 
   // ------------------------------------------------------------- 모드 전환
@@ -985,10 +1000,25 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       child: Row(
         children: [
           Container(
-            width: nameWidth,
-            alignment: Alignment.center,
+            width: _fixedWidth,
             decoration: BoxDecoration(border: Border(right: BorderSide(color: Colors.grey[400]!))),
-            child: const Text('이름', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            child: Row(
+              children: [
+                const SizedBox(
+                  width: noWidth,
+                  child: Center(
+                    child: Text('No',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: const Text('이름',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -1021,6 +1051,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   Widget _buildFixedColumn(List<_Section> sections) {
     final cells = <Widget>[];
+    var blockNo = 0; // 💡 가방(블록) 순번 — 버디 2명도 번호 하나
 
     for (final section in sections) {
       final collapsed = _collapsed.contains(section.key);
@@ -1029,7 +1060,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         cells.add(GestureDetector(
           onTap: () => _toggleCollapse(section.key),
           child: Container(
-            width: nameWidth,
+            width: _fixedWidth,
             height: groupHeaderHeight,
             color: groupHeaderColor,
             padding: const EdgeInsets.only(left: 4),
@@ -1050,60 +1081,84 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           ),
         ));
         if (collapsed || section.blocks.isEmpty) {
-          cells.add(_gap(nameWidth));
+          blockNo += section.blocks.length; // 접혀 있어도 번호는 이어지게
+          cells.add(_gap(_fixedWidth));
           continue;
         }
       }
 
       for (final block in section.blocks) {
-      final inner = <Widget>[];
+        blockNo++;
+        // 💡 가방이 다 싸졌으면 번호·이름 칸이 녹색이 된다
+        final complete = !_isEditMode && _isBlockComplete(block);
+        final bodyHeight = _slotHeight * block.members.length;
 
-      // 수정 모드에서 공유 토글 줄과 높이를 맞추기 위한 라벨 칸
-      if (_isEditMode && block.isPair) {
-        inner.add(Container(
-          width: nameWidth,
-          height: bandHeight,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5)),
-          ),
-          child: const Text('공유 설정',
-              style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: _pairColor)),
+        final nameCells = <Widget>[];
+        for (var j = 0; j < block.members.length; j++) {
+          final member = block.members[j];
+          final isLast = j == block.members.length - 1;
+          nameCells.add(Container(
+            width: nameWidth,
+            height: _slotHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: complete ? _okSoft : null,
+              border: isLast
+                  ? null
+                  : Border(bottom: BorderSide(color: Colors.grey[200]!, width: 0.5)),
+            ),
+            child: Text(
+              member.name.isEmpty ? '-' : member.name,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: complete ? _okColor : Colors.black87,
+              ),
+            ),
+          ));
+        }
+
+        cells.add(Column(
+          children: [
+            // 수정 모드에서 공유 토글 줄과 높이를 맞추기 위한 라벨 칸
+            if (_isEditMode && block.isPair)
+              Container(
+                width: _fixedWidth,
+                height: bandHeight,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Colors.grey[300]!, width: 0.5)),
+                ),
+                child: const Text('공유 설정',
+                    style: TextStyle(
+                        fontSize: 9.5, fontWeight: FontWeight.bold, color: _pairColor)),
+              ),
+            Row(
+              children: [
+                // 순번 칸 — 블록 전체 높이를 하나로 차지 (버디 = 한 가방)
+                Container(
+                  width: noWidth,
+                  height: bodyHeight,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: complete ? _okSoft : const Color(0xFFF8F9FA),
+                    border: Border(right: BorderSide(color: Colors.grey[200]!)),
+                  ),
+                  child: Text(
+                    '$blockNo',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: complete ? _okColor : Colors.grey,
+                    ),
+                  ),
+                ),
+                Column(children: nameCells),
+              ],
+            ),
+          ],
         ));
-      }
-
-      // 💡 블록 안에서는 셀 '내부' 테두리로 구분선을 그린다.
-      //    (Container의 border는 지정한 높이 안쪽에 그려지므로 좌우 높이가 어긋나지 않는다)
-      for (var j = 0; j < block.members.length; j++) {
-        final member = block.members[j];
-        final isLast = j == block.members.length - 1;
-        inner.add(Container(
-          width: nameWidth,
-          height: _slotHeight,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: isLast
-                ? null
-                : Border(bottom: BorderSide(color: Colors.grey[200]!, width: 0.5)),
-          ),
-          child: Text(
-            member.name.isEmpty ? '-' : member.name,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-        ));
-      }
-
-      // 조는 초록 레일 + 옅은 배경으로 한 덩어리처럼 감싼다.
-      cells.add(Container(
-        decoration: block.isPair
-            ? const BoxDecoration(
-                color: _pairTint,
-                border: Border(left: BorderSide(color: _pairColor, width: 3)),
-              )
-            : null,
-        child: Column(children: inner),
-      ));
-      cells.add(_gap(nameWidth));
+        cells.add(_gap(_fixedWidth));
       }
     }
 
