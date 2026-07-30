@@ -135,15 +135,16 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   double get _fixedWidth => noWidth + nameWidth;
   static const double headerHeight = 38.0;
   static const double bandHeight = 30.0;
-  static const double valueHeight = 34.0;
-  static const double statusHeight = 26.0;
+  static const double valueHeight = 36.0;
+  static const double stripWidth = 5.0; // 칸 좌측 상태 띠 (초록=완료, 빨강=미완료)
   static const double groupHeaderHeight = 30.0;
   static const Color groupHeaderColor = Color(0xFF455A64);
 
   double get _gearsWidth => _gearKeys.length * colWidth;
 
   /// 대원 한 명이 차지하는 세로 높이 (수정 모드에서는 O/X 행이 사라진다)
-  double get _slotHeight => valueHeight + (_isEditMode ? 0 : statusHeight);
+  // 대원 한 명이 차지하는 세로 높이 (상태는 좌측 띠로 표시하므로 한 줄이면 충분)
+  double get _slotHeight => valueHeight;
 
   @override
   void initState() {
@@ -1302,72 +1303,63 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   }
 
   /// 짝이 함께 쓰는 장비 — 번호도 체크도 하나뿐이다.
+  /// 💡 상태는 칸 좌측의 색 띠로 표시하고, 칸 자체를 탭하면 토글된다.
   Widget _mergedCell(_Block block, String gear, double height, EquipmentProvider provider) {
     final lead = block.members.first;
     final source = _visible(lead);
     final value = source.gears[gear]?.value ?? '';
     final checked = lead.gears[gear]?.checked ?? false;
+    final needsCheck = !_isEditMode && _needsCheck(value);
 
-    return Container(
-      width: colWidth,
-      height: height,
-      decoration: BoxDecoration(
-        // 공유 표시는 링크 아이콘으로 충분 — 배경색은 두지 않는다
-        color: _isEditMode ? _editSoft : null,
-        border: Border(right: BorderSide(color: Colors.grey[200]!)),
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 병합 칸임을 알리는 표시 — "둘이 하나를 같이 쓴다"
-                  const Icon(Icons.link_rounded, size: 13, color: _pairColor),
-                  const SizedBox(height: 2),
-                  _isEditMode
-                      ? _GearValueField(
-                          key: ValueKey('merged-${block.pairId}-$gear'),
-                          initialValue: value,
-                          onChanged: (v) {
-                            for (final m in block.members) {
-                              _editing[m.id]?.gears[gear]?.value = v;
-                            }
-                          },
-                        )
-                      : Text(value.isEmpty ? '-' : value,
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
-                ],
-              ),
+    return GestureDetector(
+      onTap: needsCheck ? () => _handleToggle(provider, lead.id, gear) : null,
+      child: Container(
+        width: colWidth,
+        height: height,
+        decoration: BoxDecoration(
+          color: _isEditMode ? _editSoft : null,
+          border: Border(right: BorderSide(color: Colors.grey[200]!)),
+        ),
+        child: Row(
+          children: [
+            // 좌측 상태 띠: 초록=쌌음, 빨강=아직 (관리 외 칸은 없음)
+            Container(
+              width: stripWidth,
+              color: needsCheck ? (checked ? _okColor : _badColor) : Colors.transparent,
             ),
-          ),
-          // 💡 관리 대상이 아닌 칸(개인 장비 등)은 O/X 없이 빈 배경
-          if (!_isEditMode && _needsCheck(value))
-            GestureDetector(
-              onTap: () => _handleToggle(provider, lead.id, gear),
-              child: Container(
-                height: statusHeight,
-                width: colWidth,
-                alignment: Alignment.center,
-                color: checked ? _okSoft : _badSoft,
-                child: Text(
-                  checked ? 'O' : 'X',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: checked ? _okColor : _badColor,
-                  ),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 병합 칸임을 알리는 표시 — "둘이 하나를 같이 쓴다"
+                    const Icon(Icons.link_rounded, size: 13, color: _pairColor),
+                    const SizedBox(height: 2),
+                    _isEditMode
+                        ? _GearValueField(
+                            key: ValueKey('merged-${block.pairId}-$gear'),
+                            initialValue: value,
+                            onChanged: (v) {
+                              for (final m in block.members) {
+                                _editing[m.id]?.gears[gear]?.value = v;
+                              }
+                            },
+                          )
+                        : Text(value.isEmpty ? '-' : value,
+                            style: const TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
+                  ],
                 ),
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  /// 각자 챙기는 장비 — 대원 한 명분의 번호 + O/X.
+  /// 각자 챙기는 장비 — 대원 한 명분의 칸.
+  /// 💡 상태는 칸 좌측의 색 띠로 표시하고, 칸 자체를 탭하면 토글된다.
   Widget _memberCell(
     MemberEquipment member,
     String gear,
@@ -1376,58 +1368,43 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   }) {
     final value = _visible(member).gears[gear]?.value ?? '';
     final checked = member.gears[gear]?.checked ?? false;
+    final needsCheck = !_isEditMode && _needsCheck(value);
 
-    return Container(
-      width: colWidth,
-      height: _slotHeight,
-      decoration: BoxDecoration(
-        border: showDivider
-            ? Border(bottom: BorderSide(color: Colors.grey[200]!, width: 0.5))
-            : null,
-      ),
-      child: Column(
-        children: [
-          Expanded(
-            child: Container(
-              width: colWidth,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: _isEditMode ? _editSoft : Colors.transparent,
-                border: Border(right: BorderSide(color: Colors.grey[200]!)),
-              ),
-              child: _isEditMode
-                  ? _GearValueField(
-                      key: ValueKey('${member.id}-$gear'),
-                      initialValue: value,
-                      onChanged: (v) => _editing[member.id]?.gears[gear]?.value = v,
-                    )
-                  : Text(value.isEmpty ? '-' : value,
-                      style: const TextStyle(fontSize: 11, color: Colors.black87)),
-            ),
+    return GestureDetector(
+      onTap: needsCheck ? () => _handleToggle(provider, member.id, gear) : null,
+      child: Container(
+        width: colWidth,
+        height: _slotHeight,
+        decoration: BoxDecoration(
+          color: _isEditMode ? _editSoft : Colors.transparent,
+          border: Border(
+            right: BorderSide(color: Colors.grey[200]!),
+            bottom: showDivider
+                ? BorderSide(color: Colors.grey[200]!, width: 0.5)
+                : BorderSide.none,
           ),
-          // 💡 관리 대상이 아닌 칸(개인 장비 등)은 O/X 없이 빈 배경
-          if (!_isEditMode && _needsCheck(value))
-            GestureDetector(
-              onTap: () => _handleToggle(provider, member.id, gear),
-              child: Container(
-                width: colWidth,
-                height: statusHeight,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: checked ? _okSoft : _badSoft,
-                  border: Border(right: BorderSide(color: Colors.grey[200]!)),
-                ),
-                child: Text(
-                  checked ? 'O' : 'X',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: checked ? _okColor : _badColor,
-                  ),
-                ),
+        ),
+        child: Row(
+          children: [
+            // 좌측 상태 띠: 초록=쌌음, 빨강=아직 (관리 외 칸은 없음)
+            Container(
+              width: stripWidth,
+              color: needsCheck ? (checked ? _okColor : _badColor) : Colors.transparent,
+            ),
+            Expanded(
+              child: Center(
+                child: _isEditMode
+                    ? _GearValueField(
+                        key: ValueKey('${member.id}-$gear'),
+                        initialValue: value,
+                        onChanged: (v) => _editing[member.id]?.gears[gear]?.value = v,
+                      )
+                    : Text(value.isEmpty ? '-' : value,
+                        style: const TextStyle(fontSize: 11, color: Colors.black87)),
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
