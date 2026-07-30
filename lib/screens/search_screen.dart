@@ -15,7 +15,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   // 💡 탭 목록 확장 (공용 장비 포함)
   final List<String> _tabs = [
-    'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '나침반', '스노클', '기타'
+    'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '나침반', '스노클', '방풍', '기타'
   ];
 
   final TextEditingController _memoController = TextEditingController();

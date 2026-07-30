@@ -71,7 +71,7 @@ class MemberEquipment {
   }
 
   factory MemberEquipment.fromMap(String id, Map<String, dynamic> map) {
-    const gearNames = ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'];
+    const gearNames = ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '스노클', '방풍', '기타'];
     Map<String, GearStatus> gearsMap = {};
     for (var name in gearNames) {
       if (map[name] != null && map[name] is Map) {

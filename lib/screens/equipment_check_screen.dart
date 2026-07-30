@@ -6,7 +6,7 @@ import '../providers/equipment_provider.dart';
 import '../providers/member_provider.dart';
 
 const List<String> _gearKeys = [
-  '가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'
+  '가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '스노클', '방풍', '기타'
 ];
 
 const Color _pairColor = Color(0xFF00796B);

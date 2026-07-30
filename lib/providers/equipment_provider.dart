@@ -242,7 +242,7 @@ class EquipmentProvider with ChangeNotifier {
     int nextOrder = _data.isEmpty ? 0 : _data.last.order + 1;
     final newRow = MemberEquipment(
         id: id, name: '', order: nextOrder,
-        gears: {for (var k in ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타']) k: GearStatus()}
+        gears: {for (var k in ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '스노클', '방풍', '기타']) k: GearStatus()}
     );
     await _membersCol.doc(id).set(newRow.toMap());
   }
