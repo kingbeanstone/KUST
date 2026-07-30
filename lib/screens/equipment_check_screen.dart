@@ -66,6 +66,11 @@ bool _needsCheck(String value) {
   return !v.contains('개인');
 }
 
+/// 💡 열별 예외를 반영한 체크 대상 판정.
+/// 가방은 세는 단위(가방 기준 완료 카운트)라서 개인 가방이어도 항상 체크한다.
+bool _needsCheckFor(String gear, String value) =>
+    gear == '가방' ? true : _needsCheck(value);
+
 /// 💡 표시 순서: 저장된 order(드래그로 변경 가능) 우선, 같으면 기수→이름.
 int _compareRows(Map<String, MemberItem> club, MemberEquipment a, MemberEquipment b) {
   final cmp = a.order.compareTo(b.order);
@@ -213,13 +218,13 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     for (final gear in _gearKeys) {
       if (block.sharesGear(gear)) {
         final status = block.members.first.gears[gear];
-        if (!_needsCheck(status?.value ?? '')) continue;
+        if (!_needsCheckFor(gear, status?.value ?? '')) continue;
         needed++;
         if (!(status?.checked ?? false)) return false;
       } else {
         for (final m in block.members) {
           final status = m.gears[gear];
-          if (!_needsCheck(status?.value ?? '')) continue;
+          if (!_needsCheckFor(gear, status?.value ?? '')) continue;
           needed++;
           if (!(status?.checked ?? false)) return false;
         }
@@ -1042,7 +1047,12 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                           height: headerHeight,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            border: Border(right: BorderSide(color: Colors.grey[300]!)),
+                            // 핀|부츠 사이 진한 구분선 — 가로 스크롤 위치 가늠용
+                            border: Border(
+                                right: BorderSide(
+                                    color: k == '핀'
+                                        ? Colors.grey[400]!
+                                        : Colors.grey[300]!)),
                           ),
                           child: Text(k, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ))
@@ -1309,7 +1319,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     final source = _visible(lead);
     final value = source.gears[gear]?.value ?? '';
     final checked = lead.gears[gear]?.checked ?? false;
-    final needsCheck = !_isEditMode && _needsCheck(value);
+    final needsCheck = !_isEditMode && _needsCheckFor(gear, value);
 
     return GestureDetector(
       onTap: needsCheck ? () => _handleToggle(provider, lead.id, gear) : null,
@@ -1321,7 +1331,9 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           color: _isEditMode
               ? _editSoft
               : (needsCheck ? (checked ? _okSoft : _badSoft) : null),
-          border: Border(right: BorderSide(color: Colors.grey[200]!)),
+          border: Border(
+              right: BorderSide(
+                  color: gear == '핀' ? Colors.grey[400]! : Colors.grey[200]!)),
         ),
         child: Center(
           child: Column(
@@ -1360,7 +1372,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   }) {
     final value = _visible(member).gears[gear]?.value ?? '';
     final checked = member.gears[gear]?.checked ?? false;
-    final needsCheck = !_isEditMode && _needsCheck(value);
+    final needsCheck = !_isEditMode && _needsCheckFor(gear, value);
 
     return GestureDetector(
       onTap: needsCheck ? () => _handleToggle(provider, member.id, gear) : null,
@@ -1374,7 +1386,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
               ? _editSoft
               : (needsCheck ? (checked ? _okSoft : _badSoft) : Colors.transparent),
           border: Border(
-            right: BorderSide(color: Colors.grey[200]!),
+            right: BorderSide(
+                color: gear == '핀' ? Colors.grey[400]! : Colors.grey[200]!),
             bottom: showDivider
                 ? BorderSide(color: Colors.grey[200]!, width: 0.5)
                 : BorderSide.none,
