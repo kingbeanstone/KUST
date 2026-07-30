@@ -130,10 +130,13 @@ class HomeScreen extends StatelessWidget {
 
             return SafeArea(
               child: Container(
-                constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+                // 💡 시트를 위로 끌어올려 계절 영역이 폰 하단에 붙지 않게 한다.
+                height: MediaQuery.of(ctx).size.height * 0.72,
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-                child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -185,17 +188,23 @@ class HomeScreen extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                               color: Colors.black54)),
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: Expedition.seasonLabels.entries.map((entry) {
-                          final isSel = selSeason == entry.key;
-                          return _expeditionPill(
-                            label: entry.value,
-                            selected: isSel,
-                            onTap: () =>
-                                expProvider.createExpedition(selYear, entry.key),
-                          );
-                        }).toList(),
+                      // 💡 계절: 가운데 정렬 + 살짝 넓은 고정 폭 버튼
+                      SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          spacing: 10,
+                          alignment: WrapAlignment.center,
+                          children: Expedition.seasonLabels.entries.map((entry) {
+                            final isSel = selSeason == entry.key;
+                            return _expeditionPill(
+                              label: entry.value,
+                              selected: isSel,
+                              width: 74,
+                              onTap: () =>
+                                  expProvider.createExpedition(selYear, entry.key),
+                            );
+                          }).toList(),
+                        ),
                       ),
 
                       // 관리자 전용: v1 최상위 데이터(25 동계) 이사
@@ -237,6 +246,25 @@ class HomeScreen extends StatelessWidget {
                       ],
                     ],
                   ),
+                ),
+                    ),
+                    const SizedBox(height: 12),
+                    // 💡 선택 완료: 시트를 닫는다 (선택은 탭 즉시 이미 반영된 상태)
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[800],
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                        ),
+                        child: const Text('선택 완료',
+                            style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             );
