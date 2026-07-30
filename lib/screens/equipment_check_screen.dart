@@ -1325,7 +1325,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
             // 좌측 상태 띠: 초록=쌌음, 빨강=아직 (관리 외 칸은 없음)
             Container(
               width: stripWidth,
-              color: needsCheck ? (checked ? _okColor : _badColor) : Colors.transparent,
+              color: needsCheck ? (checked ? _okSoft : _badSoft) : Colors.transparent,
             ),
             Expanded(
               child: Center(
@@ -1389,7 +1389,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
             // 좌측 상태 띠: 초록=쌌음, 빨강=아직 (관리 외 칸은 없음)
             Container(
               width: stripWidth,
-              color: needsCheck ? (checked ? _okColor : _badColor) : Colors.transparent,
+              color: needsCheck ? (checked ? _okSoft : _badSoft) : Colors.transparent,
             ),
             Expanded(
               child: Center(
