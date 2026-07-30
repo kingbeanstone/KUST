@@ -187,39 +187,83 @@ class HomeScreen extends StatelessWidget {
                         const Text('새 원정 만들기',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: List.generate(3, (i) {
-                            final year = DateTime.now().year - 1 + i;
-                            final isSel = selYear == year;
-                            return ChoiceChip(
-                              label: Text('$year'),
-                              selected: isSel,
-                              onSelected: (_) => setSheetState(() => selYear = year),
-                              selectedColor: Colors.blue[800],
-                              labelStyle: TextStyle(
-                                  fontSize: 12.5,
-                                  color: isSel ? Colors.white : Colors.black87),
-                              showCheckmark: false,
-                            );
-                          }),
+                        // 💡 연도: ◀ ▶ 로 한 해씩, 숫자를 탭하면 연도 그리드에서 바로 선택
+                        Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.chevron_left, size: 22),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => setSheetState(() => selYear--),
+                              ),
+                              GestureDetector(
+                                onTap: () async {
+                                  final picked = await showDialog<int>(
+                                    context: ctx,
+                                    builder: (dialogContext) => AlertDialog(
+                                      title: const Text('연도 선택',
+                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                      contentPadding: const EdgeInsets.all(12),
+                                      content: SizedBox(
+                                        width: 300,
+                                        height: 300,
+                                        child: YearPicker(
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(DateTime.now().year + 5),
+                                          selectedDate: DateTime(selYear),
+                                          onChanged: (date) =>
+                                              Navigator.pop(dialogContext, date.year),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                  if (picked != null) {
+                                    setSheetState(() => selYear = picked);
+                                  }
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue[50],
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    '$selYear년',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue[800],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.chevron_right, size: 22),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => setSheetState(() => selYear++),
+                              ),
+                            ],
+                          ),
                         ),
                         const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 8,
-                          children: Expedition.seasonLabels.entries.map((entry) {
-                            final isSel = selSeason == entry.key;
-                            return ChoiceChip(
-                              label: Text(entry.value),
-                              selected: isSel,
-                              onSelected: (_) => setSheetState(() => selSeason = entry.key),
-                              selectedColor: Colors.blue[800],
-                              labelStyle: TextStyle(
-                                  fontSize: 12.5,
-                                  color: isSel ? Colors.white : Colors.black87),
-                              showCheckmark: false,
-                            );
-                          }).toList(),
+                        Center(
+                          child: Wrap(
+                            spacing: 8,
+                            children: Expedition.seasonLabels.entries.map((entry) {
+                              final isSel = selSeason == entry.key;
+                              return ChoiceChip(
+                                label: Text(entry.value),
+                                selected: isSel,
+                                onSelected: (_) => setSheetState(() => selSeason = entry.key),
+                                selectedColor: Colors.blue[800],
+                                labelStyle: TextStyle(
+                                    fontSize: 12.5,
+                                    color: isSel ? Colors.white : Colors.black87),
+                                showCheckmark: false,
+                              );
+                            }).toList(),
+                          ),
                         ),
                         const SizedBox(height: 10),
                         SizedBox(
