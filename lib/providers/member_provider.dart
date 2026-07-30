@@ -37,14 +37,20 @@ class MemberProvider with ChangeNotifier {
     });
   }
 
+  /// 저장 전 앞뒤 공백 정리 (보이지 않는 공백이 정렬·이름 매칭을 망가뜨린다)
+  MemberItem _sanitize(MemberItem m) =>
+      m.copyWith(name: m.name.trim(), generation: m.generation.trim());
+
   Future<void> addMember(MemberItem member) async {
     // 💡 새로운 대원은 기존 명단 가장 뒤의 순서를 가짐
     int nextOrder = _members.isEmpty ? 0 : _members.last.order + 1;
-    await _db.collection('club_members').add(member.copyWith(order: nextOrder).toMap());
+    await _db
+        .collection('club_members')
+        .add(_sanitize(member).copyWith(order: nextOrder).toMap());
   }
 
   Future<void> updateMember(MemberItem member) async {
-    await _db.collection('club_members').doc(member.id).update(member.toMap());
+    await _db.collection('club_members').doc(member.id).update(_sanitize(member).toMap());
   }
 
   Future<void> deleteMember(String id) async {

@@ -82,7 +82,7 @@ class MemberEquipment {
     }
     return MemberEquipment(
       id: id,
-      name: map['이름']?.toString() ?? '',
+      name: (map['이름']?.toString() ?? '').trim(),
       order: map['order'] is int ? map['order'] : 0,
       gears: gearsMap,
       groupId: map['groupId']?.toString() ?? '',

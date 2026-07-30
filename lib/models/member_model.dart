@@ -80,8 +80,10 @@ class MemberItem {
   factory MemberItem.fromMap(String id, Map<String, dynamic> map) {
     return MemberItem(
       id: id,
-      name: map['name'] ?? '',
-      generation: map['generation'] ?? '',
+      // 💡 입력 실수로 붙은 앞뒤 공백 제거 — 공백이 남으면 정렬이 뒤집히고
+      //    (스페이스 < 한글) 버디의 이름 매칭도 어긋난다
+      name: (map['name'] ?? '').toString().trim(),
+      generation: (map['generation'] ?? '').toString().trim(),
       phone: map['phone'] ?? '',
       gender: map['gender'] ?? 'male',
       role: map['role'] ?? '대원',
