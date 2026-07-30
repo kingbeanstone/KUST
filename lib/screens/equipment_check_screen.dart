@@ -38,6 +38,32 @@ class _Section {
   List<MemberEquipment> get allMembers => blocks.expand((b) => b.members).toList();
 }
 
+/// 명단 순서대로 훑으면서 같은 pairId끼리 인접하게 묶는다.
+List<_Block> _buildBlocks(List<MemberEquipment> data) {
+  final sorted = List<MemberEquipment>.from(data)..sort((a, b) => a.order.compareTo(b.order));
+  final blocks = <_Block>[];
+  final taken = <String>{};
+
+  for (final member in sorted) {
+    if (taken.contains(member.id)) continue;
+
+    if (member.hasPair) {
+      final mates = sorted
+          .where((m) => m.pairId == member.pairId && !taken.contains(m.id))
+          .take(2)
+          .toList();
+      for (final m in mates) {
+        taken.add(m.id);
+      }
+      blocks.add(_Block(mates));
+    } else {
+      taken.add(member.id);
+      blocks.add(_Block([member]));
+    }
+  }
+  return blocks;
+}
+
 /// 💡 v2: 장비 '목록'과 '체크'를 한 화면의 두 모드로 통합.
 ///  - 보기 모드: 장비 번호 + O/X 체크
 ///  - 수정 모드: O/X 대신 번호를 편집하고, 장비 버디 편성과 장비별 공유 여부를 지정
@@ -56,6 +82,12 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   /// 접혀 있는 그룹 섹션의 key 모음
   final Set<String> _collapsed = {};
+
+  /// 그룹 편성 시트의 이름 입력 컨트롤러.
+  /// 💡 시트 안에서 만들고 whenComplete로 dispose하면 닫힘 애니메이션 중에
+  ///    살아있는 TextField의 컨트롤러를 먼저 죽여 크래시가 난다. (_dependents.isEmpty)
+  ///    그래서 화면 State가 소유하고 화면 dispose에서 정리한다.
+  final TextEditingController _groupNameController = TextEditingController();
 
   final ScrollController _headerHController = ScrollController();
   final ScrollController _bodyHController = ScrollController();
@@ -93,36 +125,11 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   void dispose() {
     _headerHController.dispose();
     _bodyHController.dispose();
+    _groupNameController.dispose();
     super.dispose();
   }
 
   // ------------------------------------------------------------- 블록 구성
-
-  /// 명단 순서대로 훑으면서 같은 pairId끼리 인접하게 묶는다.
-  List<_Block> _buildBlocks(List<MemberEquipment> data) {
-    final sorted = List<MemberEquipment>.from(data)..sort((a, b) => a.order.compareTo(b.order));
-    final blocks = <_Block>[];
-    final taken = <String>{};
-
-    for (final member in sorted) {
-      if (taken.contains(member.id)) continue;
-
-      if (member.hasPair) {
-        final mates = sorted
-            .where((m) => m.pairId == member.pairId && !taken.contains(m.id))
-            .take(2)
-            .toList();
-        for (final m in mates) {
-          taken.add(m.id);
-        }
-        blocks.add(_Block(mates));
-      } else {
-        taken.add(member.id);
-        blocks.add(_Block([member]));
-      }
-    }
-    return blocks;
-  }
 
   /// 편집 중이면 사본을, 아니면 원본을 돌려준다.
   MemberEquipment _visible(MemberEquipment member) => _editing[member.id] ?? member;
@@ -341,7 +348,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   ///    배정 단위는 블록(버디 조 또는 혼자) — 장비 버디는 항상 함께 이동한다.
   void _showGroupSheet() {
     String? selectedGroupId;
-    final nameController = TextEditingController();
+    _groupNameController.clear();
 
     showModalBottomSheet(
       context: context,
@@ -392,7 +399,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                       children: [
                         Expanded(
                           child: TextField(
-                            controller: nameController,
+                            controller: _groupNameController,
                             style: const TextStyle(fontSize: 13),
                             decoration: const InputDecoration(
                               hintText: '새 그룹 이름 (예: 교육 1팀)',
@@ -401,17 +408,20 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                               contentPadding:
                                   EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             ),
+                            // 시트 안 다른 곳을 탭하면 키보드를 내린다.
+                            onTapOutside: (_) =>
+                                FocusManager.instance.primaryFocus?.unfocus(),
                             onSubmitted: (v) {
                               provider.addGroup(v);
-                              nameController.clear();
+                              _groupNameController.clear();
                             },
                           ),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: () {
-                            provider.addGroup(nameController.text);
-                            nameController.clear();
+                            provider.addGroup(_groupNameController.text);
+                            _groupNameController.clear();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: groupHeaderColor,
@@ -582,7 +592,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           },
         ),
       ),
-    ).whenComplete(() => nameController.dispose());
+    );
   }
 
   void _confirmDeleteGroup(
