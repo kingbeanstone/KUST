@@ -143,6 +143,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   static const double valueHeight = 36.0;
   static const double groupHeaderHeight = 30.0;
   static const Color groupHeaderColor = Color(0xFF455A64);
+  static const Color totalsRowColor = Color(0xFF37474F); // 최상단 총합 행
 
   double get _gearsWidth => _gearKeys.length * colWidth;
 
@@ -231,6 +232,31 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       }
     }
     return needed > 0;
+  }
+
+  /// 💡 열(장비) 하나의 전체 현황: 관리 대상 칸 중 몇 개가 체크됐는지.
+  /// 공유 칸은 1개로 센다.
+  (int, int) _columnStats(List<_Section> sections, String gear) {
+    var done = 0;
+    var total = 0;
+    for (final section in sections) {
+      for (final block in section.blocks) {
+        if (block.sharesGear(gear)) {
+          final status = block.members.first.gears[gear];
+          if (!_needsCheckFor(gear, status?.value ?? '')) continue;
+          total++;
+          if (status?.checked ?? false) done++;
+        } else {
+          for (final m in block.members) {
+            final status = m.gears[gear];
+            if (!_needsCheckFor(gear, status?.value ?? '')) continue;
+            total++;
+            if (status?.checked ?? false) done++;
+          }
+        }
+      }
+    }
+    return (done, total);
   }
 
   /// 섹션 헤더 우측 요약 — 장비 부장은 '가방 몇 개 중 몇 개 완료'로 생각한다.
@@ -1074,6 +1100,20 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     final cells = <Widget>[];
     var blockNo = 0; // 💡 가방(블록) 순번 — 버디 2명도 번호 하나
 
+    // 💡 최상단 총합 행 (보기 모드) — 우측의 열별 카운트와 나란히
+    if (!_isEditMode) {
+      cells.add(Container(
+        width: _fixedWidth,
+        height: groupHeaderHeight,
+        color: totalsRowColor,
+        alignment: Alignment.center,
+        child: const Text('총합',
+            style: TextStyle(
+                fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white)),
+      ));
+      cells.add(_gap(_fixedWidth));
+    }
+
     for (final section in sections) {
       final collapsed = _collapsed.contains(section.key);
 
@@ -1194,6 +1234,37 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   Widget _buildScrollColumn(List<_Section> sections, EquipmentProvider provider) {
     final rows = <Widget>[];
+
+    // 💡 최상단 총합 행 (보기 모드) — 열마다 완료/전체 카운트
+    if (!_isEditMode) {
+      rows.add(Row(
+        children: _gearKeys.map((gear) {
+          final (done, total) = _columnStats(sections, gear);
+          final complete = total > 0 && done == total;
+          return Container(
+            width: colWidth,
+            height: groupHeaderHeight,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: totalsRowColor,
+              border: Border(
+                right: BorderSide(
+                    color: gear == '핀' ? Colors.white54 : Colors.white12),
+              ),
+            ),
+            child: Text(
+              total == 0 ? '-' : '$done/$total',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: complete ? const Color(0xFFA5D6A7) : Colors.white,
+              ),
+            ),
+          );
+        }).toList(),
+      ));
+      rows.add(_gap(_gearsWidth));
+    }
 
     for (final section in sections) {
       final collapsed = _collapsed.contains(section.key);
