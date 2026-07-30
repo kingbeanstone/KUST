@@ -6,10 +6,29 @@ import '../providers/expedition_provider.dart';
 import '../providers/member_provider.dart';
 import '../providers/participant_provider.dart';
 
-/// 💡 v2: 동아리원 명단에서 이번 원정에 갈 대원을 고르는 화면.
-/// 칩은 기수별 섹션에 고정되어 있고, 탭하면 그 자리에서 참가/해제가 토글된다.
-class ParticipantScreen extends StatelessWidget {
+/// 💡 v2: 원정 참가자 화면.
+///  - 보기 모드: 참가자만 기수별로 표시
+///  - 수정 모드: 동아리원 전체가 보이고, 탭하면 제자리에서 참가/해제 토글
+class ParticipantScreen extends StatefulWidget {
   const ParticipantScreen({super.key});
+
+  @override
+  State<ParticipantScreen> createState() => _ParticipantScreenState();
+}
+
+class _ParticipantScreenState extends State<ParticipantScreen> {
+  bool _isEditMode = false;
+
+  /// 기수별 그룹핑 — 숫자를 뽑아 "33" / "33기" 를 같은 섹션으로 묶는다
+  Map<String, List<MemberItem>> _groupByGeneration(List<MemberItem> members) {
+    final groups = <String, List<MemberItem>>{};
+    for (final m in members) {
+      final match = RegExp(r'\d+').firstMatch(m.generation);
+      final label = match == null ? '기수 미입력' : '${match.group(0)}기';
+      groups.putIfAbsent(label, () => []).add(m);
+    }
+    return groups;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,18 +38,11 @@ class ParticipantScreen extends StatelessWidget {
     final participantProvider = context.watch<ParticipantProvider>();
 
     final clubMembers = memberProvider.members; // 이미 기수 오름차순 정렬됨
-
-    // 참가자 요약(기수순)
     final participants =
         clubMembers.where((m) => participantProvider.isParticipant(m.id)).toList();
 
-    // 💡 기수별 그룹핑 — 숫자를 뽑아 "33" / "33기" 를 같은 섹션으로 묶는다
-    final groups = <String, List<MemberItem>>{};
-    for (final m in clubMembers) {
-      final match = RegExp(r'\d+').firstMatch(m.generation);
-      final label = match == null ? '기수 미입력' : '${match.group(0)}기';
-      groups.putIfAbsent(label, () => []).add(m);
-    }
+    // 💡 보기 모드에서는 참가자만, 수정 모드에서는 동아리원 전체를 그룹핑
+    final groups = _groupByGeneration(_isEditMode ? clubMembers : participants);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -41,6 +53,20 @@ class ParticipantScreen extends StatelessWidget {
         ),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        actions: [
+          if (isAdmin && expedition != null)
+            TextButton(
+              onPressed: () => setState(() => _isEditMode = !_isEditMode),
+              child: Text(
+                _isEditMode ? '완료' : '수정',
+                style: TextStyle(
+                  color: _isEditMode ? Colors.blue : Colors.black54,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: expedition == null
           ? const Center(
@@ -49,7 +75,7 @@ class ParticipantScreen extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // --- 참가자 요약 ---
+                // --- 상단 요약 ---
                 Row(
                   children: [
                     const Text('참가자',
@@ -69,27 +95,13 @@ class ParticipantScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                if (participants.isNotEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey[200]!),
-                    ),
-                    child: Text(
-                      participants.map((m) => m.name).join(', '),
-                      style: const TextStyle(
-                          fontSize: 12.5, color: Colors.black54, height: 1.6),
-                    ),
-                  ),
                 const SizedBox(height: 6),
                 Text(
-                  isAdmin
+                  _isEditMode
                       ? '탭하면 참가자로 추가되고, 다시 탭하면 빠집니다.'
-                      : '참가자는 파란색으로 표시됩니다.',
+                      : (isAdmin
+                          ? '우측 상단 [수정]에서 참가자를 추가/해제할 수 있습니다.'
+                          : '이번 원정에 참가하는 대원입니다.'),
                   style: const TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),
 
@@ -97,9 +109,22 @@ class ParticipantScreen extends StatelessWidget {
                 Divider(color: Colors.grey[200], height: 1),
                 const SizedBox(height: 14),
 
-                // --- 기수별 섹션 (칩은 제자리에서 토글) ---
-                if (clubMembers.isEmpty)
-                  _emptyClubGuide(context, isAdmin, memberProvider)
+                // --- 본문 ---
+                if (_isEditMode && clubMembers.isEmpty)
+                  _emptyClubGuide(context, memberProvider)
+                else if (!_isEditMode && participants.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: Text(
+                        isAdmin
+                            ? '아직 참가자가 없습니다.\n우측 상단 [수정]을 눌러 등록하세요.'
+                            : '아직 참가자가 없습니다.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 12.5, color: Colors.grey),
+                      ),
+                    ),
+                  )
                 else
                   ...groups.entries.expand((entry) => [
                         _sectionLabel(entry.key),
@@ -112,7 +137,7 @@ class ParticipantScreen extends StatelessWidget {
                                     m,
                                     selected:
                                         participantProvider.isParticipant(m.id),
-                                    onTap: isAdmin
+                                    onTap: _isEditMode
                                         ? () => participantProvider.toggle(m)
                                         : null,
                                   ))
@@ -149,7 +174,7 @@ class ParticipantScreen extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (selected) ...[
+            if (selected && _isEditMode) ...[
               const Icon(Icons.check, size: 13, color: Colors.white70),
               const SizedBox(width: 4),
             ],
@@ -178,15 +203,8 @@ class ParticipantScreen extends StatelessWidget {
     );
   }
 
-  /// 동아리원 명단이 비어있을 때: v1 명단 가져오기 안내 (관리자)
-  Widget _emptyClubGuide(BuildContext context, bool isAdmin, MemberProvider provider) {
-    if (!isAdmin) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text('등록된 동아리원이 없습니다.',
-            style: TextStyle(fontSize: 12.5, color: Colors.grey)),
-      );
-    }
+  /// 동아리원 명단이 비어있을 때: v1 명단 가져오기 안내 (관리자 수정 모드)
+  Widget _emptyClubGuide(BuildContext context, MemberProvider provider) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
