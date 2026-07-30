@@ -408,6 +408,50 @@ class _BuddyScreenState extends State<BuddyScreen> {
     }
   }
 
+  /// 팀에 배치된 사람 이름들 (리더 포함)
+  Set<String> _namesOf(BuddyTeam t) => {
+        if (t.leader.isNotEmpty) t.leader,
+        ...t.members.where((m) => m.isNotEmpty),
+      };
+
+  /// 💡 회차에 팀을 추가하기 전 검증.
+  /// 같은 사람이 두 팀으로 동시에 들어가거나, 장비버디가 같은 회차에
+  /// 겹치게 되면 사유 문자열을 돌려준다 (null이면 통과).
+  String? _roundAddViolation(BuddyDay day, BuddyRound round, BuddyTeam team) {
+    final newNames = _namesOf(team);
+    final allTeams = [for (final b in day.blocks) ...b.teams];
+
+    final existingNames = <String>{};
+    for (final t in allTeams) {
+      if (t.id != team.id && round.teamIds.contains(t.id)) {
+        existingNames.addAll(_namesOf(t));
+      }
+    }
+
+    // 1) 같은 사람이 같은 회차의 두 팀에 (예: 리더가 C·D 겸임)
+    final duplicated = newNames.intersection(existingNames);
+    if (duplicated.isNotEmpty) {
+      return '${duplicated.join(', ')}님이 이 회차의 다른 팀에 이미 있어 함께 넣을 수 없습니다.';
+    }
+
+    // 2) 장비버디가 같은 회차에 갈라져 들어가는 경우
+    final equipProvider = context.read<EquipmentProvider>();
+    final pairByName = <String, String>{};
+    for (final r in equipProvider.data) {
+      if (r.pairId.isNotEmpty && r.name.isNotEmpty) pairByName[r.name] = r.pairId;
+    }
+    for (final name in newNames) {
+      final pair = pairByName[name];
+      if (pair == null) continue;
+      for (final other in existingNames) {
+        if (other != name && pairByName[other] == pair) {
+          return '장비버디($name·$other)가 같은 회차에 입수하게 되어 넣을 수 없습니다.';
+        }
+      }
+    }
+    return null;
+  }
+
   /// 이름 입력 공용 다이얼로그 (조/팀/회차). 컨트롤러는 State 소유라 안전하다.
   void _showNameDialog({
     required String title,
@@ -636,12 +680,24 @@ class _BuddyScreenState extends State<BuddyScreen> {
                 for (final team in visibleTeams)
                   Builder(builder: (context) {
                     final included = round.teamIds.contains(team.id);
-                    return GestureDetector(
+    return GestureDetector(
                       onTap: _isEditMode
                           ? () {
-                              included
-                                  ? round.teamIds.remove(team.id)
-                                  : round.teamIds.add(team.id);
+                              if (included) {
+                                round.teamIds.remove(team.id);
+                              } else {
+                                // 💡 같은 사람/장비버디가 같은 회차에 겹치면 차단
+                                final violation =
+                                    _roundAddViolation(day, round, team);
+                                if (violation != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content: Text(violation),
+                                          duration: const Duration(seconds: 2)));
+                                  return;
+                                }
+                                round.teamIds.add(team.id);
+                              }
                               provider.saveBuddyDay(day);
                             }
                           : null,
@@ -746,24 +802,19 @@ class _BuddyScreenState extends State<BuddyScreen> {
     final assignedInBlock = <String>{};
     var conflictScope = <String>{};
 
-    Set<String> namesOf(BuddyTeam t) => {
-          if (t.leader.isNotEmpty) t.leader,
-          ...t.members.where((m) => m.isNotEmpty),
-        };
-
     if (_selBlockIdx != null && _selBlockIdx! < dayData.blocks.length) {
       final block = dayData.blocks[_selBlockIdx!];
       for (final t in block.teams) {
-        assignedInBlock.addAll(namesOf(t));
+        assignedInBlock.addAll(_namesOf(t));
       }
       if (_selTeamIdx != null && _selTeamIdx! < block.teams.length) {
         final selTeam = block.teams[_selTeamIdx!];
-        conflictScope = namesOf(selTeam);
+        conflictScope = _namesOf(selTeam);
         final allTeams = [for (final b in dayData.blocks) ...b.teams];
         for (final round in dayData.rounds) {
           if (!round.teamIds.contains(selTeam.id)) continue;
           for (final t in allTeams) {
-            if (round.teamIds.contains(t.id)) conflictScope.addAll(namesOf(t));
+            if (round.teamIds.contains(t.id)) conflictScope.addAll(_namesOf(t));
           }
         }
       }
@@ -851,9 +902,13 @@ class _BuddyScreenState extends State<BuddyScreen> {
                       runSpacing: 6,
                       children: section.value.map((member) {
                         final isAssigned = assignedInBlock.contains(member.name);
+                        // 💡 본인이 같은 회차의 다른 팀에 이미 배치된 경우 (리더 겸임 등)
+                        final selfConflict =
+                            !isAssigned && conflictScope.contains(member.name);
                         final partner = gearPartnerName(member);
                         // 💡 장비버디 짝이 충돌 범위 안에 있으면 선택 불가(회색)
                         final conflict = !isAssigned &&
+                            !selfConflict &&
                             partner != null &&
                             conflictScope.contains(partner);
 
@@ -862,12 +917,19 @@ class _BuddyScreenState extends State<BuddyScreen> {
                           height: 30,
                           child: _buildPickerItem(
                             member.name,
-                            isAssigned || conflict,
+                            isAssigned || selfConflict || conflict,
                             () {
                               if (isAssigned) {
                                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                                     content: Text('${member.name}님은 이미 이 조에 배치되어 있습니다.'),
                                     duration: const Duration(seconds: 1)));
+                                return;
+                              }
+                              if (selfConflict) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                        '${member.name}님은 같은 회차에 입수하는 다른 팀에 이미 배치되어 있습니다.'),
+                                    duration: const Duration(seconds: 2)));
                                 return;
                               }
                               if (conflict) {
