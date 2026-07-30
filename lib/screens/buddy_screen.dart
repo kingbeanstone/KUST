@@ -32,6 +32,17 @@ class _BuddyScreenState extends State<BuddyScreen> {
   int? _selTeamIdx;
   int? _selSlotIdx; // -1: 리더, 0~: 멤버 칸
 
+  /// 조 추가/이름변경 다이얼로그의 입력 컨트롤러.
+  /// 💡 다이얼로그 안에서 만들고 whenComplete로 dispose하면 닫힘 애니메이션 중
+  ///    살아있는 TextField가 죽은 컨트롤러를 참조해 크래시가 난다. State가 소유한다.
+  final TextEditingController _blockNameController = TextEditingController();
+
+  @override
+  void dispose() {
+    _blockNameController.dispose();
+    super.dispose();
+  }
+
   void _clearSelection() {
     _selBlockIdx = null;
     _selTeamIdx = null;
@@ -388,13 +399,13 @@ class _BuddyScreenState extends State<BuddyScreen> {
   }
 
   void _addBlockDialog(BuddyDay day, BuddyProvider provider) {
-    final controller = TextEditingController();
+    _blockNameController.clear();
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('조 추가', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         content: TextField(
-          controller: controller,
+          controller: _blockNameController,
           autofocus: true,
           decoration: const InputDecoration(
             hintText: '조 이름 (예: YB, 교육 1조)',
@@ -406,7 +417,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
           ElevatedButton(
             onPressed: () {
-              final name = controller.text.trim();
+              final name = _blockNameController.text.trim();
               if (name.isEmpty) return;
               day.blocks.add(BuddyBlock(
                 name: name,
@@ -420,17 +431,17 @@ class _BuddyScreenState extends State<BuddyScreen> {
           ),
         ],
       ),
-    ).whenComplete(() => controller.dispose());
+    );
   }
 
   void _renameBlockDialog(BuddyBlock block, BuddyDay day, BuddyProvider provider) {
-    final controller = TextEditingController(text: block.name);
+    _blockNameController.text = block.name;
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('조 이름 변경', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         content: TextField(
-          controller: controller,
+          controller: _blockNameController,
           autofocus: true,
           decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
         ),
@@ -438,7 +449,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
           ElevatedButton(
             onPressed: () {
-              final name = controller.text.trim();
+              final name = _blockNameController.text.trim();
               if (name.isEmpty) return;
               block.name = name;
               provider.saveBuddyDay(day);
@@ -448,7 +459,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           ),
         ],
       ),
-    ).whenComplete(() => controller.dispose());
+    );
   }
 
   void _deleteBlockDialog(int blockIdx, BuddyDay day, BuddyProvider provider) {
