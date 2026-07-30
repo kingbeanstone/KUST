@@ -7,7 +7,7 @@ import '../providers/member_provider.dart';
 import '../providers/participant_provider.dart';
 
 /// 💡 v2: 동아리원 명단에서 이번 원정에 갈 대원을 고르는 화면.
-/// 참가자는 expeditions/{id}/participants 에 동아리원 ID로 저장된다.
+/// 칩은 기수별 섹션에 고정되어 있고, 탭하면 그 자리에서 참가/해제가 토글된다.
 class ParticipantScreen extends StatelessWidget {
   const ParticipantScreen({super.key});
 
@@ -18,21 +18,19 @@ class ParticipantScreen extends StatelessWidget {
     final memberProvider = context.watch<MemberProvider>();
     final participantProvider = context.watch<ParticipantProvider>();
 
-    final clubMembers = memberProvider.members;
-    final byId = {for (final m in clubMembers) m.id: m};
+    final clubMembers = memberProvider.members; // 이미 기수 오름차순 정렬됨
 
-    // 참가자: 참가 순서대로, 명단에서 지워진 ID는 건너뛴다
-    final participants = participantProvider.participantIds
-        .map((id) => byId[id])
-        .whereType<MemberItem>()
-        .toList();
+    // 참가자 요약(기수순)
+    final participants =
+        clubMembers.where((m) => participantProvider.isParticipant(m.id)).toList();
 
-    // 미참가 동아리원을 YB/OB로 나눈다
-    final rest = clubMembers
-        .where((m) => !participantProvider.isParticipant(m.id))
-        .toList();
-    final restYb = rest.where((m) => m.memberType != 'OB').toList();
-    final restOb = rest.where((m) => m.memberType == 'OB').toList();
+    // 💡 기수별 그룹핑 — 숫자를 뽑아 "33" / "33기" 를 같은 섹션으로 묶는다
+    final groups = <String, List<MemberItem>>{};
+    for (final m in clubMembers) {
+      final match = RegExp(r'\d+').firstMatch(m.generation);
+      final label = match == null ? '기수 미입력' : '${match.group(0)}기';
+      groups.putIfAbsent(label, () => []).add(m);
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -51,7 +49,7 @@ class ParticipantScreen extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // --- 참가자 현황 ---
+                // --- 참가자 요약 ---
                 Row(
                   children: [
                     const Text('참가자',
@@ -71,91 +69,57 @@ class ParticipantScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                if (participants.isEmpty)
+                const SizedBox(height: 8),
+                if (participants.isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    alignment: Alignment.center,
-                    child: Text(
-                      isAdmin
-                          ? '아래 동아리원을 탭해서 참가자로 추가하세요.'
-                          : '아직 참가자가 없습니다.',
-                      style: const TextStyle(fontSize: 12.5, color: Colors.grey),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[200]!),
                     ),
-                  )
-                else
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: participants
-                        .map((m) => _memberChip(
-                              m,
-                              selected: true,
-                              onTap: isAdmin
-                                  ? () => participantProvider.toggle(m)
-                                  : null,
-                            ))
-                        .toList(),
+                    child: Text(
+                      participants.map((m) => m.name).join(', '),
+                      style: const TextStyle(
+                          fontSize: 12.5, color: Colors.black54, height: 1.6),
+                    ),
                   ),
-
-                const SizedBox(height: 24),
-                Divider(color: Colors.grey[200], height: 1),
-                const SizedBox(height: 16),
-
-                // --- 동아리원 명단 (미참가) ---
+                const SizedBox(height: 6),
                 Text(
-                  isAdmin ? '동아리원 · 탭하여 추가' : '동아리원',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  isAdmin
+                      ? '탭하면 참가자로 추가되고, 다시 탭하면 빠집니다.'
+                      : '참가자는 파란색으로 표시됩니다.',
+                  style: const TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),
-                const SizedBox(height: 12),
 
+                const SizedBox(height: 14),
+                Divider(color: Colors.grey[200], height: 1),
+                const SizedBox(height: 14),
+
+                // --- 기수별 섹션 (칩은 제자리에서 토글) ---
                 if (clubMembers.isEmpty)
                   _emptyClubGuide(context, isAdmin, memberProvider)
-                else ...[
-                  if (restYb.isNotEmpty) ...[
-                    _sectionLabel('YB'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: restYb
-                          .map((m) => _memberChip(
-                                m,
-                                selected: false,
-                                onTap: isAdmin
-                                    ? () => participantProvider.toggle(m)
-                                    : null,
-                              ))
-                          .toList(),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (restOb.isNotEmpty) ...[
-                    _sectionLabel('OB'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: restOb
-                          .map((m) => _memberChip(
-                                m,
-                                selected: false,
-                                onTap: isAdmin
-                                    ? () => participantProvider.toggle(m)
-                                    : null,
-                              ))
-                          .toList(),
-                    ),
-                  ],
-                  if (rest.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Center(
-                        child: Text('모든 동아리원이 참가자로 등록되었습니다.',
-                            style: TextStyle(fontSize: 12.5, color: Colors.grey)),
-                      ),
-                    ),
-                ],
+                else
+                  ...groups.entries.expand((entry) => [
+                        _sectionLabel(entry.key),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: entry.value
+                              .map((m) => _memberChip(
+                                    m,
+                                    selected:
+                                        participantProvider.isParticipant(m.id),
+                                    onTap: isAdmin
+                                        ? () => participantProvider.toggle(m)
+                                        : null,
+                                  ))
+                              .toList(),
+                        ),
+                        const SizedBox(height: 16),
+                      ]),
                 const SizedBox(height: 40),
               ],
             ),
@@ -169,6 +133,8 @@ class ParticipantScreen extends StatelessWidget {
   }
 
   Widget _memberChip(MemberItem member, {required bool selected, VoidCallback? onTap}) {
+    final isOb = member.memberType == 'OB';
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -183,6 +149,10 @@ class ParticipantScreen extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (selected) ...[
+              const Icon(Icons.check, size: 13, color: Colors.white70),
+              const SizedBox(width: 4),
+            ],
             Text(
               member.name.isEmpty ? '(이름없음)' : member.name,
               style: TextStyle(
@@ -191,19 +161,16 @@ class ParticipantScreen extends StatelessWidget {
                 color: selected ? Colors.white : Colors.black87,
               ),
             ),
-            if (member.generation.isNotEmpty) ...[
-              const SizedBox(width: 5),
+            if (isOb) ...[
+              const SizedBox(width: 4),
               Text(
-                member.generation,
+                'OB',
                 style: TextStyle(
-                  fontSize: 10.5,
-                  color: selected ? Colors.white70 : Colors.grey,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.bold,
+                  color: selected ? Colors.white60 : Colors.indigo[300],
                 ),
               ),
-            ],
-            if (selected && onTap != null) ...[
-              const SizedBox(width: 6),
-              const Icon(Icons.close, size: 13, color: Colors.white70),
             ],
           ],
         ),
