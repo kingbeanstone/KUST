@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 // ✅ 모든 Provider Import
+import 'providers/expedition_provider.dart';
 import 'providers/equipment_provider.dart';
 import 'providers/schedule_provider.dart';
 import 'providers/meal_plan_provider.dart';
@@ -62,14 +63,29 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        // 1. 장비 및 기본 설정 관리
-        ChangeNotifierProvider(create: (_) => EquipmentProvider()),
+        // 0. 원정(시즌) 선택 — 아래 원정별 provider들이 이 선택을 따라간다
+        ChangeNotifierProvider(create: (_) => ExpeditionProvider()),
 
-        // 2. 일정 관리
-        ChangeNotifierProvider(create: (_) => ScheduleProvider()),
+        // 1. 장비 및 기본 설정 관리 (원정별)
+        ChangeNotifierProxyProvider<ExpeditionProvider, EquipmentProvider>(
+          create: (_) => EquipmentProvider(),
+          update: (_, expedition, equipment) =>
+              equipment!..setExpedition(expedition.selectedId),
+        ),
 
-        // 3. 식단 관리
-        ChangeNotifierProvider(create: (_) => MealPlanProvider()),
+        // 2. 일정 관리 (원정별)
+        ChangeNotifierProxyProvider<ExpeditionProvider, ScheduleProvider>(
+          create: (_) => ScheduleProvider(),
+          update: (_, expedition, schedule) =>
+              schedule!..setExpedition(expedition.selectedId),
+        ),
+
+        // 3. 식단 관리 (원정별)
+        ChangeNotifierProxyProvider<ExpeditionProvider, MealPlanProvider>(
+          create: (_) => MealPlanProvider(),
+          update: (_, expedition, meal) =>
+              meal!..setExpedition(expedition.selectedId),
+        ),
 
         // 4. 공지사항 관리
         ChangeNotifierProvider(create: (_) => NoticeProvider()),
@@ -80,8 +96,12 @@ void main() async {
         // 6. 대원 관리 (명단 등)
         ChangeNotifierProvider(create: (_) => MemberProvider()),
 
-        // 7. 버디/탱크 관리
-        ChangeNotifierProvider(create: (_) => BuddyProvider()),
+        // 7. 버디/탱크 관리 (원정별)
+        ChangeNotifierProxyProvider<ExpeditionProvider, BuddyProvider>(
+          create: (_) => BuddyProvider(),
+          update: (_, expedition, buddy) =>
+              buddy!..setExpedition(expedition.selectedId),
+        ),
 
         // 8. QnA 게시판
         ChangeNotifierProvider(create: (_) => QnaProvider()),

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
+import '../providers/expedition_provider.dart';
 import '../providers/notice_provider.dart';
+import '../models/expedition_model.dart';
 import '../models/notice_model.dart';
 import 'equipment_screen.dart';
 import 'member_management_screen.dart';
@@ -14,6 +16,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final equipmentProvider = Provider.of<EquipmentProvider>(context);
     final noticeProvider = Provider.of<NoticeProvider>(context);
+    final expeditionProvider = Provider.of<ExpeditionProvider>(context);
 
     final isAdmin = equipmentProvider.isAdmin;
     final homeNotice = noticeProvider.homeNotice;
@@ -22,7 +25,20 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF8F9FA),
       endDrawer: _buildSideBar(context, equipmentProvider, isAdmin),
       appBar: AppBar(
-        title: const Text('KUST 동계 원정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        // 💡 v2: 타이틀 자리가 원정(시즌) 선택기. 탭하면 원정 목록 시트가 열린다.
+        title: GestureDetector(
+          onTap: () => _showExpeditionSheet(context),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                expeditionProvider.selected?.label ?? 'KUST 원정',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
+              ),
+              const Icon(Icons.arrow_drop_down, color: Colors.black54),
+            ],
+          ),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
@@ -80,6 +96,192 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 40),
           ],
+        ),
+      ),
+    );
+  }
+
+  // 💡 원정(시즌) 선택 시트: 목록에서 고르거나, 관리자는 새 원정 생성 / v1 데이터 이사
+  void _showExpeditionSheet(BuildContext context) {
+    int selYear = DateTime.now().year;
+    String selSeason = 'winter';
+    bool busy = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Consumer2<ExpeditionProvider, EquipmentProvider>(
+          builder: (ctx2, expProvider, equipProvider, _) {
+            final isAdmin = equipProvider.isAdmin;
+            final expeditions = expProvider.expeditions;
+            final hasLegacyTarget = expeditions.every((e) => e.id != '2025_winter');
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const Text('원정 선택', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+
+                      // --- 원정 목록 ---
+                      if (expeditions.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '아직 등록된 원정이 없습니다.\n관리자 인증 후 아래에서 만들거나 기존 데이터를 이사하세요.',
+                            style: TextStyle(fontSize: 12.5, color: Colors.grey),
+                          ),
+                        )
+                      else
+                        ...expeditions.map((e) {
+                          final isSelected = expProvider.selectedId == e.id;
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                            dense: true,
+                            leading: Icon(
+                              isSelected ? Icons.check_circle : Icons.circle_outlined,
+                              color: isSelected ? Colors.blue[800] : Colors.grey[400],
+                              size: 20,
+                            ),
+                            title: Text(
+                              e.label,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? Colors.blue[800] : Colors.black87,
+                              ),
+                            ),
+                            onTap: () {
+                              expProvider.select(e.id);
+                              Navigator.pop(ctx);
+                            },
+                          );
+                        }),
+
+                      // --- 관리자 전용: 새 원정 만들기 / 데이터 이사 ---
+                      if (isAdmin) ...[
+                        const SizedBox(height: 8),
+                        Divider(color: Colors.grey[200], height: 1),
+                        const SizedBox(height: 12),
+                        const Text('새 원정 만들기',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: List.generate(3, (i) {
+                            final year = DateTime.now().year - 1 + i;
+                            final isSel = selYear == year;
+                            return ChoiceChip(
+                              label: Text('$year'),
+                              selected: isSel,
+                              onSelected: (_) => setSheetState(() => selYear = year),
+                              selectedColor: Colors.blue[800],
+                              labelStyle: TextStyle(
+                                  fontSize: 12.5,
+                                  color: isSel ? Colors.white : Colors.black87),
+                              showCheckmark: false,
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          children: Expedition.seasonLabels.entries.map((entry) {
+                            final isSel = selSeason == entry.key;
+                            return ChoiceChip(
+                              label: Text(entry.value),
+                              selected: isSel,
+                              onSelected: (_) => setSheetState(() => selSeason = entry.key),
+                              selectedColor: Colors.blue[800],
+                              labelStyle: TextStyle(
+                                  fontSize: 12.5,
+                                  color: isSel ? Colors.white : Colors.black87),
+                              showCheckmark: false,
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: busy
+                                ? null
+                                : () async {
+                                    setSheetState(() => busy = true);
+                                    await expProvider.createExpedition(selYear, selSeason);
+                                    if (ctx.mounted) setSheetState(() => busy = false);
+                                  },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue[800],
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                            ),
+                            child: const Text('만들기'),
+                          ),
+                        ),
+
+                        // v1 최상위 컬렉션 데이터(25 동계)를 원정 구조로 복사
+                        if (hasLegacyTarget) ...[
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: busy
+                                  ? null
+                                  : () async {
+                                      setSheetState(() => busy = true);
+                                      final result = await expProvider.migrateLegacyData(
+                                          year: 2025, season: 'winter');
+                                      if (ctx.mounted) {
+                                        setSheetState(() => busy = false);
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('✅ $result')),
+                                        );
+                                      }
+                                    },
+                              icon: const Icon(Icons.drive_file_move_outlined, size: 16),
+                              label: const Text('기존 데이터를 25년 동계 원정으로 이사',
+                                  style: TextStyle(fontSize: 12.5)),
+                            ),
+                          ),
+                        ],
+                        if (busy)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 10),
+                            child: Center(
+                                child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2))),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

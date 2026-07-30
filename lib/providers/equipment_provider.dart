@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -42,6 +44,22 @@ class EquipmentProvider with ChangeNotifier {
   List<GeneralGearItem> get generalGears => _generalGears;
   List<EquipmentGroup> get groups => _groups;
 
+  // 💡 현재 선택된 원정. 장비 표/그룹은 expeditions/{id}/ 아래를 구독한다.
+  //    (BCD·호흡기·공용장비 인벤토리는 동아리 자산이라 원정과 무관하게 최상위 유지)
+  String? _expeditionId;
+  final List<StreamSubscription> _expSubs = [];
+
+  // 원정 미선택 상태에서 쓰기가 일어나면 조용히 엉뚱한 경로(auto-id)에 쓰는 대신
+  // 즉시 에러가 나도록 non-null 단언을 건다.
+  CollectionReference<Map<String, dynamic>> get _membersCol =>
+      _db.collection('expeditions').doc(_expeditionId!).collection('members');
+
+  DocumentReference<Map<String, dynamic>> get _groupsDoc => _db
+      .collection('expeditions')
+      .doc(_expeditionId!)
+      .collection('config')
+      .doc('equipment_groups');
+
   EquipmentProvider() {
     _initProvider();
   }
@@ -49,9 +67,27 @@ class EquipmentProvider with ChangeNotifier {
   Future<void> _initProvider() async {
     addLog("장비 시스템 초기화...");
     await _loadPreferences(); // 💡 시작 시 저장된 관리자 설정 불러오기
-    _listenToMembers();
     _listenToInventory();
     _listenToGeneralGears();
+  }
+
+  /// 💡 ExpeditionProvider(main.dart의 ProxyProvider)가 호출.
+  /// 원정이 바뀌면 기존 구독을 끊고 새 원정 경로를 다시 구독한다.
+  void setExpedition(String? expeditionId) {
+    if (_expeditionId == expeditionId) return;
+    _expeditionId = expeditionId;
+
+    for (final sub in _expSubs) {
+      sub.cancel();
+    }
+    _expSubs.clear();
+    _data = [];
+    _groups = [];
+    notifyListeners();
+
+    if (expeditionId == null) return;
+    addLog("원정 전환: $expeditionId");
+    _listenToMembers();
     _listenToGroups();
   }
 
@@ -109,10 +145,10 @@ class EquipmentProvider with ChangeNotifier {
 
   // --- 실시간 데이터 리스너 (Firestore) ---
   void _listenToMembers() {
-    _db.collection('members').orderBy('order').snapshots().listen((snapshot) {
+    _expSubs.add(_membersCol.orderBy('order').snapshots().listen((snapshot) {
       _data = snapshot.docs.map((doc) => MemberEquipment.fromMap(doc.id, doc.data())).toList();
       notifyListeners();
-    });
+    }));
   }
 
   void _listenToInventory() {
@@ -129,13 +165,13 @@ class EquipmentProvider with ChangeNotifier {
   }
 
   void _listenToGroups() {
-    _db.collection('config').doc('equipment_groups').snapshots().listen((doc) {
+    _expSubs.add(_groupsDoc.snapshots().listen((doc) {
       final list = (doc.data()?['groups'] as List?) ?? [];
       _groups = list
           .map((g) => EquipmentGroup.fromMap(Map<String, dynamic>.from(g)))
           .toList();
       notifyListeners();
-    });
+    }));
   }
 
   void _listenToGeneralGears() {
@@ -194,21 +230,21 @@ class EquipmentProvider with ChangeNotifier {
     if (!_isAdmin) return;
     final batch = _db.batch();
     for (var member in updatedList) {
-      batch.set(_db.collection('members').doc(member.id), member.toMap(), SetOptions(merge: true));
+      batch.set(_membersCol.doc(member.id), member.toMap(), SetOptions(merge: true));
     }
     await batch.commit();
     addLog("장비 데이터 일괄 저장 완료");
   }
 
   Future<void> addRow() async {
-    if (!_isAdmin) return;
+    if (!_isAdmin || _expeditionId == null) return;
     final String id = DateTime.now().millisecondsSinceEpoch.toString();
     int nextOrder = _data.isEmpty ? 0 : _data.last.order + 1;
     final newRow = MemberEquipment(
         id: id, name: '', order: nextOrder,
         gears: {for (var k in ['가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타']) k: GearStatus()}
     );
-    await _db.collection('members').doc(id).set(newRow.toMap());
+    await _membersCol.doc(id).set(newRow.toMap());
   }
 
   Future<void> deleteMember(String id) async {
@@ -217,7 +253,7 @@ class EquipmentProvider with ChangeNotifier {
       return;
     }
     try {
-      await _db.collection('members').doc(id).delete();
+      await _membersCol.doc(id).delete();
       addLog("행 삭제 성공: $id");
     } catch (e) {
       addLog("삭제 중 에러 발생: $e");
@@ -234,7 +270,7 @@ class EquipmentProvider with ChangeNotifier {
 
     final batch = _db.batch();
     for (final target in targets) {
-      batch.set(_db.collection('members').doc(target), {
+      batch.set(_membersCol.doc(target), {
         field: {'checked': next}
       }, SetOptions(merge: true));
     }
@@ -244,7 +280,8 @@ class EquipmentProvider with ChangeNotifier {
   // --- 장비 그룹(교육 1팀 등 자유 라벨) 관리 ---
 
   Future<void> _saveGroups(List<EquipmentGroup> groups) async {
-    await _db.collection('config').doc('equipment_groups').set({
+    if (_expeditionId == null) return;
+    await _groupsDoc.set({
       'groups': groups.map((g) => g.toMap()).toList(),
     });
   }
@@ -264,7 +301,7 @@ class EquipmentProvider with ChangeNotifier {
     // 소속 대원을 먼저 미지정으로 되돌린 뒤 그룹을 지운다.
     final batch = _db.batch();
     for (final m in _data.where((m) => m.groupId == groupId)) {
-      batch.set(_db.collection('members').doc(m.id), {'groupId': ''}, SetOptions(merge: true));
+      batch.set(_membersCol.doc(m.id), {'groupId': ''}, SetOptions(merge: true));
     }
     await batch.commit();
     await _saveGroups(_groups.where((g) => g.id != groupId).toList());
@@ -279,7 +316,7 @@ class EquipmentProvider with ChangeNotifier {
 
     final batch = _db.batch();
     for (final id in targets) {
-      batch.set(_db.collection('members').doc(id), {'groupId': groupId}, SetOptions(merge: true));
+      batch.set(_membersCol.doc(id), {'groupId': groupId}, SetOptions(merge: true));
     }
     await batch.commit();
   }
@@ -302,11 +339,11 @@ class EquipmentProvider with ChangeNotifier {
       // 기존 짝의 상대방을 먼저 홀로 되돌린다.
       if (existing.hasPair) {
         for (final other in _data.where((m) => m.pairId == existing.pairId && m.id != id)) {
-          batch.set(_db.collection('members').doc(other.id),
+          batch.set(_membersCol.doc(other.id),
               {'pairId': '', 'sharedGears': <String>[]}, SetOptions(merge: true));
         }
       }
-      batch.set(_db.collection('members').doc(id),
+      batch.set(_membersCol.doc(id),
           {'pairId': pairId, 'sharedGears': <String>[]}, SetOptions(merge: true));
     }
     await batch.commit();
@@ -318,7 +355,7 @@ class EquipmentProvider with ChangeNotifier {
     if (!_isAdmin || pairId.isEmpty) return;
     final batch = _db.batch();
     for (final m in _data.where((m) => m.pairId == pairId)) {
-      batch.set(_db.collection('members').doc(m.id),
+      batch.set(_membersCol.doc(m.id),
           {'pairId': '', 'sharedGears': <String>[]}, SetOptions(merge: true));
     }
     await batch.commit();
@@ -347,7 +384,7 @@ class EquipmentProvider with ChangeNotifier {
         // 합쳐진 칸은 하나의 값만 가지므로 대표의 번호/체크로 맞춘다.
         update[gear] = {'value': leadGear?.value ?? '', 'checked': leadGear?.checked ?? false};
       }
-      batch.set(_db.collection('members').doc(m.id), update, SetOptions(merge: true));
+      batch.set(_membersCol.doc(m.id), update, SetOptions(merge: true));
     }
     await batch.commit();
   }
@@ -360,7 +397,7 @@ class EquipmentProvider with ChangeNotifier {
       member.gears.forEach((key, gear) {
         resetGears[key] = {'value': gear.value, 'checked': false};
       });
-      batch.set(_db.collection('members').doc(member.id), resetGears, SetOptions(merge: true));
+      batch.set(_membersCol.doc(member.id), resetGears, SetOptions(merge: true));
     }
     await batch.commit();
     addLog("체크리스트 전체 리셋 완료");

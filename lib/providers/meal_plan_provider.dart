@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/meal_plan_model.dart';
@@ -5,8 +7,8 @@ import '../models/meal_plan_model.dart';
 class MealPlanProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // 💡 관리자 모드에서 수정 가능한 날짜 데이터 구조
-  List<Map<String, String>> _dates = [
+  // 날짜 탭 기본값 (원정 config에 저장된 게 없을 때 사용)
+  static const List<Map<String, String>> _defaultDates = [
     {'date': '1.29 (목)', 'title': '1일차 (동방파제)', 'id': '1.29'},
     {'date': '1.30 (금)', 'title': '2일차 (보목)', 'id': '1.30'},
     {'date': '1.31 (토)', 'title': '3일차 (입도)', 'id': '1.31'},
@@ -17,26 +19,48 @@ class MealPlanProvider with ChangeNotifier {
     {'date': '2.5 (목)', 'title': '8일차 (복귀)', 'id': '2.5'},
   ];
 
+  List<Map<String, String>> _dates =
+      _defaultDates.map((d) => Map<String, String>.from(d)).toList();
+
   List<Map<String, String>> get dates => _dates;
 
   List<MealPlan> _meals = [];
   List<MealPlan> get meals => _meals;
 
-  MealPlanProvider() {
-    _listenToMeals();
-    _loadTabConfig(); // 💡 저장된 날짜 설정 불러오기
+  // 💡 식단은 원정별 데이터 — expeditions/{id}/meals 를 구독한다.
+  String? _expeditionId;
+  StreamSubscription? _sub;
+
+  DocumentReference<Map<String, dynamic>> get _expRef =>
+      _db.collection('expeditions').doc(_expeditionId!);
+
+  /// ExpeditionProvider(ProxyProvider)가 호출. 원정 전환 시 구독을 갈아탄다.
+  void setExpedition(String? expeditionId) {
+    if (_expeditionId == expeditionId) return;
+    _expeditionId = expeditionId;
+
+    _sub?.cancel();
+    _sub = null;
+    _meals = [];
+    _dates = _defaultDates.map((d) => Map<String, String>.from(d)).toList();
+    notifyListeners();
+
+    if (expeditionId == null) return;
+    _sub = _expRef.collection('meals').snapshots().listen((snapshot) {
+      _meals = snapshot.docs.map((doc) => MealPlan.fromFirestore(doc.id, doc.data())).toList();
+      notifyListeners();
+    });
+    _loadTabConfig();
   }
 
-  // 💡 파이어베이스에 저장된 날짜 탭 설정 불러오기
-  void _loadTabConfig() async {
+  // 💡 원정 config에 저장된 날짜 탭 설정 불러오기
+  Future<void> _loadTabConfig() async {
     try {
-      final doc = await _db.collection('config').doc('meal_tabs').get();
-      if (doc.exists && doc.data() != null) {
-        final List<dynamic> savedTabs = doc.data()!['tabs'] ?? [];
-        if (savedTabs.isNotEmpty) {
-          _dates = savedTabs.map((item) => Map<String, String>.from(item)).toList();
-          notifyListeners();
-        }
+      final doc = await _expRef.collection('config').doc('meal_tabs').get();
+      final List<dynamic> savedTabs = doc.data()?['tabs'] ?? [];
+      if (savedTabs.isNotEmpty) {
+        _dates = savedTabs.map((item) => Map<String, String>.from(item)).toList();
+        notifyListeners();
       }
     } catch (e) {
       debugPrint("탭 설정 로드 실패: $e");
@@ -45,8 +69,9 @@ class MealPlanProvider with ChangeNotifier {
 
   // 💡 날짜 탭 설정 저장 (순서/제목/날짜 텍스트 전체 저장)
   Future<void> saveTabConfig() async {
+    if (_expeditionId == null) return;
     try {
-      await _db.collection('config').doc('meal_tabs').set({
+      await _expRef.collection('config').doc('meal_tabs').set({
         'tabs': _dates,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -83,18 +108,11 @@ class MealPlanProvider with ChangeNotifier {
     saveTabConfig();
   }
 
-  // 실시간 식단 데이터 감시
-  void _listenToMeals() {
-    _db.collection('meals').snapshots().listen((snapshot) {
-      _meals = snapshot.docs.map((doc) => MealPlan.fromFirestore(doc.id, doc.data())).toList();
-      notifyListeners();
-    });
-  }
-
   // 식단 저장 로직
   Future<void> saveMeal(MealPlan meal) async {
+    if (_expeditionId == null) return;
     try {
-      await _db.collection('meals').doc(meal.id).set(meal.toMap());
+      await _expRef.collection('meals').doc(meal.id).set(meal.toMap());
     } catch (e) {
       debugPrint("식단 저장 에러: $e");
     }

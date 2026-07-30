@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/schedule_model.dart';
@@ -5,8 +7,8 @@ import '../models/schedule_model.dart';
 class ScheduleProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // 일정 날짜 탭 정보 (Firestore의 'config/schedule_tabs' 문서에서 관리하거나 초기값 사용)
-  List<Map<String, String>> _dates = [
+  // 날짜 탭 기본값 (원정 config에 저장된 게 없을 때 사용)
+  static const List<Map<String, String>> _defaultDates = [
     {'date': '1.29 (목)', 'title': '1일차 (동방파제)', 'id': '1.29'},
     {'date': '1.30 (금)', 'title': '2일차 (보목)', 'id': '1.30'},
     {'date': '1.31 (토)', 'title': '3일차 (입도)', 'id': '1.31'},
@@ -17,38 +19,81 @@ class ScheduleProvider with ChangeNotifier {
     {'date': '2.5 (목)', 'title': '8일차 (복귀)', 'id': '2.5'},
   ];
 
+  List<Map<String, String>> _dates =
+      _defaultDates.map((d) => Map<String, String>.from(d)).toList();
+
   List<Map<String, String>> get dates => _dates;
 
   List<DailySchedule> _schedules = [];
   List<DailySchedule> get schedules => _schedules;
 
-  ScheduleProvider() {
-    _listenToSchedules();
-  }
+  // 💡 일정은 원정별 데이터 — expeditions/{id}/schedules 를 구독한다.
+  String? _expeditionId;
+  StreamSubscription? _sub;
 
-  // Firestore 실시간 리스너
-  void _listenToSchedules() {
-    _db.collection('schedules').snapshots().listen((snapshot) {
+  DocumentReference<Map<String, dynamic>> get _expRef =>
+      _db.collection('expeditions').doc(_expeditionId!);
+
+  /// ExpeditionProvider(ProxyProvider)가 호출. 원정 전환 시 구독을 갈아탄다.
+  void setExpedition(String? expeditionId) {
+    if (_expeditionId == expeditionId) return;
+    _expeditionId = expeditionId;
+
+    _sub?.cancel();
+    _sub = null;
+    _schedules = [];
+    _dates = _defaultDates.map((d) => Map<String, String>.from(d)).toList();
+    notifyListeners();
+
+    if (expeditionId == null) return;
+    _sub = _expRef.collection('schedules').snapshots().listen((snapshot) {
       _schedules = snapshot.docs.map((doc) {
         return DailySchedule.fromFirestore(doc.id, doc.data());
       }).toList();
       notifyListeners();
     });
+    _loadTabConfig();
   }
 
-  // --- 날짜 탭 관리 ---
+  // --- 날짜 탭 관리 (원정 config에 저장) ---
+
+  Future<void> _loadTabConfig() async {
+    try {
+      final doc = await _expRef.collection('config').doc('schedule_tabs').get();
+      final List<dynamic> saved = doc.data()?['tabs'] ?? [];
+      if (saved.isNotEmpty) {
+        _dates = saved.map((item) => Map<String, String>.from(item)).toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("일정 탭 설정 로드 실패: $e");
+    }
+  }
+
+  Future<void> saveTabConfig() async {
+    if (_expeditionId == null) return;
+    try {
+      await _expRef.collection('config').doc('schedule_tabs').set({
+        'tabs': _dates,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+      notifyListeners();
+    } catch (e) {
+      debugPrint("일정 탭 설정 저장 실패: $e");
+    }
+  }
+
   void reorderDates(int oldIndex, int newIndex) {
     if (newIndex > oldIndex) newIndex -= 1;
     final item = _dates.removeAt(oldIndex);
     _dates.insert(newIndex, item);
-    notifyListeners();
-    // 💡 필요 시 Firestore에 탭 순서 저장 로직 추가 가능
+    saveTabConfig();
   }
 
   void updateDayInfo(int index, String date, String title) {
     _dates[index]['date'] = date;
     _dates[index]['title'] = title;
-    notifyListeners();
+    saveTabConfig();
   }
 
   void addDay() {
@@ -57,17 +102,18 @@ class ScheduleProvider with ChangeNotifier {
       'title': '신규 일정',
       'id': DateTime.now().millisecondsSinceEpoch.toString()
     });
-    notifyListeners();
+    saveTabConfig();
   }
 
   void removeDay(int index) {
     _dates.removeAt(index);
-    notifyListeners();
+    saveTabConfig();
   }
 
   // --- 개별 일정 항목 관리 ---
   Future<void> updateDailySchedule(DailySchedule schedule) async {
-    await _db.collection('schedules').doc(schedule.id).set(schedule.toMap());
+    if (_expeditionId == null) return;
+    await _expRef.collection('schedules').doc(schedule.id).set(schedule.toMap());
   }
 
   Future<void> saveScheduleItem(String dayId, ScheduleItem item, {int? atIndex}) async {
