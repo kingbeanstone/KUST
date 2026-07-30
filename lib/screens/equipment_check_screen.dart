@@ -1147,20 +1147,21 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
             Row(
               children: [
                 // 순번 칸 — 블록 전체 높이를 하나로 차지 (버디 = 한 가방)
+                // 완료 색은 이름 칸에만 — 번호 칸은 항상 회색 유지
                 Container(
                   width: noWidth,
                   height: bodyHeight,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: complete ? _okSoft : const Color(0xFFF8F9FA),
+                    color: const Color(0xFFF8F9FA),
                     border: Border(right: BorderSide(color: Colors.grey[200]!)),
                   ),
                   child: Text(
                     '$blockNo',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.bold,
-                      color: complete ? _okColor : Colors.grey,
+                      color: Colors.grey,
                     ),
                   ),
                 ),
