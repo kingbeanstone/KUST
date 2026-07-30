@@ -53,6 +53,19 @@ int _compareByGeneration(Map<String, MemberItem> club, MemberEquipment a, Member
   return cmp != 0 ? cmp : a.name.compareTo(b.name);
 }
 
+/// 💡 이 칸이 장비 부장의 관리 대상(O/X 체크 필요)인지.
+/// 개인 장비는 관리 대상이 아니다 — 단, '개인+15'처럼 동아리 번호가
+/// 섞여 있으면 그 번호는 관리해야 하므로 체크가 생긴다.
+///  - 빈 칸, 'X'(해당 없음) → 체크 없음
+///  - 숫자 포함 → 체크 (동아리 장비 번호)
+///  - 숫자가 없어도 '개인'이 아니면 체크 (M 사이즈 슈트 등)
+bool _needsCheck(String value) {
+  final v = value.trim();
+  if (v.isEmpty || v.toUpperCase() == 'X') return false;
+  if (RegExp(r'\d').hasMatch(v)) return true;
+  return !v.contains('개인');
+}
+
 /// 💡 표시 순서: 저장된 order(드래그로 변경 가능) 우선, 같으면 기수→이름.
 int _compareRows(Map<String, MemberItem> club, MemberEquipment a, MemberEquipment b) {
   final cmp = a.order.compareTo(b.order);
@@ -114,8 +127,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   final ScrollController _headerHController = ScrollController();
   final ScrollController _bodyHController = ScrollController();
 
-  static const double nameWidth = 78.0;
-  static const double noWidth = 26.0; // 순번(가방 번호) 열
+  static const double nameWidth = 60.0;
+  static const double noWidth = 24.0; // 순번(가방 번호) 열
   static const double colWidth = 56.0;
 
   /// 좌측 고정 영역 전체 폭 (No + 이름)
@@ -193,22 +206,20 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   }
 
   /// 💡 한 덩어리(=가방)가 다 싸졌는지.
-  /// 값이 있는 칸만 대상으로 하고, 'X'(해당 없음)와 빈 칸은 제외한다.
-  /// 값이 하나도 없는 블록은 아직 아무것도 안 싼 것이므로 미완료로 본다.
+  /// 관리 대상 칸(_needsCheck)만 보고, 전부 체크됐을 때 완료.
+  /// 관리 대상이 하나도 없는 블록은 미완료로 본다.
   bool _isBlockComplete(_Block block) {
     var needed = 0;
     for (final gear in _gearKeys) {
       if (block.sharesGear(gear)) {
         final status = block.members.first.gears[gear];
-        final value = (status?.value ?? '').trim();
-        if (value.isEmpty || value.toUpperCase() == 'X') continue;
+        if (!_needsCheck(status?.value ?? '')) continue;
         needed++;
         if (!(status?.checked ?? false)) return false;
       } else {
         for (final m in block.members) {
           final status = m.gears[gear];
-          final value = (status?.value ?? '').trim();
-          if (value.isEmpty || value.toUpperCase() == 'X') continue;
+          if (!_needsCheck(status?.value ?? '')) continue;
           needed++;
           if (!(status?.checked ?? false)) return false;
         }
@@ -1331,7 +1342,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
               ),
             ),
           ),
-          if (!_isEditMode)
+          // 💡 관리 대상이 아닌 칸(개인 장비 등)은 O/X 없이 빈 배경
+          if (!_isEditMode && _needsCheck(value))
             GestureDetector(
               onTap: () => _handleToggle(provider, lead.id, gear),
               child: Container(
@@ -1392,7 +1404,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                       style: const TextStyle(fontSize: 11, color: Colors.black87)),
             ),
           ),
-          if (!_isEditMode)
+          // 💡 관리 대상이 아닌 칸(개인 장비 등)은 O/X 없이 빈 배경
+          if (!_isEditMode && _needsCheck(value))
             GestureDetector(
               onTap: () => _handleToggle(provider, member.id, gear),
               child: Container(
