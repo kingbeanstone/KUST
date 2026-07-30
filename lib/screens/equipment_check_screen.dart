@@ -28,6 +28,16 @@ class _Block {
   bool sharesGear(String gear) => isPair && members.first.sharedGears.contains(gear);
 }
 
+/// 그룹(교육 1팀 등) 단위의 섹션. title이 null이면 그룹 기능 미사용(헤더 없이 평평한 표).
+class _Section {
+  final String key; // 접기 상태 식별용
+  final String? title;
+  final List<_Block> blocks;
+  const _Section({required this.key, required this.title, required this.blocks});
+
+  List<MemberEquipment> get allMembers => blocks.expand((b) => b.members).toList();
+}
+
 /// 💡 v2: 장비 '목록'과 '체크'를 한 화면의 두 모드로 통합.
 ///  - 보기 모드: 장비 번호 + O/X 체크
 ///  - 수정 모드: O/X 대신 번호를 편집하고, 장비 버디 편성과 장비별 공유 여부를 지정
@@ -44,6 +54,9 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   /// 수정 모드 진입 시 만들어지는 편집용 사본 (id -> 사본)
   final Map<String, MemberEquipment> _editing = {};
 
+  /// 접혀 있는 그룹 섹션의 key 모음
+  final Set<String> _collapsed = {};
+
   final ScrollController _headerHController = ScrollController();
   final ScrollController _bodyHController = ScrollController();
 
@@ -53,6 +66,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   static const double bandHeight = 30.0;
   static const double valueHeight = 34.0;
   static const double statusHeight = 26.0;
+  static const double groupHeaderHeight = 30.0;
+  static const Color groupHeaderColor = Color(0xFF455A64);
 
   double get _gearsWidth => _gearKeys.length * colWidth;
 
@@ -112,6 +127,60 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   /// 편집 중이면 사본을, 아니면 원본을 돌려준다.
   MemberEquipment _visible(MemberEquipment member) => _editing[member.id] ?? member;
 
+  /// 그룹 순서대로 섹션을 만든다. 그룹이 하나도 없으면 헤더 없는 단일 섹션.
+  /// 그룹에 속하지 않은 대원은 맨 아래 '미지정' 섹션으로.
+  List<_Section> _buildSections(EquipmentProvider provider) {
+    final groups = provider.groups;
+    if (groups.isEmpty) {
+      return [_Section(key: '__all__', title: null, blocks: _buildBlocks(provider.data))];
+    }
+
+    final sections = <_Section>[];
+    final knownIds = groups.map((g) => g.id).toSet();
+
+    for (final g in groups) {
+      sections.add(_Section(
+        key: g.id,
+        title: g.name,
+        blocks: _buildBlocks(provider.data.where((m) => m.groupId == g.id).toList()),
+      ));
+    }
+
+    final rest = provider.data.where((m) => !knownIds.contains(m.groupId)).toList();
+    if (rest.isNotEmpty) {
+      sections.add(_Section(key: '__rest__', title: '미지정', blocks: _buildBlocks(rest)));
+    }
+    return sections;
+  }
+
+  void _toggleCollapse(String key) {
+    setState(() {
+      _collapsed.contains(key) ? _collapsed.remove(key) : _collapsed.add(key);
+    });
+  }
+
+  /// 섹션 헤더 우측에 붙는 요약 (보기: 완료 수 / 수정: 인원수)
+  String _sectionSummary(_Section section) {
+    final members = section.allMembers;
+    if (_isEditMode) return '${members.length}명';
+    int done = 0;
+    int total = 0;
+    for (final block in section.blocks) {
+      for (final gear in _gearKeys) {
+        if (block.sharesGear(gear)) {
+          total += 1;
+          if (block.members.first.gears[gear]?.checked ?? false) done += 1;
+        } else {
+          for (final m in block.members) {
+            total += 1;
+            if (m.gears[gear]?.checked ?? false) done += 1;
+          }
+        }
+      }
+    }
+    return '$done/$total';
+  }
+
   // ------------------------------------------------------------- 모드 전환
 
   void _enterEditMode(EquipmentProvider provider) {
@@ -133,13 +202,14 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   Future<void> _saveEdits(EquipmentProvider provider) async {
     FocusManager.instance.primaryFocus?.unfocus();
     await Future.delayed(const Duration(milliseconds: 100));
-    // 💡 편집 도중 버디 편성이 바뀌었을 수 있으므로, 사본의 pairId/sharedGears를
+    // 💡 편집 도중 버디/그룹 편성이 바뀌었을 수 있으므로, 사본의 편성 정보를
     //    최신 데이터로 갱신한 뒤 저장한다. (안 하면 저장 시 편성이 과거로 되돌아감)
     for (final m in provider.data) {
       final copy = _editing[m.id];
       if (copy != null) {
         copy.pairId = m.pairId;
         copy.sharedGears = List<String>.from(m.sharedGears);
+        copy.groupId = m.groupId;
       }
     }
     await provider.saveBulkChanges(_editing.values.toList());
@@ -171,7 +241,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<EquipmentProvider>();
-    final blocks = _buildBlocks(provider.data);
+    final sections = _buildSections(provider);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -188,18 +258,18 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           _buildHeader(),
           const Divider(height: 1, thickness: 1),
           Expanded(
-            child: blocks.isEmpty
+            child: provider.data.isEmpty
                 ? const Center(child: Text('등록된 대원이 없습니다.', style: TextStyle(color: Colors.grey)))
                 : SingleChildScrollView(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildFixedColumn(blocks),
+                        _buildFixedColumn(sections),
                         Expanded(
                           child: SingleChildScrollView(
                             controller: _bodyHController,
                             scrollDirection: Axis.horizontal,
-                            child: _buildScrollColumn(blocks, provider),
+                            child: _buildScrollColumn(sections, provider),
                           ),
                         ),
                       ],
@@ -245,15 +315,291 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         children: [
           const Expanded(
             child: Text(
-              '장비 번호를 입력하세요. 조 상단의 공유/개인 버튼으로 장비별 공유를 바꿉니다.',
+              '번호 입력 · 공유/개인 버튼으로 장비별 공유 전환',
               style: TextStyle(fontSize: 11, color: Colors.blue),
             ),
           ),
           TextButton.icon(
+            onPressed: _showGroupSheet,
+            icon: const Icon(Icons.folder_outlined, size: 15, color: groupHeaderColor),
+            label: const Text('그룹',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.bold, color: groupHeaderColor)),
+          ),
+          TextButton.icon(
             onPressed: _showPairSheet,
-            icon: const Icon(Icons.group_add_outlined, size: 16, color: _pairColor),
-            label: const Text('버디 편성',
+            icon: const Icon(Icons.group_add_outlined, size: 15, color: _pairColor),
+            label: const Text('버디',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _pairColor)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 💡 그룹(교육 1팀 등)을 만들고 대원을 배정하는 바텀시트.
+  ///    배정 단위는 블록(버디 조 또는 혼자) — 장비 버디는 항상 함께 이동한다.
+  void _showGroupSheet() {
+    String? selectedGroupId;
+    final nameController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Consumer<EquipmentProvider>(
+          builder: (ctx2, provider, _) {
+            final groups = provider.groups;
+            final blocks = _buildBlocks(provider.data);
+            final groupNames = {for (final g in groups) g.id: g.name};
+
+            String blockLabel(_Block b) => b.members
+                .map((m) => m.name.isEmpty ? '(이름없음)' : m.name)
+                .join(' · ');
+
+            return SafeArea(
+              child: Container(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(ctx).size.height * 0.8,
+                ),
+                padding: EdgeInsets.fromLTRB(
+                    20, 12, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const Text('그룹 편성',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+
+                    // --- 새 그룹 만들기 ---
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: nameController,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: const InputDecoration(
+                              hintText: '새 그룹 이름 (예: 교육 1팀)',
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                              contentPadding:
+                                  EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            onSubmitted: (v) {
+                              provider.addGroup(v);
+                              nameController.clear();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            provider.addGroup(nameController.text);
+                            nameController.clear();
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: groupHeaderColor,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                          ),
+                          child: const Text('추가'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // --- 그룹 선택 칩 ---
+                    if (groups.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('아직 그룹이 없습니다. 먼저 그룹을 만들어주세요.',
+                            style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      )
+                    else ...[
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: groups.map((g) {
+                          final isSelected = selectedGroupId == g.id;
+                          final count =
+                              provider.data.where((m) => m.groupId == g.id).length;
+                          return GestureDetector(
+                            onTap: () => setSheetState(
+                                () => selectedGroupId = isSelected ? null : g.id),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: isSelected ? groupHeaderColor : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color:
+                                      isSelected ? groupHeaderColor : Colors.grey[300]!,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${g.name} ($count)',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          isSelected ? Colors.white : Colors.black87,
+                                    ),
+                                  ),
+                                  if (isSelected) ...[
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: () => _confirmDeleteGroup(
+                                          ctx, provider, g.id, g.name),
+                                      child: const Icon(Icons.close,
+                                          size: 14, color: Colors.white70),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        selectedGroupId == null
+                            ? '그룹을 선택한 뒤 아래에서 대원을 탭하세요.'
+                            : '탭하면 넣고, 다시 탭하면 뺍니다. 장비 버디는 함께 이동합니다.',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: selectedGroupId == null
+                              ? Colors.grey
+                              : groupHeaderColor,
+                          fontWeight: selectedGroupId == null
+                              ? FontWeight.normal
+                              : FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Divider(color: Colors.grey[200], height: 1),
+                    const SizedBox(height: 12),
+
+                    // --- 대원(블록) 칩 ---
+                    Flexible(
+                      child: SingleChildScrollView(
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: blocks.map((b) {
+                            final gid = b.members.first.groupId;
+                            final inSelected =
+                                selectedGroupId != null && gid == selectedGroupId;
+                            final otherGroup =
+                                gid.isNotEmpty && gid != selectedGroupId
+                                    ? groupNames[gid]
+                                    : null;
+
+                            return GestureDetector(
+                              onTap: () {
+                                if (selectedGroupId == null) return;
+                                provider.assignToGroup(b.members.first.id,
+                                    inSelected ? '' : selectedGroupId!);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 7),
+                                decoration: BoxDecoration(
+                                  color: inSelected
+                                      ? groupHeaderColor
+                                      : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: inSelected
+                                        ? groupHeaderColor
+                                        : Colors.grey[300]!,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (b.isPair) ...[
+                                          Icon(Icons.link,
+                                              size: 12,
+                                              color: inSelected
+                                                  ? Colors.white70
+                                                  : _pairColor),
+                                          const SizedBox(width: 4),
+                                        ],
+                                        Text(
+                                          blockLabel(b),
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: inSelected
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (otherGroup != null)
+                                      Text(
+                                        otherGroup,
+                                        style: TextStyle(
+                                            fontSize: 9, color: Colors.grey[500]),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ).whenComplete(() => nameController.dispose());
+  }
+
+  void _confirmDeleteGroup(
+      BuildContext sheetCtx, EquipmentProvider provider, String groupId, String name) {
+    showDialog(
+      context: sheetCtx,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('그룹 삭제'),
+        content: Text('[$name] 그룹을 삭제합니다.\n소속 대원은 미지정으로 돌아갑니다.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('취소')),
+          TextButton(
+            onPressed: () {
+              provider.deleteGroup(groupId);
+              Navigator.pop(dCtx);
+            },
+            child: const Text('삭제', style: TextStyle(color: _badColor)),
           ),
         ],
       ),
@@ -467,10 +813,43 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   // ------------------------------------------------------- 좌측 고정 이름열
 
-  Widget _buildFixedColumn(List<_Block> blocks) {
+  Widget _buildFixedColumn(List<_Section> sections) {
     final cells = <Widget>[];
 
-    for (final block in blocks) {
+    for (final section in sections) {
+      final collapsed = _collapsed.contains(section.key);
+
+      if (section.title != null) {
+        cells.add(GestureDetector(
+          onTap: () => _toggleCollapse(section.key),
+          child: Container(
+            width: nameWidth,
+            height: groupHeaderHeight,
+            color: groupHeaderColor,
+            padding: const EdgeInsets.only(left: 4),
+            child: Row(
+              children: [
+                Icon(collapsed ? Icons.chevron_right : Icons.expand_more,
+                    size: 14, color: Colors.white70),
+                Expanded(
+                  child: Text(
+                    section.title!,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ));
+        if (collapsed || section.blocks.isEmpty) {
+          cells.add(_gap(nameWidth));
+          continue;
+        }
+      }
+
+      for (final block in section.blocks) {
       final inner = <Widget>[];
 
       // 수정 모드에서 공유 토글 줄과 높이를 맞추기 위한 라벨 칸
@@ -519,6 +898,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
         child: Column(children: inner),
       ));
       cells.add(_gap(nameWidth));
+      }
     }
 
     return Container(
@@ -529,21 +909,47 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   // --------------------------------------------------- 우측 가로 스크롤 영역
 
-  Widget _buildScrollColumn(List<_Block> blocks, EquipmentProvider provider) {
+  Widget _buildScrollColumn(List<_Section> sections, EquipmentProvider provider) {
     final rows = <Widget>[];
 
-    for (final block in blocks) {
-      final inner = <Widget>[];
+    for (final section in sections) {
+      final collapsed = _collapsed.contains(section.key);
 
-      // 💡 공유/개인 토글 줄은 수정 모드에서만 나타난다.
-      //    보기 모드에서는 '칸이 병합되어 있는 것' 자체가 공유 표시라 줄이 필요 없다.
-      if (_isEditMode && block.isPair) {
-        inner.add(_buildShareBand(block, provider));
+      if (section.title != null) {
+        rows.add(GestureDetector(
+          onTap: () => _toggleCollapse(section.key),
+          child: Container(
+            width: _gearsWidth,
+            height: groupHeaderHeight,
+            color: groupHeaderColor,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _sectionSummary(section),
+              style: const TextStyle(
+                  fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white70),
+            ),
+          ),
+        ));
+        if (collapsed || section.blocks.isEmpty) {
+          rows.add(_gap(_gearsWidth));
+          continue;
+        }
       }
-      inner.add(_buildBlockBody(block, provider));
 
-      rows.add(Column(children: inner));
-      rows.add(_gap(_gearsWidth));
+      for (final block in section.blocks) {
+        final inner = <Widget>[];
+
+        // 💡 공유/개인 토글 줄은 수정 모드에서만 나타난다.
+        //    보기 모드에서는 '칸이 병합되어 있는 것' 자체가 공유 표시라 줄이 필요 없다.
+        if (_isEditMode && block.isPair) {
+          inner.add(_buildShareBand(block, provider));
+        }
+        inner.add(_buildBlockBody(block, provider));
+
+        rows.add(Column(children: inner));
+        rows.add(_gap(_gearsWidth));
+      }
     }
 
     return Column(children: rows);

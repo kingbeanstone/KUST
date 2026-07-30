@@ -34,11 +34,13 @@ class EquipmentProvider with ChangeNotifier {
   List<BcdItem> _bcds = [];
   List<RegulatorItem> _regulators = [];
   List<GeneralGearItem> _generalGears = [];
+  List<EquipmentGroup> _groups = [];
 
   List<MemberEquipment> get data => _data;
   List<BcdItem> get bcds => _bcds;
   List<RegulatorItem> get regulators => _regulators;
   List<GeneralGearItem> get generalGears => _generalGears;
+  List<EquipmentGroup> get groups => _groups;
 
   EquipmentProvider() {
     _initProvider();
@@ -50,6 +52,7 @@ class EquipmentProvider with ChangeNotifier {
     _listenToMembers();
     _listenToInventory();
     _listenToGeneralGears();
+    _listenToGroups();
   }
 
   // --- 설정 및 관리자 인증 로직 (영구 저장 기능 포함) ---
@@ -121,6 +124,16 @@ class EquipmentProvider with ChangeNotifier {
     _db.collection('regulators').snapshots().listen((snapshot) {
       _regulators = snapshot.docs.map((doc) => RegulatorItem.fromMap(doc.id, doc.data())).toList();
       _regulators.sort((a, b) => int.tryParse(a.id)?.compareTo(int.tryParse(b.id) ?? 0) ?? a.id.compareTo(b.id));
+      notifyListeners();
+    });
+  }
+
+  void _listenToGroups() {
+    _db.collection('config').doc('equipment_groups').snapshots().listen((doc) {
+      final list = (doc.data()?['groups'] as List?) ?? [];
+      _groups = list
+          .map((g) => EquipmentGroup.fromMap(Map<String, dynamic>.from(g)))
+          .toList();
       notifyListeners();
     });
   }
@@ -224,6 +237,49 @@ class EquipmentProvider with ChangeNotifier {
       batch.set(_db.collection('members').doc(target), {
         field: {'checked': next}
       }, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  // --- 장비 그룹(교육 1팀 등 자유 라벨) 관리 ---
+
+  Future<void> _saveGroups(List<EquipmentGroup> groups) async {
+    await _db.collection('config').doc('equipment_groups').set({
+      'groups': groups.map((g) => g.toMap()).toList(),
+    });
+  }
+
+  Future<void> addGroup(String name) async {
+    if (!_isAdmin || name.trim().isEmpty) return;
+    final group = EquipmentGroup(
+      id: 'grp_${DateTime.now().millisecondsSinceEpoch}',
+      name: name.trim(),
+    );
+    await _saveGroups([..._groups, group]);
+    addLog('그룹 추가: ${group.name}');
+  }
+
+  Future<void> deleteGroup(String groupId) async {
+    if (!_isAdmin) return;
+    // 소속 대원을 먼저 미지정으로 되돌린 뒤 그룹을 지운다.
+    final batch = _db.batch();
+    for (final m in _data.where((m) => m.groupId == groupId)) {
+      batch.set(_db.collection('members').doc(m.id), {'groupId': ''}, SetOptions(merge: true));
+    }
+    await batch.commit();
+    await _saveGroups(_groups.where((g) => g.id != groupId).toList());
+  }
+
+  /// 대원을 그룹에 배정한다. 장비 버디가 있으면 표가 깨지지 않도록 짝도 함께 옮긴다.
+  /// groupId가 빈 값이면 미지정 처리.
+  Future<void> assignToGroup(String memberId, String groupId) async {
+    if (!_isAdmin) return;
+    final member = _data.firstWhere((m) => m.id == memberId);
+    final targets = member.hasPair ? _pairMemberIds(member) : [memberId];
+
+    final batch = _db.batch();
+    for (final id in targets) {
+      batch.set(_db.collection('members').doc(id), {'groupId': groupId}, SetOptions(merge: true));
     }
     await batch.commit();
   }

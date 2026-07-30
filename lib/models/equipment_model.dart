@@ -10,11 +10,31 @@ class GearStatus {
   GearStatus copy() => GearStatus(value: value, checked: checked);
 }
 
+/// 💡 장비 표의 섹션 구분용 그룹 (예: 교육 1팀).
+/// 목록은 config/equipment_groups 문서 하나에 배열로 저장되고,
+/// 대원은 groupId로 참조한다 — 그룹 이름을 바꿔도 문서 하나만 고치면 된다.
+class EquipmentGroup {
+  final String id;
+  final String name;
+
+  EquipmentGroup({required this.id, required this.name});
+
+  Map<String, dynamic> toMap() => {'id': id, 'name': name};
+
+  factory EquipmentGroup.fromMap(Map<String, dynamic> map) => EquipmentGroup(
+        id: map['id']?.toString() ?? '',
+        name: map['name']?.toString() ?? '',
+      );
+}
+
 class MemberEquipment {
   String id;
   String name;
   int order;
   Map<String, GearStatus> gears;
+
+  /// 💡 소속 그룹(EquipmentGroup.id). 빈 문자열이면 미지정.
+  String groupId;
 
   /// 💡 장비 버디(2인 1조) 식별자. 빈 문자열이면 혼자 쓰는 대원.
   /// 다이빙 버디(buddy_system)와는 별개로, 짐을 줄이려고 장비를 나눠 쓰는 짝이다.
@@ -29,6 +49,7 @@ class MemberEquipment {
     required this.name,
     required this.order,
     required this.gears,
+    this.groupId = '',
     this.pairId = '',
     this.sharedGears = const [],
   });
@@ -41,6 +62,7 @@ class MemberEquipment {
       'id': id,
       '이름': name,
       'order': order,
+      'groupId': groupId,
       'pairId': pairId,
       'sharedGears': sharedGears,
     };
@@ -63,6 +85,7 @@ class MemberEquipment {
       name: map['이름']?.toString() ?? '',
       order: map['order'] is int ? map['order'] : 0,
       gears: gearsMap,
+      groupId: map['groupId']?.toString() ?? '',
       pairId: map['pairId']?.toString() ?? '',
       sharedGears: map['sharedGears'] is List ? List<String>.from(map['sharedGears']) : const [],
     );
@@ -73,6 +96,7 @@ class MemberEquipment {
         name: name,
         order: order,
         gears: gears.map((key, value) => MapEntry(key, value.copy())),
+        groupId: groupId,
         pairId: pairId,
         sharedGears: List<String>.from(sharedGears),
       );
