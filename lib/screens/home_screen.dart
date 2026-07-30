@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
@@ -104,7 +103,7 @@ class HomeScreen extends StatelessWidget {
 
   // 원정 연도 선택 범위
   static const int _minYear = 2025;
-  static const int _maxYear = 2050;
+  static const int _maxYear = 2040;
 
   // 💡 원정(시즌) 선택 시트: 목록에서 고르거나, 관리자는 새 원정 생성 / v1 데이터 이사
   void _showExpeditionSheet(BuildContext context) {
@@ -192,7 +191,7 @@ class HomeScreen extends StatelessWidget {
                         const Text('새 원정 만들기',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        // 💡 연도: ◀ ▶ 로 한 해씩, 숫자를 탭하면 휠(알람 시간 맞추듯)로 선택
+                        // 💡 연도: ◀ ▶ 로 한 해씩, 숫자를 탭하면 연도 버튼 창에서 바로 선택
                         Center(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -323,43 +322,51 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// 💡 알람 시간 맞추듯 위아래로 돌려서 연도를 고르는 휠 다이얼로그 (2025~2050)
+  /// 💡 연도 버튼 그리드 다이얼로그 (2025~2040), 탭하면 바로 선택
   Future<int?> _showYearWheelDialog(BuildContext context, int currentYear) {
-    int wheelYear = currentYear;
-
     return showDialog<int>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('연도 선택',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        contentPadding: const EdgeInsets.all(16),
         content: SizedBox(
-          width: 200,
-          height: 180,
-          child: CupertinoPicker(
-            scrollController: FixedExtentScrollController(
-              initialItem: currentYear - _minYear,
-            ),
-            itemExtent: 38,
-            onSelectedItemChanged: (index) => wheelYear = _minYear + index,
-            children: List.generate(
-              _maxYear - _minYear + 1,
-              (i) => Center(
-                child: Text('${_minYear + i}년',
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
-              ),
-            ),
+          width: 280,
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(_maxYear - _minYear + 1, (i) {
+              final year = _minYear + i;
+              final isSelected = year == currentYear;
+              return GestureDetector(
+                onTap: () => Navigator.pop(dialogContext, year),
+                child: Container(
+                  width: 60,
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.blue[800] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected ? Colors.blue[800]! : Colors.grey[300]!,
+                    ),
+                  ),
+                  child: Text(
+                    '$year',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? Colors.white : Colors.black87,
+                    ),
+                  ),
+                ),
+              );
+            }),
           ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, wheelYear),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[800], foregroundColor: Colors.white, elevation: 0),
-            child: const Text('확인'),
-          ),
         ],
       ),
     );
