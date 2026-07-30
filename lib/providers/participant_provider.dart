@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/member_model.dart';
 
-/// 원정 직책 (강사처럼 원정별로 달라진다). key는 저장값, value는 표시명.
+/// 원정 임원단 직책 6종 (강사처럼 원정별로 달라진다. 강사는 임원이 아니라 별도).
+/// key는 저장값, value는 표시명.
 const Map<String, String> kStaffRoles = {
   'leader': '대장',
   'planning': '기획부장',
   'training': '훈련부장',
+  'equipment': '장비부장',
   'pr': '홍보부장',
   'finance': '총무부장',
 };
@@ -18,6 +20,7 @@ const Map<String, String> kStaffRoleEmoji = {
   'leader': '🚩',
   'planning': '📋',
   'training': '💪',
+  'equipment': '🎒',
   'pr': '📣',
   'finance': '💰',
 };
