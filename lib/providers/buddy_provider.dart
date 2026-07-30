@@ -36,26 +36,11 @@ class BuddyProvider with ChangeNotifier {
     });
   }
 
-  // 특정 일차의 데이터 가져오기 (없으면 초기 객체 생성)
+  // 특정 일차의 데이터 가져오기 (없으면 빈 편성 — 화면에서 [조 추가]로 시작)
   BuddyDay getDayOrDefault(String dayId, String title) {
     return _buddyDays.firstWhere(
           (d) => d.id == dayId,
-      orElse: () => BuddyDay(
-        id: dayId,
-        title: title,
-        tanks: [
-          BuddyTank(
-            tankName: '1탱크',
-            teamA: BuddyTeam(leader: '', members: List.filled(7, '')),
-            teamB: BuddyTeam(leader: '', members: List.filled(7, '')),
-          ),
-          BuddyTank(
-            tankName: '2탱크',
-            teamA: BuddyTeam(leader: '', members: List.filled(7, '')),
-            teamB: BuddyTeam(leader: '', members: List.filled(7, '')),
-          ),
-        ],
-      ),
+      orElse: () => BuddyDay(id: dayId, title: title, blocks: []),
     );
   }
 
