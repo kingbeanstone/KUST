@@ -17,9 +17,13 @@ class ParticipantProvider with ChangeNotifier {
   List<String> _ids = []; // order 순 참가자(동아리원) ID 목록
   Set<String> _idSet = {};
 
+  /// 💡 이번 원정의 강사(교육생을 가르치는 역할). 원정별로 달라진다.
+  Set<String> _instructorIds = {};
+
   List<String> get participantIds => _ids;
   int get count => _ids.length;
   bool isParticipant(String clubMemberId) => _idSet.contains(clubMemberId);
+  bool isInstructor(String clubMemberId) => _instructorIds.contains(clubMemberId);
 
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection('expeditions').doc(_expeditionId!).collection('participants');
@@ -33,15 +37,29 @@ class ParticipantProvider with ChangeNotifier {
     _sub = null;
     _ids = [];
     _idSet = {};
+    _instructorIds = {};
     notifyListeners();
 
     if (expeditionId == null) return;
     _sub = _col.orderBy('order').snapshots().listen((snapshot) {
       _ids = snapshot.docs.map((d) => d.id).toList();
       _idSet = _ids.toSet();
+      _instructorIds = snapshot.docs
+          .where((d) => d.data()['isInstructor'] == true)
+          .map((d) => d.id)
+          .toSet();
       notifyListeners();
       _reconcileGearRows(); // 💡 참가자인데 장비 행이 없는 사람을 자동 보충
     });
+  }
+
+  /// 이번 원정의 강사 지정/해제 (참가자만 가능)
+  Future<void> toggleInstructor(String clubMemberId) async {
+    if (_expeditionId == null || !_idSet.contains(clubMemberId)) return;
+    await _col.doc(clubMemberId).set(
+      {'isInstructor': !_instructorIds.contains(clubMemberId)},
+      SetOptions(merge: true),
+    );
   }
 
   /// 💡 자가 치유: 참가자 명단과 장비 표(members)를 대조해서

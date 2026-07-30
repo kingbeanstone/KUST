@@ -101,9 +101,63 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
                       ? '탭하면 참가자로 추가되고, 다시 탭하면 빠집니다.'
                       : (isAdmin
                           ? '우측 상단 [수정]에서 참가자를 추가/해제할 수 있습니다.'
-                          : '이번 원정에 참가하는 대원입니다.'),
+                          : '이번 원정에 참가하는 대원입니다. (⭐ = 강사)'),
                   style: const TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),
+
+                // 💡 강사 지정 (수정 모드) — 원정마다 교육생을 가르칠 강사를 정한다
+                if (_isEditMode && participants.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Icon(Icons.star_rounded, size: 15, color: Colors.amber[600]),
+                      const SizedBox(width: 4),
+                      const Text('강사 지정',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      const Text('참가자를 탭하면 강사로 지정/해제됩니다.',
+                          style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: participants.map((m) {
+                      final isInstructor = participantProvider.isInstructor(m.id);
+                      return GestureDetector(
+                        onTap: () => participantProvider.toggleInstructor(m.id),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: isInstructor ? Colors.amber[600] : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isInstructor ? Colors.amber[600]! : Colors.grey[300]!,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isInstructor) ...[
+                                const Icon(Icons.star_rounded, size: 13, color: Colors.white),
+                                const SizedBox(width: 3),
+                              ],
+                              Text(
+                                m.name.isEmpty ? '(이름없음)' : m.name,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: isInstructor ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
 
                 const SizedBox(height: 14),
                 Divider(color: Colors.grey[200], height: 1),
@@ -137,6 +191,8 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
                                     m,
                                     selected:
                                         participantProvider.isParticipant(m.id),
+                                    isInstructor:
+                                        participantProvider.isInstructor(m.id),
                                     onTap: _isEditMode
                                         ? () => participantProvider.toggle(m)
                                         : null,
@@ -157,7 +213,8 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
             fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black54));
   }
 
-  Widget _memberChip(MemberItem member, {required bool selected, VoidCallback? onTap}) {
+  Widget _memberChip(MemberItem member,
+      {required bool selected, bool isInstructor = false, VoidCallback? onTap}) {
     final isOb = member.memberType == 'OB';
 
     return GestureDetector(
@@ -174,6 +231,12 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 💡 이번 원정의 강사 표시
+            if (isInstructor) ...[
+              Icon(Icons.star_rounded,
+                  size: 14, color: selected ? Colors.amber[300] : Colors.amber[600]),
+              const SizedBox(width: 3),
+            ],
             if (selected && _isEditMode) ...[
               const Icon(Icons.check, size: 13, color: Colors.white70),
               const SizedBox(width: 4),

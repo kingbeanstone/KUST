@@ -365,6 +365,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                               _assignMember(member.name, dayData, buddyProvider);
                             },
                             isPaired: partner != null,
+                            isInstructor: participantProvider.isInstructor(member.id),
                           ),
                         );
                       }).toList(),
@@ -379,7 +380,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
     );
   }
 
-  Widget _buildPickerItem(String name, bool isGray, VoidCallback onTap, {bool isPaired = false}) {
+  Widget _buildPickerItem(String name, bool isGray, VoidCallback onTap,
+      {bool isPaired = false, bool isInstructor = false}) {
     return Material(
       color: isGray ? Colors.grey[100] : Colors.white,
       borderRadius: BorderRadius.circular(6),
@@ -396,6 +398,12 @@ class _BuddyScreenState extends State<BuddyScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 💡 이번 원정의 강사 표시
+              if (isInstructor) ...[
+                Icon(Icons.star_rounded, size: 11,
+                    color: isGray ? Colors.grey[300] : Colors.amber[600]),
+                const SizedBox(width: 2),
+              ],
               // 💡 장비버디가 있는 대원 표시
               if (isPaired) ...[
                 Icon(Icons.link, size: 10,
