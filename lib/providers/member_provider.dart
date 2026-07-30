@@ -20,8 +20,17 @@ class MemberProvider with ChangeNotifier {
           .map((doc) => MemberItem.fromMap(doc.id, doc.data()))
           .toList();
 
-      // 💡 [수정] 기수순이 아닌 저장된 order 필드 기준으로 정렬
-      _members.sort((a, b) => a.order.compareTo(b.order));
+      // 💡 기수 오름차순 정렬 (숫자를 뽑아 비교해 "3기" < "12기"가 올바르게),
+      //    기수가 같으면 이름순, 기수 없는 대원은 맨 뒤
+      int genKey(MemberItem m) {
+        final match = RegExp(r'\d+').firstMatch(m.generation);
+        return match == null ? 1 << 30 : int.parse(match.group(0)!);
+      }
+
+      _members.sort((a, b) {
+        final cmp = genKey(a).compareTo(genKey(b));
+        return cmp != 0 ? cmp : a.name.compareTo(b.name);
+      });
 
       notifyListeners();
     });

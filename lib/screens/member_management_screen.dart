@@ -33,14 +33,12 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
     await Future.delayed(const Duration(milliseconds: 100));
 
-    // 💡 [핵심 수정] 현재 리스트의 인덱스를 order로 할당하여 순서 저장
-    for (int i = 0; i < _localData.length; i++) {
-      final memberWithOrder = _localData[i].copyWith(order: i);
-
-      if (memberWithOrder.id.isEmpty) {
-        await provider.addMember(memberWithOrder);
+    // 💡 표시는 항상 기수순 정렬이므로 순서(order)는 건드리지 않는다
+    for (final member in _localData) {
+      if (member.id.isEmpty) {
+        await provider.addMember(member);
       } else {
-        await provider.updateMember(memberWithOrder);
+        await provider.updateMember(member);
       }
     }
 
@@ -51,7 +49,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('정렬 순서와 변경 사항이 저장되었습니다.')),
+        const SnackBar(content: Text('변경 사항이 저장되었습니다.')),
       );
     }
   }
@@ -93,22 +91,6 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
       ),
       body: displayData.isEmpty
           ? const Center(child: Text('대원을 추가해주세요.', style: TextStyle(color: Colors.grey)))
-          : _isEditMode
-          ? ReorderableListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-        itemCount: displayData.length,
-        onReorder: (oldIndex, newIndex) {
-          setState(() {
-            if (newIndex > oldIndex) newIndex -= 1;
-            final item = _localData.removeAt(oldIndex);
-            _localData.insert(newIndex, item);
-          });
-        },
-        itemBuilder: (context, index) {
-          final member = displayData[index];
-          return _buildInlineEditableCard(context, auth, memberProvider, member, index);
-        },
-      )
           : ListView.builder(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
         itemCount: displayData.length,
@@ -141,192 +123,174 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
 
   Widget _buildInlineEditableCard(BuildContext context, EquipmentProvider auth, MemberProvider provider, MemberItem member, int index) {
     final bool enabled = auth.isAdmin && _isEditMode;
+    final bool isMale = member.gender == 'male';
+    final bool isOb = member.memberType == 'OB';
 
     return Container(
       key: ValueKey(member.id.isEmpty ? 'new_${member.hashCode}_$index' : member.id),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: enabled ? Colors.blue[100]! : Colors.grey[200]!),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
-        ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          Container(
-            width: 24,
-            height: 36,
-            alignment: Alignment.center,
-            child: Text(
-              '${index + 1}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue[800],
+          // ── 1줄: 성별 · 이름 · 기수 · OB/YB · 혈액형 · (삭제)
+          Row(
+            children: [
+              SizedBox(
+                width: 18,
+                child: Text('${index + 1}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[400])),
               ),
-            ),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: enabled
-                ? () => _updateLocalItem(index, gender: member.gender == 'male' ? 'female' : 'male')
-                : null,
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: member.gender == 'male' ? Colors.blue[50] : Colors.red[50],
-              child: Text(member.gender == 'male' ? '👦' : '👧', style: const TextStyle(fontSize: 16)),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _inlineTextField(
-                      initialValue: member.name,
-                      hint: "이름",
-                      width: 70,
-                      isBold: true,
-                      enabled: enabled,
-                      onChanged: (v) => _updateLocalItem(index, name: v),
+              const SizedBox(width: 4),
+              // 💡 성별: 글자 뱃지 (수정 모드에서 탭하면 전환)
+              GestureDetector(
+                onTap: enabled
+                    ? () => setState(() =>
+                        _updateLocalItem(index, gender: isMale ? 'female' : 'male'))
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isMale ? Colors.blue[50] : Colors.pink[50],
+                    borderRadius: BorderRadius.circular(6),
+                    border: enabled
+                        ? Border.all(color: isMale ? Colors.blue[200]! : Colors.pink[200]!)
+                        : null,
+                  ),
+                  child: Text(
+                    isMale ? '남' : '여',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: isMale ? Colors.blue[700] : Colors.pink[400],
                     ),
-                    const SizedBox(width: 4),
-                    _inlineTextField(
-                      initialValue: member.generation,
-                      hint: "기수",
-                      width: 50,
-                      fontSize: 11,
-                      textColor: Colors.grey,
-                      enabled: enabled,
-                      onChanged: (v) => _updateLocalItem(index, generation: v),
-                    ),
-                    const SizedBox(width: 4),
-                    // 💡 OB/YB 구분 뱃지 (수정 모드에서 탭하면 전환)
-                    GestureDetector(
-                      onTap: enabled
-                          ? () => setState(() => _updateLocalItem(index,
-                              memberType: member.memberType == 'OB' ? 'YB' : 'OB'))
-                          : null,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: member.memberType == 'OB'
-                              ? Colors.indigo[50]
-                              : Colors.teal[50],
-                          borderRadius: BorderRadius.circular(8),
-                          border: enabled
-                              ? Border.all(
-                                  color: member.memberType == 'OB'
-                                      ? Colors.indigo[200]!
-                                      : Colors.teal[200]!)
-                              : null,
-                        ),
-                        child: Text(
-                          member.memberType,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: member.memberType == 'OB'
-                                ? Colors.indigo
-                                : Colors.teal[700],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    _inlineTextField(
-                      initialValue: member.bloodType,
-                      hint: "혈액형",
-                      width: 40,
-                      fontSize: 11,
-                      textColor: Colors.redAccent,
-                      textAlign: TextAlign.center,
-                      enabled: enabled,
-                      onChanged: (v) => _updateLocalItem(index, bloodType: v),
-                    ),
-                    if (enabled)
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.remove_circle_outline, size: 18, color: Colors.redAccent),
-                        onPressed: () => _confirmDelete(context, provider, member, index),
-                      ),
-                  ],
+                  ),
                 ),
-
-                Row(
-                  children: [
-                    const Icon(Icons.phone, size: 10, color: Colors.blue),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: _inlineTextField(
-                        initialValue: member.phone,
-                        hint: "본인 연락처",
-                        fontSize: 11,
-                        enabled: enabled,
-                        onChanged: (v) => _updateLocalItem(index, phone: v),
-                      ),
+              ),
+              const SizedBox(width: 8),
+              _inlineTextField(
+                initialValue: member.name,
+                hint: "이름",
+                width: 64,
+                isBold: true,
+                enabled: enabled,
+                onChanged: (v) => _updateLocalItem(index, name: v),
+              ),
+              const SizedBox(width: 4),
+              _inlineTextField(
+                initialValue: member.generation,
+                hint: "기수",
+                width: 36,
+                fontSize: 11,
+                textColor: Colors.grey,
+                enabled: enabled,
+                onChanged: (v) => _updateLocalItem(index, generation: v),
+              ),
+              const SizedBox(width: 4),
+              // 💡 OB/YB 구분 뱃지 (수정 모드에서 탭하면 전환)
+              GestureDetector(
+                onTap: enabled
+                    ? () => setState(() =>
+                        _updateLocalItem(index, memberType: isOb ? 'YB' : 'OB'))
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isOb ? Colors.indigo[50] : Colors.teal[50],
+                    borderRadius: BorderRadius.circular(6),
+                    border: enabled
+                        ? Border.all(color: isOb ? Colors.indigo[200]! : Colors.teal[200]!)
+                        : null,
+                  ),
+                  child: Text(
+                    member.memberType,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: isOb ? Colors.indigo : Colors.teal[700],
                     ),
-                    const SizedBox(width: 10),
-                    const Icon(Icons.emergency, size: 10, color: Colors.red),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: _inlineTextField(
-                        initialValue: member.emergencyContact,
-                        hint: "비상 연락처",
-                        fontSize: 11,
-                        enabled: enabled,
-                        onChanged: (v) => _updateLocalItem(index, emergencyContact: v),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Text("신장: ", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    _inlineTextField(
-                      initialValue: member.height,
-                      hint: "000",
-                      width: 40,
-                      fontSize: 11,
-                      enabled: enabled,
-                      onChanged: (v) => _updateLocalItem(index, height: v),
-                    ),
-                    const Text("cm", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    const SizedBox(width: 20),
-                    const Text("족장: ", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                    _inlineTextField(
-                      initialValue: member.shoeSize,
-                      hint: "000",
-                      width: 40,
-                      fontSize: 11,
-                      enabled: enabled,
-                      onChanged: (v) => _updateLocalItem(index, shoeSize: v),
-                    ),
-                    const Text("mm", style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  ],
+              ),
+              const Spacer(),
+              _inlineTextField(
+                initialValue: member.bloodType,
+                hint: "혈액형",
+                width: 40,
+                fontSize: 11,
+                textColor: Colors.redAccent,
+                textAlign: TextAlign.center,
+                enabled: enabled,
+                onChanged: (v) => _updateLocalItem(index, bloodType: v),
+              ),
+              if (enabled)
+                GestureDetector(
+                  onTap: () => _confirmDelete(context, provider, member, index),
+                  child: const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: Icon(Icons.remove_circle_outline, size: 16, color: Colors.redAccent),
+                  ),
                 ),
-              ],
-            ),
+            ],
           ),
-          if (enabled)
-            const Padding(
-              padding: EdgeInsets.only(top: 10, left: 8),
-              child: Icon(Icons.drag_handle, color: Colors.grey, size: 20),
-            ),
+
+          // ── 2줄: 연락처 · 비상연락처 · 신장 · 족장
+          Row(
+            children: [
+              const SizedBox(width: 22),
+              const Icon(Icons.phone, size: 10, color: Colors.blue),
+              const SizedBox(width: 3),
+              Expanded(
+                child: _inlineTextField(
+                  initialValue: member.phone,
+                  hint: "연락처",
+                  fontSize: 10.5,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, phone: v),
+                ),
+              ),
+              const Icon(Icons.emergency, size: 10, color: Colors.red),
+              const SizedBox(width: 3),
+              Expanded(
+                child: _inlineTextField(
+                  initialValue: member.emergencyContact,
+                  hint: "비상연락처",
+                  fontSize: 10.5,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, emergencyContact: v),
+                ),
+              ),
+              const SizedBox(width: 6),
+              _inlineTextField(
+                initialValue: member.height,
+                hint: "000",
+                width: 30,
+                fontSize: 10.5,
+                enabled: enabled,
+                onChanged: (v) => _updateLocalItem(index, height: v),
+              ),
+              Text("cm", style: TextStyle(fontSize: 9.5, color: Colors.grey[400])),
+              const SizedBox(width: 6),
+              _inlineTextField(
+                initialValue: member.shoeSize,
+                hint: "000",
+                width: 30,
+                fontSize: 10.5,
+                enabled: enabled,
+                onChanged: (v) => _updateLocalItem(index, shoeSize: v),
+              ),
+              Text("mm", style: TextStyle(fontSize: 9.5, color: Colors.grey[400])),
+            ],
+          ),
         ],
       ),
     );
   }
-
   Widget _inlineTextField({
     required String initialValue,
     required String hint,
