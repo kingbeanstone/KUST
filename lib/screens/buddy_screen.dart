@@ -143,8 +143,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
             TableCell(child: Center(child: Padding(padding: EdgeInsets.all(6), child: Text('B팀', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))))),
           ],
         ),
-        ..._buildTankRows(0, data, provider),
-        ..._buildTankRows(1, data, provider),
+        // 💡 탱크(조) 수는 데이터를 따라간다 — 2개 고정이 아님
+        for (var i = 0; i < data.tanks.length; i++) ..._buildTankRows(i, data, provider),
       ],
     );
   }
