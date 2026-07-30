@@ -22,8 +22,21 @@ class ExpeditionProvider with ChangeNotifier {
   String? get selectedId => _selectedId;
 
   Expedition? get selected {
+    final id = _selectedId;
+    if (id == null) return null;
+
+    // id 형식이 {year}_{season} 이면 목록 없이도 바로 파생한다.
+    // (조합 선택 직후 스냅샷 도착 전에도 라벨/하이라이트가 즉시 반영되도록)
+    final parts = id.split('_');
+    if (parts.length == 2) {
+      final year = int.tryParse(parts[0]);
+      if (year != null && Expedition.seasonLabels.containsKey(parts[1])) {
+        return Expedition(id: id, year: year, season: parts[1]);
+      }
+    }
+
     for (final e in _expeditions) {
-      if (e.id == _selectedId) return e;
+      if (e.id == id) return e;
     }
     return null;
   }

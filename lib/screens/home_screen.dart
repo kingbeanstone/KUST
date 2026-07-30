@@ -105,10 +105,9 @@ class HomeScreen extends StatelessWidget {
   static const int _minYear = 2025;
   static const int _maxYear = 2040;
 
-  // 💡 원정(시즌) 선택 시트: 목록에서 고르거나, 관리자는 새 원정 생성 / v1 데이터 이사
+  // 💡 원정 선택 시트: 연도 하나 + 계절 하나를 고르면 그게 곧 원정 선택이다.
+  //    '만들기' 개념 없음 — 아직 데이터가 없는 시즌은 빈 상태에서 시작한다.
   void _showExpeditionSheet(BuildContext context) {
-    int selYear = DateTime.now().year.clamp(_minYear, _maxYear);
-    String selSeason = 'winter';
     bool busy = false;
 
     showModalBottomSheet(
@@ -122,12 +121,17 @@ class HomeScreen extends StatelessWidget {
         builder: (ctx, setSheetState) => Consumer2<ExpeditionProvider, EquipmentProvider>(
           builder: (ctx2, expProvider, equipProvider, _) {
             final isAdmin = equipProvider.isAdmin;
-            final expeditions = expProvider.expeditions;
-            final hasLegacyTarget = expeditions.every((e) => e.id != '2025_winter');
+            final selected = expProvider.selected;
+            final selYear =
+                selected?.year ?? DateTime.now().year.clamp(_minYear, _maxYear);
+            final selSeason = selected?.season ?? 'winter';
+            final hasLegacyTarget =
+                expProvider.expeditions.every((e) => e.id != '2025_winter');
 
             return SafeArea(
               child: Container(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.8),
+                constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.8),
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 child: SingleChildScrollView(
                   child: Column(
@@ -145,162 +149,82 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const Text('원정 선택', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
+                      const Text('원정 선택',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      const Text('연도와 계절을 고르면 해당 원정으로 바로 전환됩니다.',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const SizedBox(height: 16),
 
-                      // --- 원정 목록 ---
-                      if (expeditions.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            '아직 등록된 원정이 없습니다.\n관리자 인증 후 아래에서 만들거나 기존 데이터를 이사하세요.',
-                            style: TextStyle(fontSize: 12.5, color: Colors.grey),
-                          ),
-                        )
-                      else
-                        ...expeditions.map((e) {
-                          final isSelected = expProvider.selectedId == e.id;
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                            dense: true,
-                            leading: Icon(
-                              isSelected ? Icons.check_circle : Icons.circle_outlined,
-                              color: isSelected ? Colors.blue[800] : Colors.grey[400],
-                              size: 20,
-                            ),
-                            title: Text(
-                              e.label,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                color: isSelected ? Colors.blue[800] : Colors.black87,
-                              ),
-                            ),
-                            onTap: () {
-                              expProvider.select(e.id);
-                              Navigator.pop(ctx);
-                            },
+                      const Text('연도',
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black54)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(_maxYear - _minYear + 1, (i) {
+                          final year = _minYear + i;
+                          final isSel = year == selYear;
+                          return _expeditionPill(
+                            label: '$year',
+                            selected: isSel,
+                            width: 62,
+                            onTap: () =>
+                                expProvider.createExpedition(year, selSeason),
                           );
                         }),
+                      ),
+                      const SizedBox(height: 16),
 
-                      // --- 관리자 전용: 새 원정 만들기 / 데이터 이사 ---
-                      if (isAdmin) ...[
-                        const SizedBox(height: 8),
+                      const Text('계절',
+                          style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black54)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: Expedition.seasonLabels.entries.map((entry) {
+                          final isSel = selSeason == entry.key;
+                          return _expeditionPill(
+                            label: entry.value,
+                            selected: isSel,
+                            onTap: () =>
+                                expProvider.createExpedition(selYear, entry.key),
+                          );
+                        }).toList(),
+                      ),
+
+                      // 관리자 전용: v1 최상위 데이터(25 동계) 이사
+                      if (isAdmin && hasLegacyTarget) ...[
+                        const SizedBox(height: 20),
                         Divider(color: Colors.grey[200], height: 1),
                         const SizedBox(height: 12),
-                        const Text('새 원정 만들기',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        // 💡 연도: ◀ ▶ 로 한 해씩, 숫자를 탭하면 연도 버튼 창에서 바로 선택
-                        Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.chevron_left, size: 22),
-                                visualDensity: VisualDensity.compact,
-                                onPressed: selYear > _minYear
-                                    ? () => setSheetState(() => selYear--)
-                                    : null,
-                              ),
-                              GestureDetector(
-                                onTap: () async {
-                                  final picked =
-                                      await _showYearWheelDialog(ctx, selYear);
-                                  if (picked != null) {
-                                    setSheetState(() => selYear = picked);
-                                  }
-                                },
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue[50],
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    '$selYear년',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blue[800],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.chevron_right, size: 22),
-                                visualDensity: VisualDensity.compact,
-                                onPressed: selYear < _maxYear
-                                    ? () => setSheetState(() => selYear++)
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Center(
-                          child: Wrap(
-                            spacing: 8,
-                            children: Expedition.seasonLabels.entries.map((entry) {
-                              final isSel = selSeason == entry.key;
-                              return ChoiceChip(
-                                label: Text(entry.value),
-                                selected: isSel,
-                                onSelected: (_) => setSheetState(() => selSeason = entry.key),
-                                selectedColor: Colors.blue[800],
-                                labelStyle: TextStyle(
-                                    fontSize: 12.5,
-                                    color: isSel ? Colors.white : Colors.black87),
-                                showCheckmark: false,
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
                         SizedBox(
                           width: double.infinity,
-                          child: ElevatedButton(
+                          child: OutlinedButton.icon(
                             onPressed: busy
                                 ? null
                                 : () async {
                                     setSheetState(() => busy = true);
-                                    await expProvider.createExpedition(selYear, selSeason);
-                                    if (ctx.mounted) setSheetState(() => busy = false);
+                                    final result =
+                                        await expProvider.migrateLegacyData(
+                                            year: 2025, season: 'winter');
+                                    if (ctx.mounted) {
+                                      setSheetState(() => busy = false);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('✅ $result')),
+                                      );
+                                    }
                                   },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[800],
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                            ),
-                            child: const Text('만들기'),
+                            icon: const Icon(Icons.drive_file_move_outlined, size: 16),
+                            label: const Text('기존 데이터를 25년 동계 원정으로 이사',
+                                style: TextStyle(fontSize: 12.5)),
                           ),
                         ),
-
-                        // v1 최상위 컬렉션 데이터(25 동계)를 원정 구조로 복사
-                        if (hasLegacyTarget) ...[
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: busy
-                                  ? null
-                                  : () async {
-                                      setSheetState(() => busy = true);
-                                      final result = await expProvider.migrateLegacyData(
-                                          year: 2025, season: 'winter');
-                                      if (ctx.mounted) {
-                                        setSheetState(() => busy = false);
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(content: Text('✅ $result')),
-                                        );
-                                      }
-                                    },
-                              icon: const Icon(Icons.drive_file_move_outlined, size: 16),
-                              label: const Text('기존 데이터를 25년 동계 원정으로 이사',
-                                  style: TextStyle(fontSize: 12.5)),
-                            ),
-                          ),
-                        ],
                         if (busy)
                           const Padding(
                             padding: EdgeInsets.only(top: 10),
@@ -322,52 +246,34 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// 💡 연도 버튼 그리드 다이얼로그 (2025~2040), 탭하면 바로 선택
-  Future<int?> _showYearWheelDialog(BuildContext context, int currentYear) {
-    return showDialog<int>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('연도 선택',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        contentPadding: const EdgeInsets.all(16),
-        content: SizedBox(
-          width: 280,
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: List.generate(_maxYear - _minYear + 1, (i) {
-              final year = _minYear + i;
-              final isSelected = year == currentYear;
-              return GestureDetector(
-                onTap: () => Navigator.pop(dialogContext, year),
-                child: Container(
-                  width: 60,
-                  padding: const EdgeInsets.symmetric(vertical: 9),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue[800] : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected ? Colors.blue[800]! : Colors.grey[300]!,
-                    ),
-                  ),
-                  child: Text(
-                    '$year',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      color: isSelected ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                ),
-              );
-            }),
+  /// 연도/계절 공용 선택 버튼
+  Widget _expeditionPill({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+    double? width,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: width,
+        padding: EdgeInsets.symmetric(horizontal: width == null ? 18 : 0, vertical: 9),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? Colors.blue[800] : Colors.grey[100],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? Colors.blue[800]! : Colors.grey[300]!,
           ),
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
-        ],
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+            color: selected ? Colors.white : Colors.black87,
+          ),
+        ),
       ),
     );
   }
