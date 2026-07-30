@@ -147,41 +147,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[400])),
               ),
               const SizedBox(width: 4),
-              // 💡 성별: 글자 뱃지 (수정 모드에서 탭하면 전환)
-              GestureDetector(
-                onTap: enabled
-                    ? () => setState(() =>
-                        _updateLocalItem(index, gender: isMale ? 'female' : 'male'))
-                    : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isMale ? Colors.blue[50] : Colors.pink[50],
-                    borderRadius: BorderRadius.circular(6),
-                    border: enabled
-                        ? Border.all(color: isMale ? Colors.blue[200]! : Colors.pink[200]!)
-                        : null,
-                  ),
-                  child: Text(
-                    isMale ? '남' : '여',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
-                      color: isMale ? Colors.blue[700] : Colors.pink[400],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _inlineTextField(
-                initialValue: member.name,
-                hint: "이름",
-                width: 64,
-                isBold: true,
-                enabled: enabled,
-                onChanged: (v) => _updateLocalItem(index, name: v),
-              ),
-              const SizedBox(width: 4),
+              // 💡 배치: 기수 → 이름 → YB/OB … 성별 → 혈액형
               _inlineTextField(
                 initialValue: member.generation,
                 hint: "기수",
@@ -190,6 +156,15 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                 textColor: Colors.grey,
                 enabled: enabled,
                 onChanged: (v) => _updateLocalItem(index, generation: v),
+              ),
+              const SizedBox(width: 6),
+              _inlineTextField(
+                initialValue: member.name,
+                hint: "이름",
+                width: 64,
+                isBold: true,
+                enabled: enabled,
+                onChanged: (v) => _updateLocalItem(index, name: v),
               ),
               const SizedBox(width: 4),
               // 💡 OB/YB 구분 뱃지 (수정 모드에서 탭하면 전환)
@@ -218,6 +193,32 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                 ),
               ),
               const Spacer(),
+              // 💡 성별: 글자 뱃지 (수정 모드에서 탭하면 전환)
+              GestureDetector(
+                onTap: enabled
+                    ? () => setState(() =>
+                        _updateLocalItem(index, gender: isMale ? 'female' : 'male'))
+                    : null,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isMale ? Colors.blue[50] : Colors.pink[50],
+                    borderRadius: BorderRadius.circular(6),
+                    border: enabled
+                        ? Border.all(color: isMale ? Colors.blue[200]! : Colors.pink[200]!)
+                        : null,
+                  ),
+                  child: Text(
+                    isMale ? '남' : '여',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.bold,
+                      color: isMale ? Colors.blue[700] : Colors.pink[400],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               _inlineTextField(
                 initialValue: member.bloodType,
                 hint: "혈액형",
