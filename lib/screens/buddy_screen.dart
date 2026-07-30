@@ -258,8 +258,35 @@ class _BuddyScreenState extends State<BuddyScreen> {
       assignedInCurrentTank.addAll(tank.teamB.members.where((m) => m.isNotEmpty));
     }
 
+    // 💡 장비 화면의 데이터(그룹·장비버디)를 가져와 픽커를 구분한다.
+    //    장비 행 ID = 동아리원 ID라서 이름이 아닌 ID로 조회한다.
+    final equipProvider = context.watch<EquipmentProvider>();
+    final gearRows = {for (final r in equipProvider.data) r.id: r};
+
+    String? gearPartnerName(MemberItem m) {
+      final row = gearRows[m.id];
+      if (row == null || row.pairId.isEmpty) return null;
+      for (final r in equipProvider.data) {
+        if (r.pairId == row.pairId && r.id != m.id) return r.name;
+      }
+      return null;
+    }
+
+    // 그룹 섹션 구성 (장비 그룹 순서대로, 그룹 없는 참가자는 미지정)
+    final byGroup = <String, List<MemberItem>>{};
+    for (final m in sortedMembers) {
+      byGroup.putIfAbsent(gearRows[m.id]?.groupId ?? '', () => []).add(m);
+    }
+    final sections = <MapEntry<String, List<MemberItem>>>[];
+    for (final g in equipProvider.groups) {
+      final members = byGroup.remove(g.id);
+      if (members != null) sections.add(MapEntry(g.name, members));
+    }
+    final rest = byGroup.values.expand((x) => x).toList();
+    if (rest.isNotEmpty) sections.add(MapEntry('미지정', rest));
+
     return Container(
-      height: 220,
+      height: 250,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -271,34 +298,80 @@ class _BuddyScreenState extends State<BuddyScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('참가자 선택 (이름 순)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
+              Row(
+                children: [
+                  const Text('참가자 선택',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    height: 24,
+                    child: _buildPickerItem('❌ 비우기', false,
+                        () => _assignMember('', dayData, buddyProvider)),
+                  ),
+                ],
+              ),
               if (_selectedTankIdx != null)
-                Text('${_selectedTankIdx! + 1}탱크 ${_selectedTeam}팀 수정 중', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                Text('${_selectedTankIdx! + 1}탱크 ${_selectedTeam}팀 수정 중',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4, childAspectRatio: 2.8, mainAxisSpacing: 6, crossAxisSpacing: 6
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final section in sections) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, bottom: 4),
+                      child: Text(section.key,
+                          style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black54)),
+                    ),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: section.value.map((member) {
+                        final isAssigned = assignedInCurrentTank.contains(member.name);
+                        final partner = gearPartnerName(member);
+                        // 💡 장비버디 짝이 이 탱크에 이미 있으면 선택 불가(회색)
+                        //    — 장비를 나눠 쓰므로 같은 회차에 못 들어간다
+                        final conflict = !isAssigned &&
+                            partner != null &&
+                            assignedInCurrentTank.contains(partner);
+
+                        return SizedBox(
+                          width: 76,
+                          height: 30,
+                          child: _buildPickerItem(
+                            member.name,
+                            isAssigned || conflict,
+                            () {
+                              if (isAssigned) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text('${member.name}님은 이미 해당 탱크에 배치되어 있습니다.'),
+                                    duration: const Duration(seconds: 1)));
+                                return;
+                              }
+                              if (conflict) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                        '장비버디 $partner님이 같은 탱크에 있어 함께 다이빙할 수 없습니다.'),
+                                    duration: const Duration(seconds: 2)));
+                                return;
+                              }
+                              _assignMember(member.name, dayData, buddyProvider);
+                            },
+                            isPaired: partner != null,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
               ),
-              itemCount: sortedMembers.length + 1,
-              itemBuilder: (context, index) {
-                if (index == 0) return _buildPickerItem('❌ 비우기', false, () => _assignMember('', dayData, buddyProvider));
-
-                final member = sortedMembers[index - 1];
-                bool isAssigned = assignedInCurrentTank.contains(member.name);
-
-                return _buildPickerItem(member.name, isAssigned, () {
-                  if (isAssigned) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${member.name}님은 이미 해당 탱크에 배치되어 있습니다.'), duration: const Duration(seconds: 1))
-                    );
-                    return;
-                  }
-                  _assignMember(member.name, dayData, buddyProvider);
-                });
-              },
             ),
           ),
         ],
@@ -306,7 +379,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
     );
   }
 
-  Widget _buildPickerItem(String name, bool isGray, VoidCallback onTap) {
+  Widget _buildPickerItem(String name, bool isGray, VoidCallback onTap, {bool isPaired = false}) {
     return Material(
       color: isGray ? Colors.grey[100] : Colors.white,
       borderRadius: BorderRadius.circular(6),
@@ -315,17 +388,31 @@ class _BuddyScreenState extends State<BuddyScreen> {
         borderRadius: BorderRadius.circular(6),
         child: Container(
           alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           decoration: BoxDecoration(
             border: Border.all(color: isGray ? Colors.grey[200]! : Colors.blue[100]!),
             borderRadius: BorderRadius.circular(6),
           ),
-          child: Text(
-              name,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: isGray ? Colors.grey[400] : Colors.black87,
-                  fontWeight: isGray ? FontWeight.normal : FontWeight.w500
-              )
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 💡 장비버디가 있는 대원 표시
+              if (isPaired) ...[
+                Icon(Icons.link, size: 10,
+                    color: isGray ? Colors.grey[300] : const Color(0xFF00796B)),
+                const SizedBox(width: 3),
+              ],
+              Flexible(
+                child: Text(
+                  name,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: isGray ? Colors.grey[400] : Colors.black87,
+                      fontWeight: isGray ? FontWeight.normal : FontWeight.w500),
+                ),
+              ),
+            ],
           ),
         ),
       ),
