@@ -1312,7 +1312,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       width: colWidth,
       height: height,
       decoration: BoxDecoration(
-        color: _pairSoft,
+        // 공유 표시는 링크 아이콘으로 충분 — 배경색은 두지 않는다
+        color: _isEditMode ? _editSoft : null,
         border: Border(right: BorderSide(color: Colors.grey[200]!)),
       ),
       child: Column(
