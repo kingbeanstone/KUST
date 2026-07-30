@@ -199,7 +199,9 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
                   )
                 else
                   ...groups.entries.expand((entry) => [
-                        _sectionLabel(entry.key),
+                        // 💡 기수 옆 참가자 수 (예: 41기 1명)
+                        _sectionLabel(
+                            '${entry.key} ${entry.value.where((m) => participantProvider.isParticipant(m.id)).length}명'),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,

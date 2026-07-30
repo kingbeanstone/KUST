@@ -17,11 +17,11 @@ const Map<String, String> kStaffRoles = {
 
 /// 직책별 이모티콘
 const Map<String, String> kStaffRoleEmoji = {
-  'leader': '🚩',
+  'leader': '👑',
   'planning': '📋',
   'training': '💪',
-  'equipment': '🎒',
-  'pr': '📣',
+  'equipment': '🔧',
+  'pr': '📷',
   'finance': '💰',
 };
 
