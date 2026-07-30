@@ -40,7 +40,48 @@ class ParticipantProvider with ChangeNotifier {
       _ids = snapshot.docs.map((d) => d.id).toList();
       _idSet = _ids.toSet();
       notifyListeners();
+      _reconcileGearRows(); // 💡 참가자인데 장비 행이 없는 사람을 자동 보충
     });
+  }
+
+  /// 💡 자가 치유: 참가자 명단과 장비 표(members)를 대조해서
+  /// 장비 행이 없는 참가자의 행을 만들어준다.
+  /// (장비 행 자동 생성 기능이 생기기 전에 등록된 참가자 복구 + 이후 어긋남 방지)
+  Future<void> _reconcileGearRows() async {
+    final expId = _expeditionId;
+    if (expId == null || _ids.isEmpty) return;
+
+    try {
+      final membersCol =
+          _db.collection('expeditions').doc(expId).collection('members');
+      final existing = await membersCol.get();
+      final existingIds = existing.docs.map((d) => d.id).toSet();
+      final missing = _ids.where((id) => !existingIds.contains(id)).toList();
+      if (missing.isEmpty) return;
+
+      final batch = _db.batch();
+      var added = 0;
+      for (var i = 0; i < missing.length; i++) {
+        final clubDoc =
+            await _db.collection('club_members').doc(missing[i]).get();
+        if (!clubDoc.exists) continue; // 명단에서 지워진 유령 참가자는 건너뜀
+
+        final name = (clubDoc.data()?['name'] ?? '').toString().trim();
+        batch.set(membersCol.doc(missing[i]), {
+          'id': missing[i],
+          '이름': name,
+          'order': DateTime.now().millisecondsSinceEpoch + i,
+        }, SetOptions(merge: true));
+        added++;
+      }
+
+      // 진행 중 원정이 바뀌었으면 엉뚱한 원정에 쓰지 않도록 중단
+      if (_expeditionId != expId || added == 0) return;
+      await batch.commit();
+      debugPrint('참가자 장비 행 $added개 자동 보충');
+    } catch (e) {
+      debugPrint('장비 행 보충 실패: $e');
+    }
   }
 
   /// 참가 여부 토글. 장비 표(members) 행도 함께 생성/삭제해서
