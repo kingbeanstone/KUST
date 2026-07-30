@@ -66,7 +66,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('👥 원정 대원 명단', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('👥 동아리원 명단', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         centerTitle: true,
@@ -207,6 +207,39 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                       enabled: enabled,
                       onChanged: (v) => _updateLocalItem(index, generation: v),
                     ),
+                    const SizedBox(width: 4),
+                    // 💡 OB/YB 구분 뱃지 (수정 모드에서 탭하면 전환)
+                    GestureDetector(
+                      onTap: enabled
+                          ? () => setState(() => _updateLocalItem(index,
+                              memberType: member.memberType == 'OB' ? 'YB' : 'OB'))
+                          : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: member.memberType == 'OB'
+                              ? Colors.indigo[50]
+                              : Colors.teal[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: enabled
+                              ? Border.all(
+                                  color: member.memberType == 'OB'
+                                      ? Colors.indigo[200]!
+                                      : Colors.teal[200]!)
+                              : null,
+                        ),
+                        child: Text(
+                          member.memberType,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: member.memberType == 'OB'
+                                ? Colors.indigo
+                                : Colors.teal[700],
+                          ),
+                        ),
+                      ),
+                    ),
                     const Spacer(),
                     _inlineTextField(
                       initialValue: member.bloodType,
@@ -331,7 +364,8 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
 
   void _updateLocalItem(int index, {
     String? name, String? generation, String? phone, String? gender,
-    String? emergencyContact, String? bloodType, String? height, String? shoeSize
+    String? emergencyContact, String? bloodType, String? height, String? shoeSize,
+    String? memberType,
   }) {
     final m = _localData[index];
     _localData[index] = m.copyWith(
@@ -343,6 +377,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
       bloodType: bloodType,
       height: height,
       shoeSize: shoeSize,
+      memberType: memberType,
     );
   }
 

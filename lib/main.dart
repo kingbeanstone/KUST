@@ -13,6 +13,7 @@ import 'providers/notice_provider.dart';
 import 'providers/executive_checklist_provider.dart';
 import 'providers/member_provider.dart';
 import 'providers/buddy_provider.dart';
+import 'providers/participant_provider.dart';
 import 'providers/qna_provider.dart';
 import 'providers/executive_provider.dart';
 import 'providers/auth_provider.dart';
@@ -93,8 +94,15 @@ void main() async {
         // 5. 임원 체크리스트
         ChangeNotifierProvider(create: (_) => ExecutiveChecklistProvider()),
 
-        // 6. 대원 관리 (명단 등)
+        // 6. 동아리원 명단 (원정 무관 원본)
         ChangeNotifierProvider(create: (_) => MemberProvider()),
+
+        // 6-1. 원정 참가자 (원정별, 동아리원 ID 참조)
+        ChangeNotifierProxyProvider<ExpeditionProvider, ParticipantProvider>(
+          create: (_) => ParticipantProvider(),
+          update: (_, expedition, participant) =>
+              participant!..setExpedition(expedition.selectedId),
+        ),
 
         // 7. 버디/탱크 관리 (원정별)
         ChangeNotifierProxyProvider<ExpeditionProvider, BuddyProvider>(

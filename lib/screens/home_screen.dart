@@ -7,6 +7,7 @@ import '../models/expedition_model.dart';
 import '../models/notice_model.dart';
 import 'equipment_screen.dart';
 import 'member_management_screen.dart';
+import 'participant_screen.dart';
 import 'buddy_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -325,11 +326,20 @@ class HomeScreen extends StatelessWidget {
 
           _drawerItem(
             context,
-            icon: isAdmin ? Icons.people_alt_outlined : Icons.lock_outline,
-            title: '원정 멤버 관리',
-            subtitle: '대원 명단 및 정보 수정',
+            icon: isAdmin ? Icons.groups_outlined : Icons.lock_outline,
+            title: '동아리원 명단',
+            subtitle: 'OB/YB 명단 및 정보 관리',
             isAdmin: isAdmin,
             target: const MemberManagementScreen(),
+          ),
+
+          _drawerItem(
+            context,
+            icon: isAdmin ? Icons.how_to_reg_outlined : Icons.lock_outline,
+            title: '원정 참가자 관리',
+            subtitle: '이번 원정에 갈 대원 선택',
+            isAdmin: isAdmin,
+            target: const ParticipantScreen(),
           ),
 
           const Spacer(),

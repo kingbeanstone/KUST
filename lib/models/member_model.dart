@@ -12,6 +12,9 @@ class MemberItem {
   // 💡 정렬 순서를 저장하기 위한 필드 추가
   final int order;
 
+  /// 💡 동아리원 구분: 'YB' 또는 'OB'
+  final String memberType;
+
   MemberItem({
     required this.id,
     required this.name,
@@ -24,6 +27,7 @@ class MemberItem {
     this.height = '',
     this.shoeSize = '',
     this.order = 0,
+    this.memberType = 'YB',
   });
 
   // 💡 copyWith 메서드 추가 (순서 변경 및 업데이트 용이)
@@ -39,6 +43,7 @@ class MemberItem {
     String? height,
     String? shoeSize,
     int? order,
+    String? memberType,
   }) {
     return MemberItem(
       id: id ?? this.id,
@@ -52,6 +57,7 @@ class MemberItem {
       height: height ?? this.height,
       shoeSize: shoeSize ?? this.shoeSize,
       order: order ?? this.order,
+      memberType: memberType ?? this.memberType,
     );
   }
 
@@ -67,6 +73,7 @@ class MemberItem {
       'height': height,
       'shoeSize': shoeSize,
       'order': order, // 저장 시 order 포함
+      'memberType': memberType,
     };
   }
 
@@ -83,6 +90,7 @@ class MemberItem {
       height: map['height'] ?? '',
       shoeSize: map['shoeSize'] ?? '',
       order: map['order'] ?? 0, // 불러올 때 order 읽기
+      memberType: map['memberType'] ?? 'YB',
     );
   }
 }
