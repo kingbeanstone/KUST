@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/equipment_model.dart';
+import '../models/member_model.dart';
 import '../providers/equipment_provider.dart';
+import '../providers/member_provider.dart';
 
 const List<String> _gearKeys = [
   '가방', 'BCD', '호흡기', '슈트', '마스크', '핀', '부츠', '장갑', '후드', '조끼', '기타'
@@ -38,9 +40,23 @@ class _Section {
   List<MemberEquipment> get allMembers => blocks.expand((b) => b.members).toList();
 }
 
-/// 명단 순서대로 훑으면서 같은 pairId끼리 인접하게 묶는다.
-List<_Block> _buildBlocks(List<MemberEquipment> data) {
-  final sorted = List<MemberEquipment>.from(data)..sort((a, b) => a.order.compareTo(b.order));
+/// 💡 동아리원 명단과 조인해서 기수 오름차순 → 이름순으로 비교한다.
+///    (장비 행 ID = 동아리원 ID. 명단에 없는 구버전 행은 맨 뒤에서 이름순)
+int _compareByGeneration(Map<String, MemberItem> club, MemberEquipment a, MemberEquipment b) {
+  int genKey(MemberEquipment m) {
+    final gen = club[m.id]?.generation ?? '';
+    final match = RegExp(r'\d+').firstMatch(gen);
+    return match == null ? 1 << 30 : int.parse(match.group(0)!);
+  }
+
+  final cmp = genKey(a).compareTo(genKey(b));
+  return cmp != 0 ? cmp : a.name.compareTo(b.name);
+}
+
+/// 기수·이름 순으로 훑으면서 같은 pairId끼리 인접하게 묶는다.
+List<_Block> _buildBlocks(List<MemberEquipment> data, Map<String, MemberItem> club) {
+  final sorted = List<MemberEquipment>.from(data)
+    ..sort((a, b) => _compareByGeneration(club, a, b));
   final blocks = <_Block>[];
   final taken = <String>{};
 
@@ -136,10 +152,15 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   /// 그룹 순서대로 섹션을 만든다. 그룹이 하나도 없으면 헤더 없는 단일 섹션.
   /// 그룹에 속하지 않은 대원은 맨 아래 '미지정' 섹션으로.
+  /// 동아리원 명단(기수 조인용) — id → MemberItem
+  Map<String, MemberItem> _clubById() =>
+      {for (final m in context.watch<MemberProvider>().members) m.id: m};
+
   List<_Section> _buildSections(EquipmentProvider provider) {
+    final club = _clubById();
     final groups = provider.groups;
     if (groups.isEmpty) {
-      return [_Section(key: '__all__', title: null, blocks: _buildBlocks(provider.data))];
+      return [_Section(key: '__all__', title: null, blocks: _buildBlocks(provider.data, club))];
     }
 
     final sections = <_Section>[];
@@ -149,13 +170,13 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       sections.add(_Section(
         key: g.id,
         title: g.name,
-        blocks: _buildBlocks(provider.data.where((m) => m.groupId == g.id).toList()),
+        blocks: _buildBlocks(provider.data.where((m) => m.groupId == g.id).toList(), club),
       ));
     }
 
     final rest = provider.data.where((m) => !knownIds.contains(m.groupId)).toList();
     if (rest.isNotEmpty) {
-      sections.add(_Section(key: '__rest__', title: '미지정', blocks: _buildBlocks(rest)));
+      sections.add(_Section(key: '__rest__', title: '미지정', blocks: _buildBlocks(rest, club)));
     }
     return sections;
   }
@@ -360,8 +381,10 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       builder: (sheetContext) => StatefulBuilder(
         builder: (ctx, setSheetState) => Consumer<EquipmentProvider>(
           builder: (ctx2, provider, _) {
+            final club =
+                {for (final m in ctx2.watch<MemberProvider>().members) m.id: m};
             final groups = provider.groups;
-            final blocks = _buildBlocks(provider.data);
+            final blocks = _buildBlocks(provider.data, club);
             final groupNames = {for (final g in groups) g.id: g.name};
 
             String blockLabel(_Block b) => b.members
@@ -631,8 +654,10 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       builder: (sheetContext) => StatefulBuilder(
         builder: (ctx, setSheetState) => Consumer<EquipmentProvider>(
           builder: (ctx2, provider, _) {
+            final club =
+                {for (final m in ctx2.watch<MemberProvider>().members) m.id: m};
             final sorted = List<MemberEquipment>.from(provider.data)
-              ..sort((a, b) => a.order.compareTo(b.order));
+              ..sort((a, b) => _compareByGeneration(club, a, b));
 
             // 짝이 온전히 2명인 조와, 나머지(혼자) 대원을 나눈다.
             final byPair = <String, List<MemberEquipment>>{};
