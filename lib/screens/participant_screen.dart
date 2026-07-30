@@ -19,6 +19,9 @@ class ParticipantScreen extends StatefulWidget {
 class _ParticipantScreenState extends State<ParticipantScreen> {
   bool _isEditMode = false;
 
+  /// 역할 지정 섹션에서 현재 선택된 역할 ('instructor' 또는 kStaffRoles의 key)
+  String _roleMode = 'instructor';
+
   /// 기수별 그룹핑 — 숫자를 뽑아 "33" / "33기" 를 같은 섹션으로 묶는다
   Map<String, List<MemberItem>> _groupByGeneration(List<MemberItem> members) {
     final groups = <String, List<MemberItem>>{};
@@ -105,53 +108,68 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
                   style: const TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),
 
-                // 💡 강사 지정 (수정 모드) — 원정마다 교육생을 가르칠 강사를 정한다
+                // 💡 역할 지정 (수정 모드) — 강사·대장·부장들은 원정마다 달라진다.
+                //    역할을 먼저 고르고, 참가자를 탭하면 지정/해제된다.
                 if (_isEditMode && participants.isNotEmpty) ...[
                   const SizedBox(height: 14),
-                  Row(
+                  const Row(
                     children: [
-                      Icon(Icons.star_rounded, size: 15, color: Colors.amber[600]),
-                      const SizedBox(width: 4),
-                      const Text('강사 지정',
+                      Text('역할 지정',
                           style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      const SizedBox(width: 8),
-                      const Text('참가자를 탭하면 강사로 지정/해제됩니다.',
+                      SizedBox(width: 8),
+                      Text('역할을 고르고 참가자를 탭하세요.',
                           style: TextStyle(fontSize: 11, color: Colors.grey)),
                     ],
                   ),
                   const SizedBox(height: 8),
+                  // 역할 선택 칩
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _roleModeChip('instructor', '⭐ 강사'),
+                      ...kStaffRoles.entries.map((entry) => _roleModeChip(
+                          entry.key, '${kStaffRoleEmoji[entry.key]} ${entry.value}')),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // 참가자 칩 (탭하면 선택된 역할 지정/해제)
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: participants.map((m) {
                       final isInstructor = participantProvider.isInstructor(m.id);
+                      final staffRole = participantProvider.staffRoleOf(m.id);
+                      final hasSelectedRole = _roleMode == 'instructor'
+                          ? isInstructor
+                          : staffRole == _roleMode;
+                      final markers =
+                          '${staffRole != null ? kStaffRoleEmoji[staffRole] ?? '' : ''}'
+                          '${isInstructor ? '⭐' : ''}';
+
                       return GestureDetector(
-                        onTap: () => participantProvider.toggleInstructor(m.id),
+                        onTap: () => _roleMode == 'instructor'
+                            ? participantProvider.toggleInstructor(m.id)
+                            : participantProvider.toggleStaffRole(m.id, _roleMode),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                           decoration: BoxDecoration(
-                            color: isInstructor ? Colors.amber[600] : Colors.white,
+                            color: hasSelectedRole ? Colors.amber[600] : Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: isInstructor ? Colors.amber[600]! : Colors.grey[300]!,
+                              color: hasSelectedRole
+                                  ? Colors.amber[600]!
+                                  : Colors.grey[300]!,
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isInstructor) ...[
-                                const Icon(Icons.star_rounded, size: 13, color: Colors.white),
-                                const SizedBox(width: 3),
-                              ],
-                              Text(
-                                m.name.isEmpty ? '(이름없음)' : m.name,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: isInstructor ? Colors.white : Colors.black87,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            '${markers.isEmpty ? '' : '$markers '}'
+                            '${m.name.isEmpty ? '(이름없음)' : m.name}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: hasSelectedRole ? Colors.white : Colors.black87,
+                            ),
                           ),
                         ),
                       );
@@ -193,6 +211,8 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
                                         participantProvider.isParticipant(m.id),
                                     isInstructor:
                                         participantProvider.isInstructor(m.id),
+                                    roleEmoji:
+                                        participantProvider.roleEmojiOf(m.id),
                                     onTap: _isEditMode
                                         ? () => participantProvider.toggle(m)
                                         : null,
@@ -207,6 +227,32 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
     );
   }
 
+  /// 역할 지정 섹션의 역할 선택 칩
+  Widget _roleModeChip(String key, String label) {
+    final isSelected = _roleMode == key;
+    return GestureDetector(
+      onTap: () => setState(() => _roleMode = key),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blueGrey[700] : Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? Colors.blueGrey[700]! : Colors.grey[300]!,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.bold,
+            color: isSelected ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _sectionLabel(String text) {
     return Text(text,
         style: const TextStyle(
@@ -214,7 +260,10 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
   }
 
   Widget _memberChip(MemberItem member,
-      {required bool selected, bool isInstructor = false, VoidCallback? onTap}) {
+      {required bool selected,
+      bool isInstructor = false,
+      String roleEmoji = '',
+      VoidCallback? onTap}) {
     final isOb = member.memberType == 'OB';
 
     return GestureDetector(
@@ -231,6 +280,11 @@ class _ParticipantScreenState extends State<ParticipantScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // 💡 이번 원정의 직책 이모티콘 (대장/부장들)
+            if (roleEmoji.isNotEmpty) ...[
+              Text(roleEmoji, style: const TextStyle(fontSize: 11.5)),
+              const SizedBox(width: 3),
+            ],
             // 💡 이번 원정의 강사 표시
             if (isInstructor) ...[
               Icon(Icons.star_rounded,

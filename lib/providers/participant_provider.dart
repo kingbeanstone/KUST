@@ -4,6 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/member_model.dart';
 
+/// 원정 직책 (강사처럼 원정별로 달라진다). key는 저장값, value는 표시명.
+const Map<String, String> kStaffRoles = {
+  'leader': '대장',
+  'planning': '기획부장',
+  'training': '훈련부장',
+  'pr': '홍보부장',
+  'finance': '총무부장',
+};
+
+/// 직책별 이모티콘
+const Map<String, String> kStaffRoleEmoji = {
+  'leader': '🚩',
+  'planning': '📋',
+  'training': '💪',
+  'pr': '📣',
+  'finance': '💰',
+};
+
 /// 💡 현재 원정의 참가자 목록.
 /// expeditions/{expId}/participants/{clubMemberId} — 문서 ID 자체가
 /// club_members 문서의 ID다(외래키). 이름 등 정보는 저장하지 않고
@@ -20,10 +38,22 @@ class ParticipantProvider with ChangeNotifier {
   /// 💡 이번 원정의 강사(교육생을 가르치는 역할). 원정별로 달라진다.
   Set<String> _instructorIds = {};
 
+  /// 💡 이번 원정의 직책 (memberId → kStaffRoles의 key). 직책은 1인 1개.
+  Map<String, String> _staffRoles = {};
+
   List<String> get participantIds => _ids;
   int get count => _ids.length;
   bool isParticipant(String clubMemberId) => _idSet.contains(clubMemberId);
   bool isInstructor(String clubMemberId) => _instructorIds.contains(clubMemberId);
+  String? staffRoleOf(String clubMemberId) => _staffRoles[clubMemberId];
+
+  /// 칩/픽커에 붙일 역할 이모티콘 (직책 + 강사 겸임 표시)
+  String roleEmojiOf(String clubMemberId) {
+    final buffer = StringBuffer();
+    final role = _staffRoles[clubMemberId];
+    if (role != null) buffer.write(kStaffRoleEmoji[role] ?? '');
+    return buffer.toString();
+  }
 
   CollectionReference<Map<String, dynamic>> get _col =>
       _db.collection('expeditions').doc(_expeditionId!).collection('participants');
@@ -38,6 +68,7 @@ class ParticipantProvider with ChangeNotifier {
     _ids = [];
     _idSet = {};
     _instructorIds = {};
+    _staffRoles = {};
     notifyListeners();
 
     if (expeditionId == null) return;
@@ -48,6 +79,10 @@ class ParticipantProvider with ChangeNotifier {
           .where((d) => d.data()['isInstructor'] == true)
           .map((d) => d.id)
           .toSet();
+      _staffRoles = {
+        for (final d in snapshot.docs)
+          if (kStaffRoles.containsKey(d.data()['staffRole'])) d.id: d.data()['staffRole'] as String
+      };
       notifyListeners();
       _reconcileGearRows(); // 💡 참가자인데 장비 행이 없는 사람을 자동 보충
     });
@@ -60,6 +95,13 @@ class ParticipantProvider with ChangeNotifier {
       {'isInstructor': !_instructorIds.contains(clubMemberId)},
       SetOptions(merge: true),
     );
+  }
+
+  /// 이번 원정의 직책 지정. 같은 직책을 다시 탭하면 해제, 다른 직책이면 교체.
+  Future<void> toggleStaffRole(String clubMemberId, String roleKey) async {
+    if (_expeditionId == null || !_idSet.contains(clubMemberId)) return;
+    final next = _staffRoles[clubMemberId] == roleKey ? '' : roleKey;
+    await _col.doc(clubMemberId).set({'staffRole': next}, SetOptions(merge: true));
   }
 
   /// 💡 자가 치유: 참가자 명단과 장비 표(members)를 대조해서
