@@ -258,7 +258,9 @@ class HomeScreen extends StatelessWidget {
       child: Container(
         width: width,
         padding: EdgeInsets.symmetric(horizontal: width == null ? 18 : 0, vertical: 9),
-        alignment: Alignment.center,
+        // 💡 alignment는 고정 폭일 때만. 폭 미지정 상태에서 주면
+        //    Container가 가로 전체로 늘어나 버튼이 세로로 쌓인다.
+        alignment: width == null ? null : Alignment.center,
         decoration: BoxDecoration(
           color: selected ? Colors.blue[800] : Colors.grey[100],
           borderRadius: BorderRadius.circular(10),
