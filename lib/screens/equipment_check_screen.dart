@@ -1092,7 +1092,8 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   }
 
   /// 블록(조/혼자) 사이를 띄우는 간격. 얇은 선 대신 여백을 줘서 조가 한 덩어리로 읽힌다.
-  Widget _gap(double width) => Container(width: width, height: 8, color: const Color(0xFFF1F3F5));
+  Widget _gap(double width, [double height = 8]) =>
+      Container(width: width, height: height, color: const Color(0xFFF1F3F5));
 
   // ------------------------------------------------------- 좌측 고정 이름열
 
@@ -1111,7 +1112,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
             style: TextStyle(
                 fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white)),
       ));
-      cells.add(_gap(_fixedWidth));
+      cells.add(_gap(_fixedWidth, 3)); // 총합-그룹 사이는 좁게
     }
 
     for (final section in sections) {
@@ -1263,7 +1264,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           );
         }).toList(),
       ));
-      rows.add(_gap(_gearsWidth));
+      rows.add(_gap(_gearsWidth, 3)); // 총합-그룹 사이는 좁게
     }
 
     for (final section in sections) {

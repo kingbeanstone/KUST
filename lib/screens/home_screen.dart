@@ -5,7 +5,8 @@ import '../providers/expedition_provider.dart';
 import '../providers/notice_provider.dart';
 import '../models/expedition_model.dart';
 import '../models/notice_model.dart';
-import 'equipment_screen.dart';
+import 'equipment_check_screen.dart';
+import 'search_screen.dart';
 import 'member_management_screen.dart';
 import 'participant_screen.dart';
 import 'buddy_screen.dart';
@@ -80,9 +81,9 @@ class HomeScreen extends StatelessWidget {
               childAspectRatio: 1.4,
               children: [
                 _buildMenuCard(context,
-                    title: '장비',
-                    icon: Icons.backpack_outlined, color: Colors.blue,
-                    target: const EquipmentScreen()),
+                    title: '장비 체크',
+                    icon: Icons.checklist_rounded, color: Colors.blue,
+                    target: const EquipmentCheckScreen()),
                 _buildMenuCard(context,
                     title: '버디',
                     icon: Icons.people_outline_rounded, color: Colors.teal,
@@ -340,6 +341,15 @@ class HomeScreen extends StatelessWidget {
             subtitle: '이번 원정에 갈 대원 선택',
             isAdmin: isAdmin,
             target: const ParticipantScreen(),
+          ),
+
+          _drawerItem(
+            context,
+            icon: Icons.inventory_2_outlined,
+            title: '장비 인벤토리',
+            subtitle: 'BCD·호흡기 번호 및 공용 장비 수량',
+            isAdmin: true, // 💡 열람은 누구나 (수정은 화면 안에서 관리자만)
+            target: const SearchScreen(),
           ),
 
           const Spacer(),
