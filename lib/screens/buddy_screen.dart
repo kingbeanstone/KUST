@@ -132,6 +132,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
                         label: const Text('조 추가', style: TextStyle(fontSize: 13)),
                       ),
                     ),
+
+                  _buildRoundsSection(buddyData, buddyProvider),
                   const SizedBox(height: 40),
                 ],
               ),
@@ -230,27 +232,6 @@ class _BuddyScreenState extends State<BuddyScreen> {
                     ),
                   ),
                 ),
-                // 입수 방식 (수정 모드에서 탭하면 전환)
-                GestureDetector(
-                  onTap: _isEditMode
-                      ? () {
-                          block.simultaneous = !block.simultaneous;
-                          provider.saveBuddyDay(day);
-                        }
-                      : null,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: block.simultaneous ? Colors.orange[300] : Colors.teal[300],
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      block.simultaneous ? '동시 입수' : '로테이션',
-                      style: const TextStyle(
-                          fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ),
                 if (_isEditMode) ...[
                   const SizedBox(width: 4),
                   IconButton(
@@ -298,9 +279,22 @@ class _BuddyScreenState extends State<BuddyScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text(block.teams[t].name,
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold, fontSize: 13)),
+                              // 💡 수정 모드에서 팀 이름 탭 = 이름 변경
+                              GestureDetector(
+                                onTap: _isEditMode
+                                    ? () => _showNameDialog(
+                                          title: '팀 이름 변경',
+                                          initial: block.teams[t].name,
+                                          onSave: (name) {
+                                            block.teams[t].name = name;
+                                            provider.saveBuddyDay(day);
+                                          },
+                                        )
+                                    : null,
+                                child: Text(block.teams[t].name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold, fontSize: 13)),
+                              ),
                               if (_isEditMode)
                                 GestureDetector(
                                   onTap: () => _deleteTeamDialog(blockIdx, t, day, provider),
@@ -398,18 +392,40 @@ class _BuddyScreenState extends State<BuddyScreen> {
     return '${String.fromCharCode(65 + (total % 26))}팀';
   }
 
-  void _addBlockDialog(BuddyDay day, BuddyProvider provider) {
-    _blockNameController.clear();
+  /// 고유 ID를 가진 새 팀 생성 (회차가 이 ID로 참조한다)
+  BuddyTeam _newTeam(BuddyDay day) => BuddyTeam(
+        id: 'team_${DateTime.now().microsecondsSinceEpoch}',
+        name: _nextTeamName(day),
+        leader: '',
+        members: [],
+      );
+
+  /// 팀 삭제 시 회차 참조도 함께 정리
+  void _removeTeamFromRounds(BuddyDay day, Iterable<String> teamIds) {
+    final ids = teamIds.toSet();
+    for (final round in day.rounds) {
+      round.teamIds.removeWhere(ids.contains);
+    }
+  }
+
+  /// 이름 입력 공용 다이얼로그 (조/팀/회차). 컨트롤러는 State 소유라 안전하다.
+  void _showNameDialog({
+    required String title,
+    String initial = '',
+    String hint = '',
+    required void Function(String name) onSave,
+  }) {
+    _blockNameController.text = initial;
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('조 추가', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: _blockNameController,
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '조 이름 (예: YB, 교육 1조)',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: hint,
+            border: const OutlineInputBorder(),
             isDense: true,
           ),
         ),
@@ -419,46 +435,38 @@ class _BuddyScreenState extends State<BuddyScreen> {
             onPressed: () {
               final name = _blockNameController.text.trim();
               if (name.isEmpty) return;
-              day.blocks.add(BuddyBlock(
-                name: name,
-                simultaneous: false,
-                teams: [BuddyTeam(name: _nextTeamName(day), leader: '', members: [])],
-              ));
-              provider.saveBuddyDay(day);
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('추가'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _renameBlockDialog(BuddyBlock block, BuddyDay day, BuddyProvider provider) {
-    _blockNameController.text = block.name;
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('조 이름 변경', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: _blockNameController,
-          autofocus: true,
-          decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
-          ElevatedButton(
-            onPressed: () {
-              final name = _blockNameController.text.trim();
-              if (name.isEmpty) return;
-              block.name = name;
-              provider.saveBuddyDay(day);
+              onSave(name);
               Navigator.pop(dialogContext);
             },
             child: const Text('저장'),
           ),
         ],
       ),
+    );
+  }
+
+  void _addBlockDialog(BuddyDay day, BuddyProvider provider) {
+    _showNameDialog(
+      title: '조 추가',
+      hint: '조 이름 (예: YB, 교육 1조)',
+      onSave: (name) {
+        day.blocks.add(BuddyBlock(
+          name: name,
+          teams: [_newTeam(day)],
+        ));
+        provider.saveBuddyDay(day);
+      },
+    );
+  }
+
+  void _renameBlockDialog(BuddyBlock block, BuddyDay day, BuddyProvider provider) {
+    _showNameDialog(
+      title: '조 이름 변경',
+      initial: block.name,
+      onSave: (name) {
+        block.name = name;
+        provider.saveBuddyDay(day);
+      },
     );
   }
 
@@ -473,6 +481,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
           TextButton(
             onPressed: () {
+              _removeTeamFromRounds(day, block.teams.map((t) => t.id));
               day.blocks.removeAt(blockIdx);
               provider.saveBuddyDay(day);
               setState(_clearSelection);
@@ -486,7 +495,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
   }
 
   void _addTeam(BuddyBlock block, BuddyDay day, BuddyProvider provider) {
-    block.teams.add(BuddyTeam(name: _nextTeamName(day), leader: '', members: []));
+    block.teams.add(_newTeam(day));
     provider.saveBuddyDay(day);
   }
 
@@ -495,6 +504,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
     final hasMembers = team.leader.isNotEmpty || team.members.any((m) => m.isNotEmpty);
 
     void doDelete() {
+      _removeTeamFromRounds(day, [team.id]);
       day.blocks[blockIdx].teams.removeAt(teamIdx);
       provider.saveBuddyDay(day);
       setState(_clearSelection);
@@ -518,6 +528,158 @@ class _BuddyScreenState extends State<BuddyScreen> {
             },
             child: const Text('삭제', style: TextStyle(color: Colors.red)),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------- 입수 순서
+
+  /// 💡 회차별 입수 팀 표. 같은 팀을 여러 회차에 넣을 수 있고 회차 이름은 자유(중복 허용).
+  /// 장비버디 충돌 검사는 이 표의 "같은 회차" 기준으로 이뤄진다.
+  Widget _buildRoundsSection(BuddyDay day, BuddyProvider provider) {
+    if (!_isEditMode && day.rounds.isEmpty) return const SizedBox.shrink();
+
+    final allTeams = [for (final b in day.blocks) ...b.teams];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 18),
+        const Row(
+          children: [
+            Icon(Icons.pool, size: 16, color: Colors.blueGrey),
+            SizedBox(width: 6),
+            Text('입수 순서', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        if (_isEditMode)
+          const Padding(
+            padding: EdgeInsets.only(top: 2, bottom: 4),
+            child: Text(
+              '회차의 팀을 탭해 넣고 빼세요. 같은 팀을 여러 회차에 넣을 수 있습니다.\n'
+              '장비버디 충돌은 같은 회차에 들어가는 팀 기준으로 검사됩니다.',
+              style: TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ),
+        const SizedBox(height: 6),
+
+        for (var r = 0; r < day.rounds.length; r++)
+          _buildRoundRow(r, day, allTeams, provider),
+
+        if (_isEditMode)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                day.rounds.add(BuddyRound(
+                    name: '${day.rounds.length + 1}탱크', teamIds: []));
+                provider.saveBuddyDay(day);
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('회차 추가', style: TextStyle(fontSize: 13)),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRoundRow(
+      int roundIdx, BuddyDay day, List<BuddyTeam> allTeams, BuddyProvider provider) {
+    final round = day.rounds[roundIdx];
+    // 보기 모드에서는 포함된 팀만, 수정 모드에서는 전체 팀을 토글 칩으로
+    final visibleTeams = _isEditMode
+        ? allTeams
+        : allTeams.where((t) => round.teamIds.contains(t.id)).toList();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 회차 이름 (수정 모드에서 탭하면 변경)
+          GestureDetector(
+            onTap: _isEditMode
+                ? () => _showNameDialog(
+                      title: '회차 이름 변경',
+                      initial: round.name,
+                      onSave: (name) {
+                        round.name = name;
+                        provider.saveBuddyDay(day);
+                      },
+                    )
+                : null,
+            child: Container(
+              width: 62,
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(
+                round.name,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (visibleTeams.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: Text('-', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  ),
+                for (final team in visibleTeams)
+                  Builder(builder: (context) {
+                    final included = round.teamIds.contains(team.id);
+                    return GestureDetector(
+                      onTap: _isEditMode
+                          ? () {
+                              included
+                                  ? round.teamIds.remove(team.id)
+                                  : round.teamIds.add(team.id);
+                              provider.saveBuddyDay(day);
+                            }
+                          : null,
+                      child: Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: included ? Colors.blue[800] : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(
+                            color: included ? Colors.blue[800]! : Colors.grey[300]!,
+                          ),
+                        ),
+                        child: Text(
+                          team.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: included ? Colors.white : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          ),
+          if (_isEditMode)
+            GestureDetector(
+              onTap: () {
+                day.rounds.removeAt(roundIdx);
+                provider.saveBuddyDay(day);
+              },
+              child: const Padding(
+                padding: EdgeInsets.only(left: 6, top: 4),
+                child: Icon(Icons.close, size: 16, color: Colors.redAccent),
+              ),
+            ),
         ],
       ),
     );
@@ -579,26 +741,31 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
     // 💡 선택된 조/팀 기준의 검사 범위:
     //  - assignedInBlock: 같은 조 안 중복 배치 방지
-    //  - conflictScope: 장비버디 충돌 범위 (동시 입수=조 전체, 로테이션=선택한 팀)
+    //  - conflictScope: 장비버디 충돌 범위 — 선택한 팀 + 입수 순서표에서
+    //    그 팀과 같은 회차에 함께 들어가는 모든 팀의 대원들
     final assignedInBlock = <String>{};
     var conflictScope = <String>{};
-    var selectedBlockSimultaneous = false;
 
-    if (_selBlockIdx != null && _selBlockIdx! < dayData.blocks.length) {
-      final block = dayData.blocks[_selBlockIdx!];
-      selectedBlockSimultaneous = block.simultaneous;
-      for (final t in block.teams) {
-        if (t.leader.isNotEmpty) assignedInBlock.add(t.leader);
-        assignedInBlock.addAll(t.members.where((m) => m.isNotEmpty));
-      }
-      if (block.simultaneous) {
-        conflictScope = assignedInBlock;
-      } else if (_selTeamIdx != null && _selTeamIdx! < block.teams.length) {
-        final t = block.teams[_selTeamIdx!];
-        conflictScope = {
+    Set<String> namesOf(BuddyTeam t) => {
           if (t.leader.isNotEmpty) t.leader,
           ...t.members.where((m) => m.isNotEmpty),
         };
+
+    if (_selBlockIdx != null && _selBlockIdx! < dayData.blocks.length) {
+      final block = dayData.blocks[_selBlockIdx!];
+      for (final t in block.teams) {
+        assignedInBlock.addAll(namesOf(t));
+      }
+      if (_selTeamIdx != null && _selTeamIdx! < block.teams.length) {
+        final selTeam = block.teams[_selTeamIdx!];
+        conflictScope = namesOf(selTeam);
+        final allTeams = [for (final b in dayData.blocks) ...b.teams];
+        for (final round in dayData.rounds) {
+          if (!round.teamIds.contains(selTeam.id)) continue;
+          for (final t in allTeams) {
+            if (round.teamIds.contains(t.id)) conflictScope.addAll(namesOf(t));
+          }
+        }
       }
     }
 
@@ -705,9 +872,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
                               }
                               if (conflict) {
                                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text(selectedBlockSimultaneous
-                                        ? '장비버디 $partner님이 같은 조(동시 입수)에 있어 함께 다이빙할 수 없습니다.'
-                                        : '장비버디 $partner님이 같은 팀에 있어 함께 다이빙할 수 없습니다.'),
+                                    content: Text(
+                                        '장비버디 $partner님과 같은 회차에 입수하게 되어 배치할 수 없습니다.'),
                                     duration: const Duration(seconds: 2)));
                                 return;
                               }
