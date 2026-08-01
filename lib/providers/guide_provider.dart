@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class GuideSection {
   final String id;
   final String title;
+  final String emoji; // 대분류 카드에 크게 보여줄 이모티콘
   final String content;
   final int order;
 
@@ -15,12 +16,14 @@ class GuideSection {
     required this.title,
     required this.content,
     required this.order,
+    this.emoji = '',
   });
 
   factory GuideSection.fromMap(String id, Map<String, dynamic> map) =>
       GuideSection(
         id: id,
         title: (map['title'] ?? '').toString(),
+        emoji: (map['emoji'] ?? '').toString(),
         content: (map['content'] ?? '').toString(),
         order: (map['order'] as num? ?? 0).toInt(),
       );
@@ -59,19 +62,21 @@ class GuideProvider with ChangeNotifier {
     _listen();
   }
 
-  Future<void> addSection(String title, String content) async {
+  Future<void> addSection(String title, String content, String emoji) async {
     final maxOrder =
         _sections.isEmpty ? 0 : _sections.map((s) => s.order).reduce((a, b) => a > b ? a : b);
     await _db.collection('guides').add({
       'title': title.trim(),
+      'emoji': emoji.trim(),
       'content': content,
       'order': maxOrder + 1,
     });
   }
 
-  Future<void> updateSection(String id, String title, String content) async {
+  Future<void> updateSection(
+      String id, String title, String content, String emoji) async {
     await _db.collection('guides').doc(id).set(
-      {'title': title.trim(), 'content': content},
+      {'title': title.trim(), 'content': content, 'emoji': emoji.trim()},
       SetOptions(merge: true),
     );
   }
