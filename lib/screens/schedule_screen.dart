@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
+import '../providers/expedition_provider.dart';
 import '../providers/schedule_provider.dart';
 import '../models/schedule_model.dart';
 
@@ -40,9 +42,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   final ScrollController _headerHScroll = ScrollController();
   final ScrollController _bodyHScroll = ScrollController();
 
+  /// 현재 시각선을 1분마다 갱신
+  Timer? _nowTimer;
+
   @override
   void initState() {
     super.initState();
+    _nowTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
     // 헤더와 본문의 가로 스크롤 동기화
     _headerHScroll.addListener(() {
       if (_bodyHScroll.hasClients && _bodyHScroll.offset != _headerHScroll.offset) {
@@ -58,10 +66,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   void dispose() {
+    _nowTimer?.cancel();
     _vScroll.dispose();
     _headerHScroll.dispose();
     _bodyHScroll.dispose();
     super.dispose();
+  }
+
+  /// 일차 id('8.3' 형태)를 실제 날짜로 변환 (파싱 불가 시 null)
+  DateTime? _dateOfDay(String dayId, int year) {
+    final match = RegExp(r'^(\d{1,2})\.(\d{1,2})$').firstMatch(dayId.trim());
+    if (match == null) return null;
+    return DateTime(year, int.parse(match.group(1)!), int.parse(match.group(2)!));
   }
 
   // ------------------------------------------------------------- 시간 유틸
@@ -327,6 +343,30 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final dates = scheduleProvider.dates;
     final schedulesById = {for (final s in scheduleProvider.schedules) s.id: s};
 
+    // ── 실제 날짜 기반 진행 상태 (원정 연도 기준)
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final year = context.read<ExpeditionProvider>().selected?.year ?? now.year;
+    final nowMinutes = now.hour * 60 + now.minute;
+
+    DateTime? firstDay;
+    DateTime? lastDay;
+    for (final day in dates) {
+      final d = _dateOfDay(day['id']!, year);
+      if (d == null) continue;
+      if (firstDay == null || d.isBefore(firstDay)) firstDay = d;
+      if (lastDay == null || d.isAfter(lastDay)) lastDay = d;
+    }
+
+    // 원정 진행률: 첫날 00:00 ~ 마지막 날 24:00
+    double? progress;
+    if (firstDay != null && lastDay != null) {
+      final total =
+          lastDay.add(const Duration(days: 1)).difference(firstDay).inMinutes;
+      final elapsed = now.difference(firstDay).inMinutes;
+      progress = (elapsed / total).clamp(0.0, 1.0);
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -360,6 +400,40 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                 return Column(
                   children: [
+                    // ── 원정 진행률 (날짜 헤더 위 1줄)
+                    if (progress != null)
+                      Container(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                        child: Row(
+                          children: [
+                            Text('원정 진행률',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[600])),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(3),
+                                child: LinearProgressIndicator(
+                                  value: progress,
+                                  minHeight: 6,
+                                  backgroundColor: Colors.grey[200],
+                                  valueColor: AlwaysStoppedAnimation(
+                                      progress >= 1.0
+                                          ? Colors.green
+                                          : Colors.blue[700]!),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text('${(progress * 100).round()}%',
+                                style: const TextStyle(
+                                    fontSize: 11.5, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+
                     // ── 일차 헤더 행 (세로 스크롤과 무관하게 고정)
                     SizedBox(
                       height: _headerHeight,
@@ -472,13 +546,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                                             top: 0,
                                             width: colWidth,
                                             height: 24 * _hourHeight,
-                                            child: _buildDayColumn(
-                                              context,
-                                              scheduleProvider,
-                                              isAdmin,
-                                              dates[i],
-                                              schedulesById[dates[i]['id']],
-                                            ),
+                                            child: Builder(builder: (context) {
+                                              final colDate = _dateOfDay(
+                                                  dates[i]['id']!, year);
+                                              // -1: 지난 날, 0: 오늘, 1: 미래/모름
+                                              var dayStatus = 1;
+                                              if (colDate != null) {
+                                                if (colDate.isBefore(today)) {
+                                                  dayStatus = -1;
+                                                } else if (colDate
+                                                    .isAtSameMomentAs(today)) {
+                                                  dayStatus = 0;
+                                                }
+                                              }
+                                              return _buildDayColumn(
+                                                context,
+                                                scheduleProvider,
+                                                isAdmin,
+                                                dates[i],
+                                                schedulesById[dates[i]['id']],
+                                                dayStatus: dayStatus,
+                                                nowMinutes: nowMinutes,
+                                              );
+                                            }),
                                           ),
                                       ],
                                     ),
@@ -517,8 +607,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     ScheduleProvider scheduleProvider,
     bool isAdmin,
     Map<String, String> day,
-    DailySchedule? schedule,
-  ) {
+    DailySchedule? schedule, {
+    int dayStatus = 1, // -1: 지난 날, 0: 오늘, 1: 미래/모름
+    int nowMinutes = 0,
+  }) {
     final dayId = day['id']!;
     final items = schedule?.items ?? const <ScheduleItem>[];
 
@@ -558,6 +650,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       double top;
       double height;
       final bool timeless = start == null;
+      var durationMinutes = 60;
 
       if (timeless) {
         // 시간 미정 항목은 열 상단에 쌓는다
@@ -575,10 +668,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             break;
           }
         }
-        final durationMinutes = next != null ? next - start : 60;
+        durationMinutes = next != null ? next - start : 60;
         height = (durationMinutes / 60.0 * _hourHeight)
             .clamp(20.0, 24 * _hourHeight - top);
       }
+
+      // 💡 완료된 일정: 지난 날 전체, 오늘은 끝난 시각이 현재보다 이전인 것
+      final bool completed = dayStatus == -1 ||
+          (dayStatus == 0 && !timeless && start + durationMinutes <= nowMinutes);
 
       children.add(Positioned(
         top: top,
@@ -592,8 +689,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               : _showItemDetail(context, day['date']!.split(' ').first, item),
           child: Builder(builder: (context) {
             // 💡 항목별 색상 (미지정: 파랑, 시간 미정 항목은 주황)
-            final accent = kItemColors[item.color] ??
+            //    완료된 일정은 색을 빼고 회색으로 가라앉힌다.
+            var accent = kItemColors[item.color] ??
                 (timeless ? Colors.orange[400]! : Colors.blue[800]!);
+            if (completed) accent = Colors.grey[400]!;
             return Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
@@ -611,11 +710,36 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 fontSize: 10.5,
                 height: 1.2,
                 fontWeight: FontWeight.w600,
-                color: Colors.blueGrey[800],
+                color: completed ? Colors.grey[500] : Colors.blueGrey[800],
               ),
             ),
           );
           }),
+        ),
+      ));
+    }
+
+    // 💡 오늘 열: 현재 시각 위치에 얇은 회색선 (1분마다 갱신)
+    if (dayStatus == 0) {
+      final nowTop = nowMinutes / 60.0 * _hourHeight;
+      children.add(Positioned(
+        top: nowTop - 3,
+        left: 0,
+        child: Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(
+            color: Colors.grey[600],
+            shape: BoxShape.circle,
+          ),
+        ),
+      ));
+      children.add(Positioned(
+        top: nowTop - 0.75,
+        left: 0,
+        right: 0,
+        child: IgnorePointer(
+          child: Container(height: 1.5, color: Colors.grey[600]),
         ),
       ));
     }

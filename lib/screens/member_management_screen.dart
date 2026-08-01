@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/member_provider.dart';
 import '../models/member_model.dart';
 
+/// 💡 v2: 차분한 엑셀식 표. 색 뱃지/이모티콘 없이 행열을 맞춰 보여준다.
 class MemberManagementScreen extends StatefulWidget {
   const MemberManagementScreen({super.key});
 
@@ -14,6 +17,21 @@ class MemberManagementScreen extends StatefulWidget {
 class _MemberManagementScreenState extends State<MemberManagementScreen> {
   bool _isEditMode = false;
   List<MemberItem> _localData = [];
+
+  // 열 폭 (엑셀처럼 모든 행이 같은 폭을 쓴다)
+  static const double _wNo = 30;
+  static const double _wGen = 42;
+  static const double _wName = 72;
+  static const double _wType = 38;
+  static const double _wGender = 34;
+  static const double _wBlood = 46;
+  static const double _wPhone = 116;
+  static const double _wEmergency = 116;
+  static const double _wHeight = 48;
+  static const double _wShoe = 48;
+  static const double _wDelete = 32;
+
+  static const Color _line = Color(0xFFD6D6D6);
 
   void _enterEditMode(List<MemberItem> remoteMembers) {
     setState(() {
@@ -54,17 +72,32 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     }
   }
 
+  double get _tableWidth =>
+      _wNo +
+      _wGen +
+      _wName +
+      _wType +
+      _wGender +
+      _wBlood +
+      _wPhone +
+      _wEmergency +
+      _wHeight +
+      _wShoe +
+      (_isEditMode ? _wDelete : 0);
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<EquipmentProvider>(context);
     final memberProvider = Provider.of<MemberProvider>(context);
 
-    final List<MemberItem> displayData = _isEditMode ? _localData : memberProvider.members;
+    final List<MemberItem> displayData =
+        _isEditMode ? _localData : memberProvider.members;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('👥 동아리원 명단', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('동아리원 명단',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         centerTitle: true,
@@ -73,7 +106,8 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
             if (!_isEditMode)
               TextButton(
                 onPressed: () => _enterEditMode(memberProvider.members),
-                child: const Text('수정', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                child: const Text('수정',
+                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
               )
             else ...[
               TextButton(
@@ -82,7 +116,8 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
               ),
               TextButton(
                 onPressed: () => _saveChanges(memberProvider),
-                child: const Text('완료', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                child: const Text('완료',
+                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
               ),
             ]
           ],
@@ -90,244 +125,261 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
         ],
       ),
       body: displayData.isEmpty
-          ? const Center(child: Text('대원을 추가해주세요.', style: TextStyle(color: Colors.grey)))
-          : ListView.builder(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-        itemCount: displayData.length,
-        itemBuilder: (context, index) {
-          final member = displayData[index];
-          return _buildInlineEditableCard(context, auth, memberProvider, member, index);
-        },
-      ),
+          ? const Center(
+              child: Text('대원을 추가해주세요.', style: TextStyle(color: Colors.grey)))
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final width = math.max(_tableWidth, constraints.maxWidth);
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: width,
+                    height: constraints.maxHeight,
+                    child: Column(
+                      children: [
+                        _buildHeaderRow(),
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 100),
+                            itemCount: displayData.length,
+                            itemBuilder: (context, index) => _buildMemberRow(
+                                auth, memberProvider, displayData[index], index),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
       floatingActionButton: (auth.isAdmin && _isEditMode)
           ? FloatingActionButton.extended(
-        onPressed: () {
-          setState(() {
-            _localData.add(MemberItem(
-              id: '',
-              name: '',
-              generation: '',
-              phone: '',
-              gender: 'male',
-              order: _localData.length, // 신규 대원은 마지막 순번
-            ));
-          });
-        },
-        backgroundColor: Colors.blue[800],
-        icon: const Icon(Icons.person_add, color: Colors.white),
-        label: const Text('대원 추가', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      )
+              onPressed: () {
+                setState(() {
+                  _localData.add(MemberItem(
+                    id: '',
+                    name: '',
+                    generation: '',
+                    phone: '',
+                    gender: 'male',
+                    order: _localData.length, // 신규 대원은 마지막 순번
+                  ));
+                });
+              },
+              backgroundColor: Colors.blue[800],
+              icon: const Icon(Icons.person_add, color: Colors.white),
+              label: const Text('대원 추가',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            )
           : null,
     );
   }
 
-  Widget _buildInlineEditableCard(BuildContext context, EquipmentProvider auth, MemberProvider provider, MemberItem member, int index) {
-    final bool enabled = auth.isAdmin && _isEditMode;
-    final bool isMale = member.gender == 'male';
-    final bool isOb = member.memberType == 'OB';
+  // ------------------------------------------------------------- 표 구성
 
-    return Container(
-      key: ValueKey(member.id.isEmpty ? 'new_${member.hashCode}_$index' : member.id),
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+  Widget _cell(double width, Widget child,
+      {Color? bg, double height = 36, VoidCallback? onTap}) {
+    final cell = Container(
+      width: width,
+      height: height,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: enabled ? Colors.blue[100]! : Colors.grey[200]!),
+        color: bg,
+        border: const Border(
+          right: BorderSide(color: _line, width: 0.6),
+          bottom: BorderSide(color: _line, width: 0.6),
+        ),
       ),
-      child: Column(
-        children: [
-          // ── 1줄: 성별 · 이름 · 기수 · OB/YB · 혈액형 · (삭제)
-          Row(
-            children: [
-              // 💡 순번은 '1.' 기수는 '33기'로 표기해 숫자 혼동 방지
-              SizedBox(
-                width: 22,
-                child: Text('${index + 1}.',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[400])),
-              ),
-              const SizedBox(width: 6),
-              // 💡 배치: 기수 → 이름 → YB/OB … 성별 → 혈액형
-              _inlineTextField(
-                initialValue: member.generation,
-                hint: "기수",
-                width: 26,
-                fontSize: 11,
-                textColor: Colors.grey,
-                textAlign: TextAlign.end,
-                enabled: enabled,
-                onChanged: (v) => _updateLocalItem(index, generation: v),
-              ),
-              if (member.generation.isNotEmpty)
-                Text('기', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-              const SizedBox(width: 6),
-              _inlineTextField(
-                initialValue: member.name,
-                hint: "이름",
-                width: 64,
-                isBold: true,
-                enabled: enabled,
-                onChanged: (v) => _updateLocalItem(index, name: v),
-              ),
-              const SizedBox(width: 4),
-              // 💡 OB/YB 구분 뱃지 (수정 모드에서 탭하면 전환)
-              GestureDetector(
-                onTap: enabled
-                    ? () => setState(() =>
-                        _updateLocalItem(index, memberType: isOb ? 'YB' : 'OB'))
-                    : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isOb ? Colors.indigo[50] : Colors.teal[50],
-                    borderRadius: BorderRadius.circular(6),
-                    border: enabled
-                        ? Border.all(color: isOb ? Colors.indigo[200]! : Colors.teal[200]!)
-                        : null,
-                  ),
-                  child: Text(
-                    member.memberType,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: isOb ? Colors.indigo : Colors.teal[700],
-                    ),
-                  ),
-                ),
-              ),
-              const Spacer(),
-              // 💡 성별: 글자 뱃지 (수정 모드에서 탭하면 전환)
-              GestureDetector(
-                onTap: enabled
-                    ? () => setState(() =>
-                        _updateLocalItem(index, gender: isMale ? 'female' : 'male'))
-                    : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: isMale ? Colors.blue[50] : Colors.pink[50],
-                    borderRadius: BorderRadius.circular(6),
-                    border: enabled
-                        ? Border.all(color: isMale ? Colors.blue[200]! : Colors.pink[200]!)
-                        : null,
-                  ),
-                  child: Text(
-                    isMale ? '남' : '여',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.bold,
-                      color: isMale ? Colors.blue[700] : Colors.pink[400],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              _inlineTextField(
-                initialValue: member.bloodType,
-                hint: "혈액형",
-                width: 40,
-                fontSize: 11,
-                textColor: Colors.redAccent,
-                textAlign: TextAlign.center,
-                enabled: enabled,
-                onChanged: (v) => _updateLocalItem(index, bloodType: v),
-              ),
-              if (enabled)
-                GestureDetector(
-                  onTap: () => _confirmDelete(context, provider, member, index),
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 6),
-                    child: Icon(Icons.remove_circle_outline, size: 16, color: Colors.redAccent),
-                  ),
-                ),
-            ],
-          ),
+      child: child,
+    );
+    if (onTap == null) return cell;
+    return InkWell(onTap: onTap, child: cell);
+  }
 
-          // ── 2줄: 연락처 · 비상연락처 · 신장 · 족장
-          Row(
-            children: [
-              const SizedBox(width: 22),
-              const Icon(Icons.phone, size: 10, color: Colors.blue),
-              const SizedBox(width: 3),
-              Expanded(
-                child: _inlineTextField(
-                  initialValue: member.phone,
-                  hint: "연락처",
-                  fontSize: 10.5,
-                  enabled: enabled,
-                  onChanged: (v) => _updateLocalItem(index, phone: v),
-                ),
-              ),
-              const Icon(Icons.emergency, size: 10, color: Colors.red),
-              const SizedBox(width: 3),
-              Expanded(
-                child: _inlineTextField(
-                  initialValue: member.emergencyContact,
-                  hint: "비상연락처",
-                  fontSize: 10.5,
-                  enabled: enabled,
-                  onChanged: (v) => _updateLocalItem(index, emergencyContact: v),
-                ),
-              ),
-              const SizedBox(width: 6),
-              _inlineTextField(
-                initialValue: member.height,
-                hint: "000",
-                width: 30,
-                fontSize: 10.5,
-                enabled: enabled,
-                onChanged: (v) => _updateLocalItem(index, height: v),
-              ),
-              Text("cm", style: TextStyle(fontSize: 9.5, color: Colors.grey[400])),
-              const SizedBox(width: 6),
-              _inlineTextField(
-                initialValue: member.shoeSize,
-                hint: "000",
-                width: 30,
-                fontSize: 10.5,
-                enabled: enabled,
-                onChanged: (v) => _updateLocalItem(index, shoeSize: v),
-              ),
-              Text("mm", style: TextStyle(fontSize: 9.5, color: Colors.grey[400])),
-            ],
-          ),
+  Widget _headText(String text) => Text(text,
+      style: TextStyle(
+          fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.grey[700]));
+
+  Widget _buildHeaderRow() {
+    return Container(
+      color: const Color(0xFFF3F4F6),
+      child: Row(
+        children: [
+          _cell(_wNo, _headText('No'), height: 32),
+          _cell(_wGen, _headText('기수'), height: 32),
+          _cell(_wName, _headText('이름'), height: 32),
+          _cell(_wType, _headText('구분'), height: 32),
+          _cell(_wGender, _headText('성별'), height: 32),
+          _cell(_wBlood, _headText('혈액형'), height: 32),
+          _cell(_wPhone, _headText('연락처'), height: 32),
+          _cell(_wEmergency, _headText('비상연락처'), height: 32),
+          _cell(_wHeight, _headText('신장'), height: 32),
+          _cell(_wShoe, _headText('족장'), height: 32),
+          if (_isEditMode) _cell(_wDelete, const SizedBox(), height: 32),
         ],
       ),
     );
   }
+
+  Widget _buildMemberRow(EquipmentProvider auth, MemberProvider provider,
+      MemberItem member, int index) {
+    final bool enabled = auth.isAdmin && _isEditMode;
+    final bool isMale = member.gender == 'male';
+    final bool isOb = member.memberType == 'OB';
+
+    Text plain(String text, {bool bold = false, Color? color}) => Text(
+          text,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+            color: color ?? Colors.black87,
+          ),
+        );
+
+    // 수정 모드에서 탭 전환 셀임을 알리는 옅은 배경
+    final toggleBg = enabled ? const Color(0xFFF0F6FF) : null;
+
+    return Row(
+      key: ValueKey(member.id.isEmpty ? 'new_${member.hashCode}_$index' : member.id),
+      children: [
+        _cell(_wNo, plain('${index + 1}', color: Colors.grey[500])),
+        enabled
+            ? _cell(
+                _wGen,
+                _inlineTextField(
+                  initialValue: member.generation,
+                  hint: '기수',
+                  textAlign: TextAlign.center,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, generation: v),
+                ))
+            : _cell(_wGen,
+                plain(member.generation.isEmpty ? '' : '${member.generation}기')),
+        enabled
+            ? _cell(
+                _wName,
+                _inlineTextField(
+                  initialValue: member.name,
+                  hint: '이름',
+                  isBold: true,
+                  textAlign: TextAlign.center,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, name: v),
+                ))
+            : _cell(_wName, plain(member.name, bold: true)),
+        _cell(
+          _wType,
+          plain(member.memberType),
+          bg: toggleBg,
+          onTap: enabled
+              ? () => setState(
+                  () => _updateLocalItem(index, memberType: isOb ? 'YB' : 'OB'))
+              : null,
+        ),
+        _cell(
+          _wGender,
+          plain(isMale ? '남' : '여'),
+          bg: toggleBg,
+          onTap: enabled
+              ? () => setState(
+                  () => _updateLocalItem(index, gender: isMale ? 'female' : 'male'))
+              : null,
+        ),
+        enabled
+            ? _cell(
+                _wBlood,
+                _inlineTextField(
+                  initialValue: member.bloodType,
+                  hint: '혈액형',
+                  textAlign: TextAlign.center,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, bloodType: v),
+                ))
+            : _cell(_wBlood, plain(member.bloodType)),
+        enabled
+            ? _cell(
+                _wPhone,
+                _inlineTextField(
+                  initialValue: member.phone,
+                  hint: '연락처',
+                  textAlign: TextAlign.center,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, phone: v),
+                ))
+            : _cell(_wPhone, plain(member.phone)),
+        enabled
+            ? _cell(
+                _wEmergency,
+                _inlineTextField(
+                  initialValue: member.emergencyContact,
+                  hint: '비상연락처',
+                  textAlign: TextAlign.center,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, emergencyContact: v),
+                ))
+            : _cell(_wEmergency, plain(member.emergencyContact)),
+        enabled
+            ? _cell(
+                _wHeight,
+                _inlineTextField(
+                  initialValue: member.height,
+                  hint: 'cm',
+                  textAlign: TextAlign.center,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, height: v),
+                ))
+            : _cell(_wHeight, plain(member.height)),
+        enabled
+            ? _cell(
+                _wShoe,
+                _inlineTextField(
+                  initialValue: member.shoeSize,
+                  hint: 'mm',
+                  textAlign: TextAlign.center,
+                  enabled: enabled,
+                  onChanged: (v) => _updateLocalItem(index, shoeSize: v),
+                ))
+            : _cell(_wShoe, plain(member.shoeSize)),
+        if (_isEditMode)
+          _cell(
+            _wDelete,
+            const Icon(Icons.remove_circle_outline, size: 15, color: Colors.redAccent),
+            onTap: enabled
+                ? () => _confirmDelete(context, provider, member, index)
+                : null,
+          ),
+      ],
+    );
+  }
+
   Widget _inlineTextField({
     required String initialValue,
     required String hint,
     required bool enabled,
     required Function(String) onChanged,
-    double? width,
-    double fontSize = 13,
     bool isBold = false,
-    Color? textColor,
     TextAlign textAlign = TextAlign.start,
   }) {
-    return SizedBox(
-      width: width,
-      child: TextFormField(
-        key: ValueKey('${initialValue}_$enabled'),
-        initialValue: initialValue,
-        enabled: enabled,
-        textAlign: textAlign,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-          color: textColor ?? Colors.black87,
-        ),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(fontSize: fontSize, color: Colors.grey[300]),
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 4),
-          border: enabled ? const UnderlineInputBorder(borderSide: BorderSide(color: Colors.blue, width: 0.5)) : InputBorder.none,
-        ),
-        onChanged: onChanged,
+    return TextFormField(
+      key: ValueKey('${initialValue}_$enabled'),
+      initialValue: initialValue,
+      enabled: enabled,
+      textAlign: textAlign,
+      style: TextStyle(
+        fontSize: 12,
+        fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
+        color: Colors.black87,
       ),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(fontSize: 11, color: Colors.grey[300]),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(vertical: 4),
+        border: InputBorder.none,
+      ),
+      onChanged: onChanged,
     );
   }
 
