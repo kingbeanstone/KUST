@@ -1,15 +1,12 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../providers/dive_log_provider.dart';
-import '../providers/member_provider.dart';
 import '../models/dive_log_model.dart';
-import '../models/member_model.dart';
 
 /// 💡 나의 다이브 로그 + 성장 그래프.
-/// 로그인 없이 '내 이름'을 기기에 기억시키고, 로그는 동아리원 문서 밑에 쌓인다.
+/// 개인 체크리스트처럼 이 기기(브라우저)에만 저장한다 — 열면 바로 내 로그.
 class DiveLogScreen extends StatefulWidget {
   const DiveLogScreen({super.key});
 
@@ -18,9 +15,9 @@ class DiveLogScreen extends StatefulWidget {
 }
 
 class _DiveLogScreenState extends State<DiveLogScreen> {
-  static const _prefsKey = 'my_member_id';
+  static const _prefsKey = 'my_dive_logs';
 
-  String? _myId;
+  List<DiveLog> _logs = [];
   bool _loaded = false;
 
   /// 그래프 기준: 'end'(잔여 바) | 'sac'(분당 소모)
@@ -37,7 +34,7 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
   @override
   void initState() {
     super.initState();
-    _loadMyId();
+    _load();
   }
 
   @override
@@ -51,23 +48,45 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     super.dispose();
   }
 
-  Future<void> _loadMyId() async {
+  // ------------------------------------------------------------- 저장/불러오기
+
+  Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final id = prefs.getString(_prefsKey);
+    final raw = prefs.getString(_prefsKey);
+    final logs = <DiveLog>[];
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        for (final item in jsonDecode(raw) as List) {
+          final map = Map<String, dynamic>.from(item);
+          logs.add(DiveLog.fromMap((map['id'] ?? '').toString(), map));
+        }
+      } catch (e) {
+        debugPrint('다이브 로그 로드 실패: $e');
+      }
+    }
+    _sort(logs);
     if (!mounted) return;
     setState(() {
-      _myId = id;
+      _logs = logs;
       _loaded = true;
     });
-    if (id != null) context.read<DiveLogProvider>().setMember(id);
   }
 
-  Future<void> _pickMe(String memberId) async {
+  void _sort(List<DiveLog> logs) {
+    logs.sort((a, b) {
+      final d = a.date.compareTo(b.date);
+      return d != 0 ? d : a.id.compareTo(b.id);
+    });
+  }
+
+  Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, memberId);
-    if (!mounted) return;
-    setState(() => _myId = memberId);
-    context.read<DiveLogProvider>().setMember(memberId);
+    await prefs.setString(
+      _prefsKey,
+      jsonEncode([
+        for (final log in _logs) {'id': log.id, ...log.toMap()},
+      ]),
+    );
   }
 
   String _fmt(double v) =>
@@ -77,15 +96,24 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final memberProvider = context.watch<MemberProvider>();
-
     if (!_loaded) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    MemberItem? me;
-    for (final m in memberProvider.members) {
-      if (m.id == _myId) me = m;
+    // 그래프 값 (기준에 따라)
+    final values = <double>[];
+    final labels = <String>[];
+    for (final log in _logs) {
+      final v = _metric == 'end'
+          ? (log.endBar > 0 ? log.endBar : null)
+          : log.consumptionPerMin;
+      if (v == null) continue;
+      values.add(v);
+      // 'YYYY-MM-DD' → 'M/D'
+      final parts = log.date.split('-');
+      labels.add(parts.length == 3
+          ? '${int.tryParse(parts[1]) ?? parts[1]}/${int.tryParse(parts[2]) ?? parts[2]}'
+          : log.date);
     }
 
     return Scaffold(
@@ -95,187 +123,115 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
-        actions: [
-          if (me != null)
-            TextButton(
-              onPressed: () => setState(() => _myId = null),
-              child: Text('이름 변경',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 90),
+        children: [
+          // ── 요약
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: Row(
+              children: [
+                const Text('나의 로그',
+                    style:
+                        TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Text('총 ${_logs.length}회',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[800])),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 성장 그래프
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('성장 그래프',
+                        style: TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    _metricChip('end', '잔여 바'),
+                    const SizedBox(width: 6),
+                    _metricChip('sac', '분당 소모'),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _metric == 'end'
+                      ? '다이빙 후 남은 공기. 높아질수록 성장!'
+                      : '1분에 쓰는 공기(bar/min). 낮아질수록 성장!',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 170,
+                  width: double.infinity,
+                  child: values.length < 2
+                      ? Center(
+                          child: Text(
+                            '로그가 2개 이상 쌓이면 그래프가 그려집니다.',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey[400]),
+                          ),
+                        )
+                      : CustomPaint(
+                          painter: _LineChartPainter(
+                            values: values,
+                            labels: labels,
+                            color: _metric == 'end'
+                                ? Colors.blue[700]!
+                                : Colors.teal[600]!,
+                            unit: _metric == 'end' ? 'bar' : '',
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 로그 목록 (최근이 위)
+          if (_logs.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(left: 4, bottom: 6),
+              child: Text('로그',
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black54)),
+            ),
+          for (var i = _logs.length - 1; i >= 0; i--) _logRow(i, _logs[i]),
+
+          const SizedBox(height: 10),
+          Center(
+            child: Text('이 로그는 내 기기에만 저장됩니다.',
+                style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+          ),
         ],
       ),
-      body: me == null
-          ? _buildNamePicker(memberProvider)
-          : _buildLogBody(me),
-      floatingActionButton: me != null
-          ? FloatingActionButton.extended(
-              onPressed: () => _showLogDialog(),
-              backgroundColor: Colors.blue[800],
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('로그 추가',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
-            )
-          : null,
-    );
-  }
-
-  // ------------------------------------------------------------- 이름 선택
-
-  Widget _buildNamePicker(MemberProvider memberProvider) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 4),
-          child: Text('내 이름을 선택하세요',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        ),
-        Text('이 기기에 기억되고, 내 로그는 내 이름에 쌓입니다.',
-            style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final m in memberProvider.members)
-              GestureDetector(
-                onTap: () => _pickMe(m.id),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Text(
-                    '${m.generation}기 ${m.name}',
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // ------------------------------------------------------------- 로그 본문
-
-  Widget _buildLogBody(MemberItem me) {
-    final provider = context.watch<DiveLogProvider>();
-    final logs = provider.logs;
-
-    // 그래프 값 (기준에 따라)
-    final values = <double>[];
-    final labels = <String>[];
-    for (final log in logs) {
-      final v = _metric == 'end' ? log.endBar : log.consumptionPerMin;
-      if (v == null || (_metric == 'end' && log.endBar <= 0)) continue;
-      values.add(v is double ? v : (v as num).toDouble());
-      // 'YYYY-MM-DD' → 'M/D'
-      final parts = log.date.split('-');
-      labels.add(parts.length == 3
-          ? '${int.tryParse(parts[1]) ?? parts[1]}/${int.tryParse(parts[2]) ?? parts[2]}'
-          : log.date);
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 90),
-      children: [
-        // ── 요약
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Text('${me.generation}기 ${me.name}',
-                  style: const TextStyle(
-                      fontSize: 14.5, fontWeight: FontWeight.bold)),
-              const Spacer(),
-              Text('총 ${logs.length}회',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue[800])),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // ── 성장 그래프
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Text('성장 그래프',
-                      style: TextStyle(
-                          fontSize: 13.5, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  _metricChip('end', '잔여 바'),
-                  const SizedBox(width: 6),
-                  _metricChip('sac', '분당 소모'),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _metric == 'end'
-                    ? '다이빙 후 남은 공기. 높아질수록 성장!'
-                    : '1분에 쓰는 공기(bar/min). 낮아질수록 성장!',
-                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 170,
-                width: double.infinity,
-                child: values.length < 2
-                    ? Center(
-                        child: Text(
-                          '로그가 2개 이상 쌓이면 그래프가 그려집니다.',
-                          style:
-                              TextStyle(fontSize: 12, color: Colors.grey[400]),
-                        ),
-                      )
-                    : CustomPaint(
-                        painter: _LineChartPainter(
-                          values: values,
-                          labels: labels,
-                          color: _metric == 'end'
-                              ? Colors.blue[700]!
-                              : Colors.teal[600]!,
-                          unit: _metric == 'end' ? 'bar' : '',
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // ── 로그 목록 (최근이 위)
-        if (logs.isNotEmpty)
-          const Padding(
-            padding: EdgeInsets.only(left: 4, bottom: 6),
-            child: Text('로그',
-                style: TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black54)),
-          ),
-        for (var i = logs.length - 1; i >= 0; i--) _logRow(i, logs[i]),
-      ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showLogDialog(),
+        backgroundColor: Colors.blue[800],
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('로그 추가',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
     );
   }
 
@@ -373,8 +329,6 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     _endBarController.text =
         log != null && log.endBar > 0 ? _fmt(log.endBar) : '';
 
-    final provider = context.read<DiveLogProvider>();
-
     Widget numField(TextEditingController c, String label) => Expanded(
           child: TextField(
             controller: c,
@@ -435,7 +389,8 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
           if (log != null)
             TextButton(
               onPressed: () {
-                provider.deleteLog(log.id);
+                setState(() => _logs.removeWhere((l) => l.id == log.id));
+                _save();
                 Navigator.pop(dialogContext);
               },
               child: const Text('삭제', style: TextStyle(color: Colors.red)),
@@ -451,7 +406,8 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
               final date = _dateController.text.trim();
               if (date.isEmpty) return;
               final newLog = DiveLog(
-                id: log?.id ?? '',
+                id: log?.id ??
+                    DateTime.now().microsecondsSinceEpoch.toString(),
                 date: date,
                 site: _siteController.text.trim(),
                 depth: num0(_depthController),
@@ -459,11 +415,12 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                 startBar: num0(_startBarController),
                 endBar: num0(_endBarController),
               );
-              if (log == null) {
-                provider.addLog(newLog);
-              } else {
-                provider.updateLog(newLog);
-              }
+              setState(() {
+                _logs.removeWhere((l) => l.id == newLog.id);
+                _logs.add(newLog);
+                _sort(_logs);
+              });
+              _save();
               Navigator.pop(dialogContext);
             },
             child: const Text('저장'),
@@ -521,7 +478,8 @@ class _LineChartPainter extends CustomPainter {
     for (var g = 0; g <= 2; g++) {
       final gv = minV + (maxV - minV) * g / 2;
       final gy = y(gv);
-      canvas.drawLine(Offset(leftPad, gy), Offset(size.width - 4, gy), gridPaint);
+      canvas.drawLine(
+          Offset(leftPad, gy), Offset(size.width - 4, gy), gridPaint);
       _text(canvas, _fmtV(gv), Offset(0, gy - 6), 9.5, Colors.grey[500]!);
     }
 
@@ -570,7 +528,8 @@ class _LineChartPainter extends CustomPainter {
   String _fmtV(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 
-  void _text(Canvas canvas, String text, Offset offset, double size, Color color,
+  void _text(
+      Canvas canvas, String text, Offset offset, double size, Color color,
       {bool bold = false}) {
     final painter = TextPainter(
       text: TextSpan(
