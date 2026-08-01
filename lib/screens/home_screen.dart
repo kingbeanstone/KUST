@@ -11,6 +11,7 @@ import 'search_screen.dart';
 import 'member_management_screen.dart';
 import 'participant_screen.dart';
 import 'buddy_screen.dart';
+import 'personal_checklist_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -95,6 +96,10 @@ class HomeScreen extends StatelessWidget {
                     title: '버디',
                     icon: Icons.people_outline_rounded, color: Colors.teal,
                     target: const BuddyScreen()),
+                _buildMenuCard(context,
+                    title: '개인 체크리스트',
+                    icon: Icons.luggage_outlined, color: Colors.indigo,
+                    target: const PersonalChecklistScreen()),
               ],
             ),
 
