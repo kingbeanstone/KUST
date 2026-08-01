@@ -27,6 +27,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
   int _selectedDateIndex = 0;
   bool _isEditMode = false;
 
+  /// 하단 픽커 확장 여부 (끌거나 탭해서 전환)
+  bool _pickerExpanded = false;
+
   // 사람 배치 선택 상태
   int? _selBlockIdx;
   int? _selTeamIdx; // block.teamIds 안에서의 위치
@@ -1454,9 +1457,14 @@ class _BuddyScreenState extends State<BuddyScreen> {
       }
     }
 
-    return Container(
-      height: 250,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    // 💡 살짝 끌면 화면 절반 이상으로 확장, 다시 내리면 원래 높이로
+    final expandedHeight = MediaQuery.of(context).size.height * 0.55;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      height: _pickerExpanded ? expandedHeight : 250,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -1466,25 +1474,53 @@ class _BuddyScreenState extends State<BuddyScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Text('참가자 선택',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.blue)),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    height: 24,
-                    child: _buildPickerItem('❌ 비우기', false,
-                        () => _assignMember('', dayData, buddyProvider)),
+          // 드래그 핸들 + 헤더 (끌거나 탭하면 확장/축소)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _pickerExpanded = !_pickerExpanded),
+            onVerticalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (velocity < 0) setState(() => _pickerExpanded = true);
+              if (velocity > 0) setState(() => _pickerExpanded = false);
+            },
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 6, bottom: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ],
-              ),
-              if (selectionLabel != null)
-                Text(selectionLabel,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
-            ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('참가자 선택',
+                            style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue)),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          height: 24,
+                          child: _buildPickerItem('❌ 비우기', false,
+                              () => _assignMember('', dayData, buddyProvider)),
+                        ),
+                      ],
+                    ),
+                    if (selectionLabel != null)
+                      Text(selectionLabel,
+                          style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 6),
           Expanded(
