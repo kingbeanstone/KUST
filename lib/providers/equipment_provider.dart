@@ -308,6 +308,15 @@ class EquipmentProvider with ChangeNotifier {
     addLog('그룹 추가: ${group.name}');
   }
 
+  Future<void> renameGroup(String groupId, String newName) async {
+    if (!_isAdmin || newName.trim().isEmpty) return;
+    await _saveGroups([
+      for (final g in _groups)
+        g.id == groupId ? EquipmentGroup(id: g.id, name: newName.trim()) : g
+    ]);
+    addLog('그룹 이름 변경: $newName');
+  }
+
   Future<void> deleteGroup(String groupId) async {
     if (!_isAdmin) return;
     // 소속 대원을 먼저 미지정으로 되돌린 뒤 그룹을 지운다.

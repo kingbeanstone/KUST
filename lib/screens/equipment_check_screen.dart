@@ -129,6 +129,9 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   ///    그래서 화면 State가 소유하고 화면 dispose에서 정리한다.
   final TextEditingController _groupNameController = TextEditingController();
 
+  /// 그룹 이름 변경 다이얼로그용 (새 그룹 입력란과 분리)
+  final TextEditingController _groupRenameController = TextEditingController();
+
   final ScrollController _headerHController = ScrollController();
   final ScrollController _bodyHController = ScrollController();
 
@@ -171,6 +174,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     _headerHController.dispose();
     _bodyHController.dispose();
     _groupNameController.dispose();
+    _groupRenameController.dispose();
     super.dispose();
   }
 
@@ -756,21 +760,38 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                               : FontWeight.bold,
                         ),
                       ),
-                      // 💡 명시적인 그룹 삭제 버튼 (선택된 그룹이 있을 때)
+                      // 💡 선택된 그룹의 이름 변경 / 삭제 버튼
                       if (selectedGroupId != null &&
                           groups.any((g) => g.id == selectedGroupId))
                         Align(
                           alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () {
-                              final g = groups
-                                  .firstWhere((g) => g.id == selectedGroupId);
-                              _confirmDeleteGroup(ctx, provider, g.id, g.name);
-                            },
-                            icon: const Icon(Icons.delete_outline,
-                                size: 15, color: _badColor),
-                            label: const Text('선택한 그룹 삭제',
-                                style: TextStyle(fontSize: 12, color: _badColor)),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () {
+                                  final g = groups
+                                      .firstWhere((g) => g.id == selectedGroupId);
+                                  _renameGroupDialog(ctx, provider, g);
+                                },
+                                icon: const Icon(Icons.edit_outlined,
+                                    size: 15, color: groupHeaderColor),
+                                label: const Text('이름 변경',
+                                    style: TextStyle(
+                                        fontSize: 12, color: groupHeaderColor)),
+                              ),
+                              TextButton.icon(
+                                onPressed: () {
+                                  final g = groups
+                                      .firstWhere((g) => g.id == selectedGroupId);
+                                  _confirmDeleteGroup(ctx, provider, g.id, g.name);
+                                },
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 15, color: _badColor),
+                                label: const Text('삭제',
+                                    style: TextStyle(fontSize: 12, color: _badColor)),
+                              ),
+                            ],
                           ),
                         ),
                     ],
@@ -859,6 +880,35 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
             );
           },
         ),
+      ),
+    );
+  }
+
+  void _renameGroupDialog(
+      BuildContext sheetCtx, EquipmentProvider provider, EquipmentGroup group) {
+    _groupRenameController.text = group.name;
+    showDialog(
+      context: sheetCtx,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('그룹 이름 변경',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: _groupRenameController,
+          autofocus: true,
+          decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () {
+              final name = _groupRenameController.text.trim();
+              if (name.isEmpty) return;
+              provider.renameGroup(group.id, name);
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('저장'),
+          ),
+        ],
       ),
     );
   }
