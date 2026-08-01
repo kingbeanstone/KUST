@@ -140,23 +140,27 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
           // ── 1줄: 성별 · 이름 · 기수 · OB/YB · 혈액형 · (삭제)
           Row(
             children: [
+              // 💡 순번은 '1.' 기수는 '33기'로 표기해 숫자 혼동 방지
               SizedBox(
-                width: 18,
-                child: Text('${index + 1}',
-                    textAlign: TextAlign.center,
+                width: 22,
+                child: Text('${index + 1}.',
+                    textAlign: TextAlign.right,
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey[400])),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               // 💡 배치: 기수 → 이름 → YB/OB … 성별 → 혈액형
               _inlineTextField(
                 initialValue: member.generation,
                 hint: "기수",
-                width: 36,
+                width: 26,
                 fontSize: 11,
                 textColor: Colors.grey,
+                textAlign: TextAlign.end,
                 enabled: enabled,
                 onChanged: (v) => _updateLocalItem(index, generation: v),
               ),
+              if (member.generation.isNotEmpty)
+                Text('기', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
               const SizedBox(width: 6),
               _inlineTextField(
                 initialValue: member.name,

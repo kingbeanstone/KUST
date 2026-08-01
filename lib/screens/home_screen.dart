@@ -118,6 +118,9 @@ class HomeScreen extends StatelessWidget {
   //    '만들기' 개념 없음 — 아직 데이터가 없는 시즌은 빈 상태에서 시작한다.
   void _showExpeditionSheet(BuildContext context) {
     bool busy = false;
+    // 💡 시트 안에서는 로컬 선택만 (버튼 반응 즉시) — [선택 완료]에서 실제 적용
+    int? pickedYear;
+    String? pickedSeason;
 
     showModalBottomSheet(
       context: context,
@@ -131,9 +134,10 @@ class HomeScreen extends StatelessWidget {
           builder: (ctx2, expProvider, equipProvider, _) {
             final isAdmin = equipProvider.isAdmin;
             final selected = expProvider.selected;
-            final selYear =
-                selected?.year ?? DateTime.now().year.clamp(_minYear, _maxYear);
-            final selSeason = selected?.season ?? 'winter';
+            final selYear = pickedYear ??
+                selected?.year ??
+                DateTime.now().year.clamp(_minYear, _maxYear);
+            final selSeason = pickedSeason ?? selected?.season ?? 'winter';
             final hasLegacyTarget =
                 expProvider.expeditions.every((e) => e.id != '2025_winter');
 
@@ -184,8 +188,7 @@ class HomeScreen extends StatelessWidget {
                             label: '$year',
                             selected: isSel,
                             width: 62,
-                            // 💡 둘러보기는 선택만 — 문서를 만들지 않는다
-                            onTap: () => expProvider.select('${year}_$selSeason'),
+                            onTap: () => setSheetState(() => pickedYear = year),
                           );
                         }),
                       ),
@@ -209,9 +212,8 @@ class HomeScreen extends StatelessWidget {
                               label: entry.value,
                               selected: isSel,
                               width: 74,
-                              // 💡 둘러보기는 선택만 — 문서를 만들지 않는다
                               onTap: () =>
-                                  expProvider.select('${selYear}_${entry.key}'),
+                                  setSheetState(() => pickedSeason = entry.key),
                             );
                           }).toList(),
                         ),
@@ -259,11 +261,14 @@ class HomeScreen extends StatelessWidget {
                 ),
                     ),
                     const SizedBox(height: 12),
-                    // 💡 선택 완료: 시트를 닫는다 (선택은 탭 즉시 이미 반영된 상태)
+                    // 💡 선택 완료: 이때 실제로 원정을 전환하고 시트를 닫는다
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () => Navigator.pop(ctx),
+                        onPressed: () {
+                          expProvider.select('${selYear}_$selSeason');
+                          Navigator.pop(ctx);
+                        },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue[800],
                           foregroundColor: Colors.white,

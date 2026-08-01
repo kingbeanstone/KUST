@@ -1,9 +1,16 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/schedule_provider.dart';
 import '../models/schedule_model.dart';
 
+/// 💡 v2: 구글 캘린더식 주간 그리드.
+/// 좌측 00~24시 시간축 + 일차별 열. 일정 블록은 시간 위치에 절대 배치되어
+/// 하루 전체의 흐름과 각 일정의 길이감이 한눈에 보인다.
+///  - 관리자: 빈 칸을 탭하면 그 시간으로 일정 추가, 블록 탭 = 수정
+///  - 일반: 블록 탭 = 상세 보기
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({super.key});
 
@@ -12,7 +19,61 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
-  int _selectedDateIndex = 0;
+  static const double _hourHeight = 40.0; // 1시간의 세로 픽셀
+  static const double _axisWidth = 46.0; // 좌측 시간축 폭
+  static const double _headerHeight = 42.0; // 일차 헤더 높이
+
+  // 아침 6시부터 보이도록 초기 스크롤
+  final ScrollController _vScroll =
+      ScrollController(initialScrollOffset: 6 * _hourHeight);
+  final ScrollController _headerHScroll = ScrollController();
+  final ScrollController _bodyHScroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // 헤더와 본문의 가로 스크롤 동기화
+    _headerHScroll.addListener(() {
+      if (_bodyHScroll.hasClients && _bodyHScroll.offset != _headerHScroll.offset) {
+        _bodyHScroll.jumpTo(_headerHScroll.offset);
+      }
+    });
+    _bodyHScroll.addListener(() {
+      if (_headerHScroll.hasClients && _headerHScroll.offset != _bodyHScroll.offset) {
+        _headerHScroll.jumpTo(_bodyHScroll.offset);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _vScroll.dispose();
+    _headerHScroll.dispose();
+    _bodyHScroll.dispose();
+    super.dispose();
+  }
+
+  // ------------------------------------------------------------- 시간 유틸
+
+  /// 'HH:MM' 형태를 분 단위로 파싱 ('~14:30' 같은 접두어 허용, 실패 시 null)
+  int? _parseMinutes(String time) {
+    final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(time);
+    if (match == null) return null;
+    return int.parse(match.group(1)!) * 60 + int.parse(match.group(2)!);
+  }
+
+  /// 새 일정을 시간순으로 끼워 넣을 위치 (파싱 불가면 맨 뒤)
+  int _autoInsertIndex(List<ScheduleItem> items, String time) {
+    final newMinutes = _parseMinutes(time);
+    if (newMinutes == null) return items.length;
+    for (var i = 0; i < items.length; i++) {
+      final t = _parseMinutes(items[i].time);
+      if (t != null && t > newMinutes) return i;
+    }
+    return items.length;
+  }
+
+  // ------------------------------------------------------------- 다이얼로그
 
   // 💡 날짜 탭 관리 다이얼로그 (ScheduleProvider와 연결)
   void _showManageDaysDialog(BuildContext context, ScheduleProvider scheduleProvider) {
@@ -116,29 +177,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  /// 'HH:MM' 형태를 분 단위로 파싱 ('~14:30' 같은 접두어 허용, 실패 시 null)
-  int? _parseMinutes(String time) {
-    final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(time);
-    if (match == null) return null;
-    return int.parse(match.group(1)!) * 60 + int.parse(match.group(2)!);
-  }
-
-  /// 새 일정을 시간순으로 끼워 넣을 위치 (파싱 불가면 맨 뒤)
-  int _autoInsertIndex(List<ScheduleItem> items, String time) {
-    final newMinutes = _parseMinutes(time);
-    if (newMinutes == null) return items.length;
-    for (var i = 0; i < items.length; i++) {
-      final t = _parseMinutes(items[i].time);
-      if (t != null && t > newMinutes) return i;
-    }
-    return items.length;
-  }
-
-  // 일정 항목 다이얼로그 (ScheduleProvider와 연결)
-  void _showItemDialog(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, {ScheduleItem? item, int? index}) {
+  // 일정 항목 추가/수정 다이얼로그
+  void _showItemDialog(
+    BuildContext context,
+    ScheduleProvider scheduleProvider,
+    bool isAdmin, {
+    required String dayId,
+    ScheduleItem? item,
+    int? index,
+    String? presetTime,
+  }) {
     if (!isAdmin) return;
-    final TextEditingController _timeController = TextEditingController(text: item?.time ?? "");
-    final TextEditingController _descController = TextEditingController(text: item?.description ?? "");
+    final timeController = TextEditingController(text: item?.time ?? presetTime ?? "");
+    final descController = TextEditingController(text: item?.description ?? "");
 
     showDialog(
       context: context,
@@ -152,13 +203,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: _timeController,
+              controller: timeController,
               decoration: const InputDecoration(labelText: '시간 (예: 08:00)', hintStyle: TextStyle(fontSize: 12)),
               keyboardType: TextInputType.datetime,
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: _descController,
+              controller: descController,
               decoration: const InputDecoration(labelText: '내용', hintText: '활동 내용을 입력하세요'),
             ),
           ],
@@ -168,18 +219,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           if (item != null && index != null)
             TextButton(
               onPressed: () {
-                scheduleProvider.deleteScheduleItem(scheduleProvider.dates[_selectedDateIndex]['id']!, index);
+                scheduleProvider.deleteScheduleItem(dayId, index);
                 Navigator.pop(context);
               },
               child: const Text('삭제', style: TextStyle(color: Colors.red)),
             ),
           ElevatedButton(
             onPressed: () {
-              if (_timeController.text.isEmpty || _descController.text.isEmpty) return;
-              final newItem = ScheduleItem(time: _timeController.text, description: _descController.text);
-              final dayId = scheduleProvider.dates[_selectedDateIndex]['id']!;
+              if (descController.text.isEmpty) return;
+              final newItem = ScheduleItem(
+                  time: timeController.text, description: descController.text);
               if (item == null) {
-                // 💡 새 일정은 시간순으로 자동 삽입 (사이 + 버튼 대체)
+                // 💡 새 일정은 시간순으로 자동 삽입
                 final items = scheduleProvider.schedules
                     .firstWhere((s) => s.id == dayId,
                         orElse: () => DailySchedule(id: dayId, items: []))
@@ -198,158 +249,201 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
+  /// 일반 사용자용 상세 보기 (좁은 열에서 잘린 내용 확인)
+  void _showItemDetail(BuildContext context, String dayLabel, ScheduleItem item) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('$dayLabel ${item.time}',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        content: Text(item.description,
+            style: const TextStyle(fontSize: 14, height: 1.5)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('닫기')),
+        ],
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------- build
+
   @override
   Widget build(BuildContext context) {
-    // 💡 두 Provider를 동시에 가져옵니다.
     final equipmentProvider = Provider.of<EquipmentProvider>(context);
     final scheduleProvider = Provider.of<ScheduleProvider>(context);
 
     final isAdmin = equipmentProvider.isAdmin;
     final dates = scheduleProvider.dates;
-
-    if (_selectedDateIndex >= dates.length) _selectedDateIndex = 0;
-
-    final currentId = dates.isNotEmpty ? dates[_selectedDateIndex]['id']! : "";
-
-    final dailySchedule = scheduleProvider.schedules.firstWhere(
-          (s) => s.id == currentId,
-      orElse: () => DailySchedule(id: currentId, items: []),
-    );
+    final schedulesById = {for (final s in scheduleProvider.schedules) s.id: s};
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('📅 원정 일정', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
           if (isAdmin)
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Center(
+                  child: Text('빈 칸 탭 = 일정 추가',
+                      style: TextStyle(fontSize: 11, color: Colors.blue))),
+            ),
+          if (isAdmin)
             IconButton(
               icon: const Icon(Icons.settings_outlined, color: Colors.blue),
               onPressed: () => _showManageDaysDialog(context, scheduleProvider),
               tooltip: '일자 관리',
             ),
-          if (isAdmin && dailySchedule.items.isNotEmpty)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Center(child: Text('길게 눌러 이동', style: TextStyle(fontSize: 11, color: Colors.blue))),
-            )
         ],
       ),
-      body: Column(
-        children: [
-          // 상단 날짜 바
-          Container(
-            height: 90,
-            color: Colors.white,
-            child: dates.isEmpty
-                ? const Center(child: Text('설정된 일자가 없습니다.'))
-                : ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              itemCount: dates.length,
-              itemBuilder: (context, index) {
-                bool isSelected = _selectedDateIndex == index;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedDateIndex = index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 130,
-                    margin: const EdgeInsets.only(right: 10),
-                    decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue[800] : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isSelected ? Colors.blue[800]! : Colors.grey[200]!,
-                        width: 1.5,
+      body: dates.isEmpty
+          ? _buildEmptyState()
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                // 화면에 다 들어가면 균등 분할, 아니면 84px씩 가로 스크롤
+                final colWidth = math.max(
+                    84.0, (constraints.maxWidth - _axisWidth) / dates.length);
+                final gridWidth = colWidth * dates.length;
+
+                return Column(
+                  children: [
+                    // ── 일차 헤더 행 (세로 스크롤과 무관하게 고정)
+                    SizedBox(
+                      height: _headerHeight,
+                      child: Row(
+                        children: [
+                          const SizedBox(width: _axisWidth),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              controller: _headerHScroll,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: gridWidth,
+                                child: Row(
+                                  children: [
+                                    for (final day in dates)
+                                      Container(
+                                        width: colWidth,
+                                        padding:
+                                            const EdgeInsets.symmetric(horizontal: 2),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                              left: BorderSide(
+                                                  color: Colors.grey[200]!)),
+                                        ),
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Text(
+                                              day['date']!.split(' ').first,
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                            Text(
+                                              day['title']!,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                  fontSize: 9.5,
+                                                  color: Colors.grey[600]),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      boxShadow: isSelected
-                          ? [BoxShadow(color: Colors.blue[800]!.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))]
-                          : [],
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          dates[index]['date']!,
-                          style: TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 0.5,
-                            color: isSelected ? Colors.white.withOpacity(0.8) : Colors.black45,
-                            fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                    const Divider(height: 1),
+
+                    // ── 시간축 + 그리드
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: _vScroll,
+                        child: SizedBox(
+                          height: 24 * _hourHeight,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 시간축 (00~24)
+                              SizedBox(
+                                width: _axisWidth,
+                                height: 24 * _hourHeight,
+                                child: Stack(
+                                  children: [
+                                    for (var h = 1; h < 24; h++)
+                                      Positioned(
+                                        top: h * _hourHeight - 7,
+                                        right: 6,
+                                        child: Text(
+                                          '${h.toString().padLeft(2, '0')}:00',
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.grey[500]),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              // 그리드
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  controller: _bodyHScroll,
+                                  scrollDirection: Axis.horizontal,
+                                  child: SizedBox(
+                                    width: gridWidth,
+                                    height: 24 * _hourHeight,
+                                    child: Stack(
+                                      children: [
+                                        // 시간 격자선
+                                        for (var h = 0; h <= 24; h++)
+                                          Positioned(
+                                            top: math.min(
+                                                h * _hourHeight, 24 * _hourHeight - 1),
+                                            left: 0,
+                                            right: 0,
+                                            child: Container(
+                                                height: 0.7,
+                                                color: Colors.grey[200]),
+                                          ),
+                                        // 일차 열
+                                        for (var i = 0; i < dates.length; i++)
+                                          Positioned(
+                                            left: i * colWidth,
+                                            top: 0,
+                                            width: colWidth,
+                                            height: 24 * _hourHeight,
+                                            child: _buildDayColumn(
+                                              context,
+                                              scheduleProvider,
+                                              isAdmin,
+                                              dates[i],
+                                              schedulesById[dates[i]['id']],
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          dates[index]['title']!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isSelected ? Colors.white : Colors.black87,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 );
               },
             ),
-          ),
-          const Divider(height: 1),
-          // 일정 리스트
-          Expanded(
-            child: dates.isEmpty
-                ? _buildEmptyState()
-                : dailySchedule.items.isEmpty
-                ? _buildEmptyState()
-                : isAdmin
-                ? ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 16, 16, 80),
-              itemCount: dailySchedule.items.length,
-              onReorder: (oldIndex, newIndex) {
-                setState(() {
-                  if (newIndex > oldIndex) newIndex -= 1;
-                  final item = dailySchedule.items.removeAt(oldIndex);
-                  dailySchedule.items.insert(newIndex, item);
-                  scheduleProvider.updateDailySchedule(dailySchedule);
-                });
-              },
-              proxyDecorator: (child, index, animation) {
-                return Material(
-                  elevation: 5, color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  child: child,
-                );
-              },
-              itemBuilder: (context, index) {
-                final item = dailySchedule.items[index];
-                return KeyedSubtree(
-                  key: ValueKey('${item.time}_${item.description}_$index'),
-                  child: _buildTimelineItem(
-                      context, scheduleProvider, isAdmin, dailySchedule.items, index),
-                );
-              },
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 16, 16, 80),
-              itemCount: dailySchedule.items.length,
-              itemBuilder: (context, index) {
-                return _buildTimelineItem(
-                    context, scheduleProvider, isAdmin, dailySchedule.items, index);
-              },
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: isAdmin && dates.isNotEmpty
-          ? FloatingActionButton.extended(
-        onPressed: () => _showItemDialog(context, scheduleProvider, isAdmin),
-        backgroundColor: Colors.blue[800],
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('일정 추가', style: TextStyle(color: Colors.white)),
-      )
-          : null,
     );
   }
 
@@ -360,161 +454,119 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         children: [
           Icon(Icons.event_note, size: 48, color: Colors.grey[300]),
           const SizedBox(height: 16),
-          const Text('일정이 없습니다.', style: TextStyle(color: Colors.grey)),
+          const Text('설정된 일자가 없습니다.', style: TextStyle(color: Colors.grey)),
         ],
       ),
     );
   }
 
-  /// 💡 구글 캘린더식 타임라인: 다음 일정까지의 시간 간격에 비례해
-  /// 블록 높이가 정해져서 각 일정의 '길이감'이 한눈에 보인다.
-  Widget _buildTimelineItem(BuildContext context, ScheduleProvider scheduleProvider,
-      bool isAdmin, List<ScheduleItem> items, int index) {
-    final item = items[index];
+  // ------------------------------------------------------------- 일차 열
 
-    // 다음 시간 파싱 가능한 항목까지의 간격으로 높이 계산
-    final start = _parseMinutes(item.time);
-    int? next;
-    for (var j = index + 1; j < items.length; j++) {
-      final t = _parseMinutes(items[j].time);
-      if (t != null) {
-        next = t;
-        break;
+  Widget _buildDayColumn(
+    BuildContext context,
+    ScheduleProvider scheduleProvider,
+    bool isAdmin,
+    Map<String, String> day,
+    DailySchedule? schedule,
+  ) {
+    final dayId = day['id']!;
+    final items = schedule?.items ?? const <ScheduleItem>[];
+
+    final children = <Widget>[
+      // 열 왼쪽 경계선
+      Positioned.fill(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: Colors.grey[200]!)),
+          ),
+        ),
+      ),
+      // 💡 빈 칸 탭 → 그 시간으로 일정 추가 (관리자)
+      if (isAdmin)
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: (details) {
+              final minutes = (details.localPosition.dy / _hourHeight * 60).round();
+              final rounded = (minutes / 30).round() * 30; // 30분 단위 반올림
+              final clamped = rounded.clamp(0, 23 * 60 + 30);
+              final preset =
+                  '${(clamped ~/ 60).toString().padLeft(2, '0')}:${(clamped % 60).toString().padLeft(2, '0')}';
+              _showItemDialog(context, scheduleProvider, isAdmin,
+                  dayId: dayId, presetTime: preset);
+            },
+          ),
+        ),
+    ];
+
+    // 일정 블록 배치
+    var unparsedCount = 0;
+    for (var i = 0; i < items.length; i++) {
+      final item = items[i];
+      final start = _parseMinutes(item.time);
+
+      double top;
+      double height;
+      final bool timeless = start == null;
+
+      if (timeless) {
+        // 시간 미정 항목은 열 상단에 쌓는다
+        top = 2.0 + unparsedCount * 24;
+        height = 22;
+        unparsedCount++;
+      } else {
+        top = start / 60.0 * _hourHeight;
+        // 다음 시간 파싱 가능한 항목까지가 이 일정의 '길이'
+        int? next;
+        for (var j = i + 1; j < items.length; j++) {
+          final t = _parseMinutes(items[j].time);
+          if (t != null && t > start) {
+            next = t;
+            break;
+          }
+        }
+        final durationMinutes = next != null ? next - start : 60;
+        height = (durationMinutes / 60.0 * _hourHeight)
+            .clamp(20.0, 24 * _hourHeight - top);
       }
-    }
 
-    const minHeight = 48.0;
-    const maxHeight = 150.0; // 밤샘 이동 같은 긴 공백이 화면을 다 먹지 않게
-    double height = minHeight;
-    if (start != null && next != null && next > start) {
-      height = ((next - start) * 1.1).clamp(minHeight, maxHeight);
-    }
-    final isLast = next == null;
-    final compact = height < 68;
-
-    return SizedBox(
-      height: height,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 시간 라벨 열
-          SizedBox(
-            width: 52,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4, right: 6),
-              child: Text(
-                item.time,
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blueGrey[600]),
+      children.add(Positioned(
+        top: top,
+        left: 2,
+        right: 2.5,
+        height: height,
+        child: GestureDetector(
+          onTap: () => isAdmin
+              ? _showItemDialog(context, scheduleProvider, isAdmin,
+                  dayId: dayId, item: item, index: i)
+              : _showItemDetail(context, day['date']!.split(' ').first, item),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: timeless ? Colors.orange[50] : Colors.blue[50],
+              borderRadius: BorderRadius.circular(5),
+              border: Border(
+                left: BorderSide(
+                    color: timeless ? Colors.orange[400]! : Colors.blue[800]!,
+                    width: 2.5),
+              ),
+            ),
+            child: Text(
+              item.description,
+              maxLines: math.max(1, (height - 6) ~/ 13),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1.2,
+                fontWeight: FontWeight.w600,
+                color: Colors.blueGrey[800],
               ),
             ),
           ),
-          // 타임라인 레일 (점 + 세로선)
-          SizedBox(
-            width: 14,
-            child: Column(
-              children: [
-                const SizedBox(height: 5),
-                Container(
-                  width: 9,
-                  height: 9,
-                  decoration:
-                      BoxDecoration(color: Colors.blue[800], shape: BoxShape.circle),
-                ),
-                if (!isLast)
-                  Expanded(child: Container(width: 2, color: Colors.blue[100])),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // 일정 블록 — 높이가 곧 시간 길이
-          Expanded(
-            child: GestureDetector(
-              onTap: isAdmin
-                  ? () => _showItemDialog(context, scheduleProvider, isAdmin,
-                      item: item, index: index)
-                  : null,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 4),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border(
-                      left: BorderSide(color: Colors.blue[800]!, width: 3.5)),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2)),
-                  ],
-                ),
-                child: compact
-                    ? Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.description,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF212121)),
-                            ),
-                          ),
-                          if (isAdmin)
-                            const Icon(Icons.drag_indicator,
-                                color: Colors.grey, size: 18),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item.description,
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF212121)),
-                                ),
-                              ),
-                              if (isAdmin)
-                                const Icon(Icons.drag_indicator,
-                                    color: Colors.grey, size: 18),
-                            ],
-                          ),
-                          const Spacer(),
-                          if (start != null && next != null)
-                            Text(
-                              _durationLabel(next - start),
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.blueGrey[300]),
-                            ),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ));
+    }
 
-  /// 분 → '1시간 30분' 형태 라벨
-  String _durationLabel(int minutes) {
-    final h = minutes ~/ 60;
-    final m = minutes % 60;
-    if (h == 0) return '$m분';
-    if (m == 0) return '$h시간';
-    return '$h시간 $m분';
+    return Stack(children: children);
   }
 }
