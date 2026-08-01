@@ -23,6 +23,18 @@ class _MoreScreenState extends State<MoreScreen> {
   bool _isSettingUp = false;
   bool _showDebugConsole = false;
 
+  /// 💡 전화번호는 기본 숨김 — 탭한 사람만 공개 (가벼운 프라이버시)
+  final Set<String> _revealedPhones = {};
+
+  /// 한 줄 메시지 편집 다이얼로그용 (State 소유 — dispose 크래시 방지)
+  final TextEditingController _introController = TextEditingController();
+
+  @override
+  void dispose() {
+    _introController.dispose();
+    super.dispose();
+  }
+
   // 💡 알림 권한 상태를 뱃지 형태로 표시
   Widget _buildStatusBadge(AuthorizationStatus status) {
     String text = "알 수 없음";
@@ -224,10 +236,11 @@ class _MoreScreenState extends State<MoreScreen> {
   }
 
   /// 💡 현재 원정 참가자의 직책(대장~총무)과 강사를 자동으로 보여준다.
-  /// 이름·기수·연락처는 동아리원 명단에서 조인 — 별도 입력 불필요.
+  /// 이름·기수는 동아리원 명단에서 조인, 한 줄 메시지는 참가자 문서에 저장.
   Widget _buildExpeditionStaffList(BuildContext context) {
     final participantProvider = context.watch<ParticipantProvider>();
     final memberProvider = context.watch<MemberProvider>();
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
     final byId = {for (final m in memberProvider.members) m.id: m};
 
     // 직책별 담당자 수집
@@ -252,27 +265,70 @@ class _MoreScreenState extends State<MoreScreen> {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── 임원단 (대장~총무)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              children: [
+                for (final entry in kStaffRoles.entries)
+                  _staffTile(
+                    emoji: kStaffRoleEmoji[entry.key] ?? '',
+                    roleName: entry.value,
+                    members: roleHolders[entry.key] ?? const [],
+                    participantProvider: participantProvider,
+                    isAdmin: isAdmin,
+                  ),
+              ],
+            ),
+          ),
         ),
-        child: Column(
-          children: [
-            for (final entry in kStaffRoles.entries)
-              _staffTile(
-                emoji: kStaffRoleEmoji[entry.key] ?? '',
-                roleName: entry.value,
-                members: roleHolders[entry.key] ?? const [],
-              ),
-            if (instructors.isNotEmpty)
-              _staffTile(emoji: '⭐', roleName: '강사', members: instructors),
-          ],
+
+        // ── 강사진 (임원 아님 — 별도 섹션)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 20, 16, 8),
+          child: Text('⭐ 강사진',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ),
-      ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: instructors.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text('지정된 강사가 없습니다.',
+                      style: TextStyle(fontSize: 13, color: Colors.grey)),
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Column(
+                    children: [
+                      for (final m in instructors)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            border: Border(
+                                bottom: BorderSide(color: Colors.grey[100]!)),
+                          ),
+                          child: _personRow(m, participantProvider, isAdmin),
+                        ),
+                    ],
+                  ),
+                ),
+        ),
+      ],
     );
   }
 
@@ -280,6 +336,8 @@ class _MoreScreenState extends State<MoreScreen> {
     required String emoji,
     required String roleName,
     required List<MemberItem> members,
+    required ParticipantProvider participantProvider,
+    required bool isAdmin,
   }) {
     final hasHolder = members.isNotEmpty;
     return Container(
@@ -304,28 +362,121 @@ class _MoreScreenState extends State<MoreScreen> {
                     style: TextStyle(fontSize: 13, color: Colors.grey[400]))
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: members
-                        .map((m) => Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: Row(
-                                children: [
-                                  Text(m.name,
-                                      style: const TextStyle(
-                                          fontSize: 14, fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 6),
-                                  if (m.generation.isNotEmpty)
-                                    Text(m.generation,
-                                        style: const TextStyle(
-                                            fontSize: 12, color: Colors.blueGrey)),
-                                  const Spacer(),
-                                  Text(m.phone,
-                                      style: const TextStyle(
-                                          fontSize: 12, color: Colors.black87)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
+                    children: [
+                      for (final m in members)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: _personRow(m, participantProvider, isAdmin),
+                        ),
+                    ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 이름·기수 + [번호 보기] + 한 줄 메시지 (관리자는 메시지 편집 가능)
+  Widget _personRow(
+      MemberItem m, ParticipantProvider participantProvider, bool isAdmin) {
+    final intro = participantProvider.introOf(m.id);
+    final revealed = _revealedPhones.contains(m.id);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(m.name,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 6),
+            if (m.generation.isNotEmpty)
+              Text('${m.generation}기',
+                  style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
+            const Spacer(),
+            // 💡 전화번호는 탭해야 보인다
+            if (m.phone.isNotEmpty)
+              GestureDetector(
+                onTap: () => setState(() {
+                  revealed
+                      ? _revealedPhones.remove(m.id)
+                      : _revealedPhones.add(m.id);
+                }),
+                child: revealed
+                    ? Text(m.phone,
+                        style: const TextStyle(fontSize: 12, color: Colors.black87))
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text('번호 보기',
+                            style: TextStyle(
+                                fontSize: 10.5, color: Colors.grey[600])),
+                      ),
+              ),
+          ],
+        ),
+        // 한 줄 메시지 (관리자: 탭하여 편집)
+        if (intro.isNotEmpty || isAdmin)
+          GestureDetector(
+            onTap: isAdmin
+                ? () => _editIntroDialog(m, participantProvider)
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Row(
+                children: [
+                  Icon(Icons.format_quote, size: 13, color: Colors.grey[400]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      intro.isEmpty ? '한 줄 메시지 입력' : intro,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontStyle: FontStyle.italic,
+                        color: intro.isEmpty ? Colors.grey[300] : Colors.black54,
+                      ),
+                    ),
+                  ),
+                  if (isAdmin)
+                    Icon(Icons.edit, size: 11, color: Colors.grey[300]),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _editIntroDialog(MemberItem m, ParticipantProvider participantProvider) {
+    _introController.text = participantProvider.introOf(m.id);
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('${m.name} 한 줄 메시지',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: _introController,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(
+            hintText: '예: 안전 다이빙! 무리하지 맙시다',
+            border: OutlineInputBorder(),
+            isDense: true,
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () {
+              participantProvider.setIntro(m.id, _introController.text);
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('저장'),
           ),
         ],
       ),

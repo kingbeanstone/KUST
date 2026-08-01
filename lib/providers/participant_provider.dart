@@ -44,11 +44,15 @@ class ParticipantProvider with ChangeNotifier {
   /// 💡 이번 원정의 직책 (memberId → kStaffRoles의 key). 직책은 1인 1개.
   Map<String, String> _staffRoles = {};
 
+  /// 💡 임원/강사의 한 줄 메시지 (memberId → 문구, 원정별)
+  Map<String, String> _intros = {};
+
   List<String> get participantIds => _ids;
   int get count => _ids.length;
   bool isParticipant(String clubMemberId) => _idSet.contains(clubMemberId);
   bool isInstructor(String clubMemberId) => _instructorIds.contains(clubMemberId);
   String? staffRoleOf(String clubMemberId) => _staffRoles[clubMemberId];
+  String introOf(String clubMemberId) => _intros[clubMemberId] ?? '';
 
   /// 칩/픽커에 붙일 역할 이모티콘 (직책 + 강사 겸임 표시)
   String roleEmojiOf(String clubMemberId) {
@@ -91,6 +95,11 @@ class ParticipantProvider with ChangeNotifier {
         for (final d in snapshot.docs)
           if (kStaffRoles.containsKey(d.data()['staffRole'])) d.id: d.data()['staffRole'] as String
       };
+      _intros = {
+        for (final d in snapshot.docs)
+          if ((d.data()['intro'] ?? '').toString().isNotEmpty)
+            d.id: d.data()['intro'] as String
+      };
       notifyListeners();
       _reconcileGearRows(); // 💡 참가자인데 장비 행이 없는 사람을 자동 보충
     }, onError: (e) {
@@ -115,6 +124,12 @@ class ParticipantProvider with ChangeNotifier {
       {'isInstructor': !_instructorIds.contains(clubMemberId)},
       SetOptions(merge: true),
     );
+  }
+
+  /// 임원/강사 한 줄 메시지 저장 (참가자만)
+  Future<void> setIntro(String clubMemberId, String text) async {
+    if (_expeditionId == null || !_idSet.contains(clubMemberId)) return;
+    await _col.doc(clubMemberId).set({'intro': text.trim()}, SetOptions(merge: true));
   }
 
   /// 이번 원정의 직책 지정. 같은 직책을 다시 탭하면 해제, 다른 직책이면 교체.

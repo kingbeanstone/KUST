@@ -2,13 +2,17 @@ class ScheduleItem {
   final String time;
   final String description;
 
-  ScheduleItem({required this.time, required this.description});
+  /// 블록 색상 키 (schedule_screen의 kItemColors, '' = 기본 파랑)
+  final String color;
+
+  ScheduleItem({required this.time, required this.description, this.color = ''});
 
   // 💡 데이터를 Map으로 변환 (저장용)
   Map<String, dynamic> toMap() {
     return {
       'time': time,
       'description': description,
+      'color': color,
     };
   }
 
@@ -17,6 +21,7 @@ class ScheduleItem {
     return ScheduleItem(
       time: map['time'] ?? '',
       description: map['description'] ?? '',
+      color: map['color'] ?? '',
     );
   }
 }

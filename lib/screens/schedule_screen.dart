@@ -6,6 +6,17 @@ import '../providers/equipment_provider.dart';
 import '../providers/schedule_provider.dart';
 import '../models/schedule_model.dart';
 
+/// 일정 블록 색상 팔레트 (키가 Firestore에 저장된다)
+const Map<String, Color> kItemColors = {
+  'blue': Color(0xFF1565C0),
+  'teal': Color(0xFF00796B),
+  'green': Color(0xFF2E7D32),
+  'orange': Color(0xFFEF6C00),
+  'purple': Color(0xFF6A1B9A),
+  'red': Color(0xFFC62828),
+  'grey': Color(0xFF546E7A),
+};
+
 /// 💡 v2: 구글 캘린더식 주간 그리드.
 /// 좌측 00~24시 시간축 + 일차별 열. 일정 블록은 시간 위치에 절대 배치되어
 /// 하루 전체의 흐름과 각 일정의 길이감이 한눈에 보인다.
@@ -190,10 +201,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     if (!isAdmin) return;
     final timeController = TextEditingController(text: item?.time ?? presetTime ?? "");
     final descController = TextEditingController(text: item?.description ?? "");
+    var selectedColor =
+        kItemColors.containsKey(item?.color) ? item!.color : 'blue';
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           item == null ? '새 일정 추가' : '일정 수정',
@@ -208,9 +222,42 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               keyboardType: TextInputType.datetime,
             ),
             const SizedBox(height: 12),
+            // 💡 멀티라인: 엔터로 줄바꿈, 최대 4줄까지 늘어남
             TextField(
               controller: descController,
+              keyboardType: TextInputType.multiline,
+              textInputAction: TextInputAction.newline,
+              minLines: 1,
+              maxLines: 4,
               decoration: const InputDecoration(labelText: '내용', hintText: '활동 내용을 입력하세요'),
+            ),
+            const SizedBox(height: 16),
+            // 💡 블록 색상 선택
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 10,
+                children: kItemColors.entries.map((entry) {
+                  final isSelected = selectedColor == entry.key;
+                  return GestureDetector(
+                    onTap: () => setDialogState(() => selectedColor = entry.key),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: entry.value,
+                        shape: BoxShape.circle,
+                        border: isSelected
+                            ? Border.all(color: Colors.black87, width: 2.5)
+                            : null,
+                      ),
+                      child: isSelected
+                          ? const Icon(Icons.check, size: 15, color: Colors.white)
+                          : null,
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ],
         ),
@@ -228,7 +275,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             onPressed: () {
               if (descController.text.isEmpty) return;
               final newItem = ScheduleItem(
-                  time: timeController.text, description: descController.text);
+                  time: timeController.text,
+                  description: descController.text,
+                  color: selectedColor);
               if (item == null) {
                 // 💡 새 일정은 시간순으로 자동 삽입
                 final items = scheduleProvider.schedules
@@ -245,6 +294,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             child: const Text('저장'),
           ),
         ],
+        ),
       ),
     );
   }
@@ -540,15 +590,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               ? _showItemDialog(context, scheduleProvider, isAdmin,
                   dayId: dayId, item: item, index: i)
               : _showItemDetail(context, day['date']!.split(' ').first, item),
-          child: Container(
+          child: Builder(builder: (context) {
+            // 💡 항목별 색상 (미지정: 파랑, 시간 미정 항목은 주황)
+            final accent = kItemColors[item.color] ??
+                (timeless ? Colors.orange[400]! : Colors.blue[800]!);
+            return Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
-              color: timeless ? Colors.orange[50] : Colors.blue[50],
+              color: Color.alphaBlend(accent.withAlpha(26), Colors.white),
               borderRadius: BorderRadius.circular(5),
               border: Border(
-                left: BorderSide(
-                    color: timeless ? Colors.orange[400]! : Colors.blue[800]!,
-                    width: 2.5),
+                left: BorderSide(color: accent, width: 2.5),
               ),
             ),
             child: Text(
@@ -562,7 +614,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 color: Colors.blueGrey[800],
               ),
             ),
-          ),
+          );
+          }),
         ),
       ));
     }
