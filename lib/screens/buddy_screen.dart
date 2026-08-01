@@ -13,6 +13,13 @@ import '../models/member_model.dart';
 const Color _blockHeaderColor = Color(0xFF455A64);
 const Color _leaderTint = Color(0xFFFFF8E1);
 
+/// 조 이름이 들어가는 왼쪽 라벨 열 폭
+const double _blockLabelWidth = 46;
+const Color _morningTint = Color(0xFFFFF3E0);
+const Color _morningText = Color(0xFFE65100);
+const Color _afternoonTint = Color(0xFFE3F2FD);
+const Color _afternoonText = Color(0xFF1565C0);
+
 /// 💡 v2: 다이빙 버디 편성. 수정 모드는 4단계 흐름으로 유도한다.
 ///  1️⃣ 팀 만들기 → 2️⃣ 조 구성 → 3️⃣ 입수 순서 → 4️⃣ 사람 배치
 /// 팀·입수 순서가 정해져야 장비버디 충돌 검사가 정확해지기 때문.
@@ -139,8 +146,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
                       ),
                   ],
 
-                  // ── 보기 모드: 입수 순서를 조 표보다 먼저 (일차 제목 바로 아래)
-                  if (!_isEditMode) _buildRoundsSection(buddyData, buddyProvider),
+                  // ── 보기 모드: 입수 순서 (열 레이아웃이면 헤더가 대신한다)
+                  if (!_isEditMode && !_useColumnLayout(buddyData))
+                    _buildRoundsSection(buddyData, buddyProvider),
 
                   // ── 조별 표 (보기: 편성 결과 / 수정: 사람 배치)
                   if (buddyData.blocks.isEmpty && !_isEditMode)
@@ -151,8 +159,12 @@ class _BuddyScreenState extends State<BuddyScreen> {
                             style: TextStyle(color: Colors.grey, fontSize: 13)),
                       ),
                     ),
+                  if (_useColumnLayout(buddyData) && buddyData.blocks.isNotEmpty)
+                    _buildRoundHeaderRow(buddyData),
                   for (var b = 0; b < buddyData.blocks.length; b++)
-                    _buildBlockTable(b, buddyData, buddyProvider),
+                    _useColumnLayout(buddyData)
+                        ? _buildBlockRow(b, buddyData, buddyProvider)
+                        : _buildBlockTable(b, buddyData, buddyProvider),
 
                   const SizedBox(height: 40),
                 ],
@@ -892,6 +904,203 @@ class _BuddyScreenState extends State<BuddyScreen> {
         if (r.teamIds.contains(team.id)) r.name,
     ];
     return names.isEmpty ? '회차 미정' : names.join('·');
+  }
+
+  /// 💡 엑셀식 열 레이아웃 사용 여부: 회차(오전/오후)가 열이 된다.
+  /// 회차가 너무 많으면 열이 좁아져 기존 조별 표로 보여준다.
+  bool _useColumnLayout(BuddyDay day) =>
+      day.rounds.isNotEmpty && day.rounds.length <= 3;
+
+  bool _isMorningish(BuddyDay day, BuddyRound round) =>
+      round.name.contains('오전') ||
+      (!round.name.contains('오후') && day.rounds.indexOf(round) == 0);
+
+  /// 표 전체 상단의 회차 헤더 1줄: [    ][ 오전 ][ 오후 ]
+  Widget _buildRoundHeaderRow(BuddyDay day) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 6),
+      child: Row(
+        children: [
+          const SizedBox(width: _blockLabelWidth),
+          for (final round in day.rounds)
+            Expanded(
+              child: Container(
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _isMorningish(day, round) ? _morningTint : _afternoonTint,
+                  border: Border.all(color: Colors.black),
+                ),
+                child: Text(
+                  round.name,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.bold,
+                    color: _isMorningish(day, round) ? _morningText : _afternoonText,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 💡 조 한 줄: 왼쪽 조 라벨 + 회차별 열(팀 표). 팀은 자기 회차 열에 들어간다.
+  Widget _buildBlockRow(int blockIdx, BuddyDay day, BuddyProvider provider) {
+    final block = day.blocks[blockIdx];
+
+    // (block.teamIds 안의 실제 위치, 팀) — 선택/배치는 실제 위치 기준
+    final entries = <MapEntry<int, BuddyTeam>>[
+      for (var i = 0; i < block.teamIds.length; i++)
+        if (day.teamById(block.teamIds[i]) != null)
+          MapEntry(i, day.teamById(block.teamIds[i])!),
+    ];
+
+    // 회차별 열 배정 (여러 회차에 속한 팀은 첫 회차 열로)
+    final columns =
+        List.generate(day.rounds.length, (_) => <MapEntry<int, BuddyTeam>>[]);
+    final unassigned = <MapEntry<int, BuddyTeam>>[];
+    for (final e in entries) {
+      final ri = _firstRoundIndexOf(day, e.value);
+      (ri < day.rounds.length ? columns[ri] : unassigned).add(e);
+    }
+
+    final teams = [for (final e in entries) e.value];
+    final showLeaderRow = _isEditMode || teams.any((t) => t.leader.isNotEmpty);
+
+    int slotsOf(BuddyTeam t) {
+      var n = t.members.length + (_isEditMode ? 1 : 0);
+      if (n.isOdd) n++;
+      return math.max(n, 2);
+    }
+
+    final maxSlots = teams.isEmpty ? 2 : teams.map(slotsOf).reduce(math.max);
+    final rowCount = maxSlots ~/ 2;
+
+    Widget teamBox(MapEntry<int, BuddyTeam> e) {
+      final team = e.value;
+      final teamIdx = e.key;
+      return Table(
+        border: TableBorder.all(color: Colors.black, width: 1),
+        children: [
+          TableRow(children: [
+            Container(
+              height: 28,
+              color: Colors.grey[100],
+              alignment: Alignment.center,
+              child: Text(team.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+            ),
+          ]),
+          if (showLeaderRow)
+            TableRow(children: [
+              _buildCell(blockIdx, teamIdx, -1, team.leader, isLeader: true),
+            ]),
+          for (var r = 0; r < rowCount; r++)
+            TableRow(children: [
+              Row(
+                children: [
+                  Expanded(
+                      child: _buildCell(
+                          blockIdx, teamIdx, r * 2, _memberAt(team, r * 2))),
+                  Container(width: 1, height: 35, color: Colors.black),
+                  Expanded(
+                      child: _buildCell(
+                          blockIdx, teamIdx, r * 2 + 1, _memberAt(team, r * 2 + 1))),
+                ],
+              ),
+            ]),
+        ],
+      );
+    }
+
+    Widget blockLabel() => Container(
+          width: _blockLabelWidth,
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            border: Border.all(color: Colors.black),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            block.name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+        );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          if (teams.isEmpty)
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  blockLabel(),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.black)),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _isEditMode ? '2️⃣ 조 구성에서 팀을 배정하세요.' : '팀이 없습니다.',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  blockLabel(),
+                  for (final col in columns)
+                    Expanded(
+                      child: col.isEmpty
+                          ? Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                border: Border.all(color: Colors.black),
+                              ),
+                            )
+                          : Column(children: [for (final e in col) teamBox(e)]),
+                    ),
+                ],
+              ),
+            ),
+          // 어느 회차에도 없는 팀 — 숨기지 않고 아래에 표시해 배정을 유도한다
+          for (final e in unassigned)
+            Row(
+              children: [
+                const SizedBox(width: _blockLabelWidth),
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: double.infinity,
+                        height: 20,
+                        color: Colors.orange[50],
+                        alignment: Alignment.center,
+                        child: const Text('⚠ 회차 미정 — 3️⃣ 입수 순서에서 배정하세요',
+                            style: TextStyle(
+                                fontSize: 10, color: Colors.deepOrange,
+                                fontWeight: FontWeight.bold)),
+                      ),
+                      teamBox(e),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildBlockTable(int blockIdx, BuddyDay day, BuddyProvider provider) {
