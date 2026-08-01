@@ -5,6 +5,10 @@
 class BuddyDay {
   final String id; // 일차 ID (schedule의 id와 매칭)
   final String title;
+
+  /// 일차 유형: 'beach'(비치) | 'boating'(보팅) | ''(미지정)
+  String type;
+
   final List<BuddyBlock> blocks;
   final List<BuddyRound> rounds;
 
@@ -13,11 +17,13 @@ class BuddyDay {
     required this.title,
     required this.blocks,
     required this.rounds,
+    this.type = '',
   });
 
   Map<String, dynamic> toMap() {
     return {
       'title': title,
+      'type': type,
       'blocks': blocks.map((b) => b.toMap()).toList(),
       'rounds': rounds.map((r) => r.toMap()).toList(),
     };
@@ -29,6 +35,7 @@ class BuddyDay {
       return BuddyDay(
         id: id,
         title: map['title'] ?? '',
+        type: map['type'] ?? '',
         blocks: (map['blocks'] as List)
             .map((b) => BuddyBlock.fromMap(Map<String, dynamic>.from(b)))
             .toList(),

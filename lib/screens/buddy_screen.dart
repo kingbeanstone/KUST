@@ -103,22 +103,99 @@ class _BuddyScreenState extends State<BuddyScreen> {
                     decoration: BoxDecoration(
                         color: Colors.grey[50],
                         border: Border.all(color: Colors.black, width: 1.5)),
-                    child: Text(dayTitle,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(dayTitle,
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        // 💡 일차 유형 표시 (수정 모드에서 탭하면 전환)
+                        if (buddyData.type.isNotEmpty || _isEditMode) ...[
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: _isEditMode
+                                ? () {
+                                    buddyData.type = buddyData.type == 'beach'
+                                        ? 'boating'
+                                        : (buddyData.type == 'boating' ? '' : 'beach');
+                                    buddyProvider.saveBuddyDay(buddyData);
+                                  }
+                                : null,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: buddyData.type == 'beach'
+                                    ? Colors.amber[100]
+                                    : (buddyData.type == 'boating'
+                                        ? Colors.lightBlue[100]
+                                        : Colors.grey[200]),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                buddyData.type == 'beach'
+                                    ? '🏖 비치'
+                                    : (buddyData.type == 'boating' ? '🚤 보팅' : '유형'),
+                                style: const TextStyle(
+                                    fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 12),
 
-                  if (buddyData.blocks.isEmpty)
+                  if (buddyData.blocks.isEmpty) ...[
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 30),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Text(
                         _isEditMode
-                            ? '아래 [조 추가]로 편성을 시작하세요.'
+                            ? '템플릿으로 시작하거나 [조 추가]로 직접 만드세요.'
                             : '이 날의 버디 편성이 아직 없습니다.',
                         style: const TextStyle(color: Colors.grey, fontSize: 13),
                       ),
                     ),
+                    // 💡 대장의 편성 방식 템플릿 — 딸깍 한 번으로 뼈대 생성
+                    if (_isEditMode) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  _applyBeachTemplate(buddyData, buddyProvider),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.amber[600],
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              child: const Text('🏖 비치 편성으로 시작\nYB(A·B) + 교육팀(C·D)',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 11.5, height: 1.4)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  _applyBoatingTemplate(buddyData, buddyProvider),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightBlue[600],
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              child: const Text('🚤 보팅 편성으로 시작\n혼성 A~D팀',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 11.5, height: 1.4)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ],
 
                   for (var b = 0; b < buddyData.blocks.length; b++)
                     _buildBlock(b, buddyData, buddyProvider),
@@ -406,6 +483,59 @@ class _BuddyScreenState extends State<BuddyScreen> {
     for (final round in day.rounds) {
       round.teamIds.removeWhere(ids.contains);
     }
+  }
+
+  /// 💡 비치 템플릿: YB(A·B) / 교육팀(C·D) 두 조로 쪼개고,
+  ///    오전=[A,C] 오후=[B,D] 회차를 미리 깔아준다. 전부 수정 가능.
+  void _applyBeachTemplate(BuddyDay day, BuddyProvider provider) {
+    BuddyTeam newTeam(String letter) => BuddyTeam(
+          id: 'team_${DateTime.now().microsecondsSinceEpoch}_$letter',
+          name: '$letter팀',
+          leader: '',
+          members: [],
+        );
+
+    final a = newTeam('A');
+    final b = newTeam('B');
+    final c = newTeam('C');
+    final d = newTeam('D');
+
+    day.type = 'beach';
+    day.blocks.addAll([
+      BuddyBlock(name: 'YB', teams: [a, b]),
+      BuddyBlock(name: '교육팀', teams: [c, d]),
+    ]);
+    day.rounds.addAll([
+      BuddyRound(name: '오전', teamIds: [a.id, c.id]),
+      BuddyRound(name: '오후', teamIds: [b.id, d.id]),
+    ]);
+    provider.saveBuddyDay(day);
+  }
+
+  /// 💡 보팅 템플릿: YB·신입 혼성 A~D팀 한 조 + 오전/오후 2회차씩.
+  ///    오전엔 A팀 2탱크, 오후엔 B팀 2탱크 예시 배치 (전부 수정 가능).
+  void _applyBoatingTemplate(BuddyDay day, BuddyProvider provider) {
+    BuddyTeam newTeam(String letter) => BuddyTeam(
+          id: 'team_${DateTime.now().microsecondsSinceEpoch}_$letter',
+          name: '$letter팀',
+          leader: '',
+          members: [],
+        );
+
+    final a = newTeam('A');
+    final b = newTeam('B');
+    final c = newTeam('C');
+    final d = newTeam('D');
+
+    day.type = 'boating';
+    day.blocks.add(BuddyBlock(name: '보팅 (혼성)', teams: [a, b, c, d]));
+    day.rounds.addAll([
+      BuddyRound(name: '오전 1', teamIds: [a.id]),
+      BuddyRound(name: '오전 2', teamIds: [a.id]),
+      BuddyRound(name: '오후 1', teamIds: [b.id]),
+      BuddyRound(name: '오후 2', teamIds: [b.id]),
+    ]);
+    provider.saveBuddyDay(day);
   }
 
   /// 팀에 배치된 사람 이름들 (리더 포함)
