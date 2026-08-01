@@ -15,12 +15,14 @@ class RecipeBookScreen extends StatefulWidget {
 class _RecipeBookScreenState extends State<RecipeBookScreen> {
   /// 다이얼로그 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _ingredientsController = TextEditingController();
   final TextEditingController _stepsController = TextEditingController();
 
   @override
   void dispose() {
     _nameController.dispose();
+    _categoryController.dispose();
     _ingredientsController.dispose();
     _stepsController.dispose();
     super.dispose();
@@ -28,6 +30,7 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
 
   void _showEditDialog(RecipeProvider provider, {Recipe? recipe}) {
     _nameController.text = recipe?.name ?? '';
+    _categoryController.text = recipe?.category ?? '';
     _ingredientsController.text = recipe?.ingredients ?? '';
     _stepsController.text = recipe?.steps ?? '';
 
@@ -45,6 +48,16 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                 controller: _nameController,
                 decoration: const InputDecoration(
                     labelText: '요리 이름 (예: 김치찌개)', isDense: true),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _categoryController,
+                decoration: const InputDecoration(
+                  labelText: '카테고리',
+                  hintText: '밥 / 국·찌개 / 메인 / 간식…',
+                  hintStyle: TextStyle(fontSize: 12),
+                  isDense: true,
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
@@ -92,12 +105,13 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
               final name = _nameController.text.trim();
               if (name.isEmpty) return;
               if (recipe == null) {
-                provider.addRecipe(
-                    name, _ingredientsController.text, _stepsController.text);
+                provider.addRecipe(name, _categoryController.text,
+                    _ingredientsController.text, _stepsController.text);
               } else {
                 provider.updateRecipe(Recipe(
                   id: recipe.id,
                   name: name,
+                  category: _categoryController.text.trim(),
                   ingredients: _ingredientsController.text,
                   steps: _stepsController.text,
                 ));
@@ -132,12 +146,38 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
             )
-          : ListView.builder(
+          : ListView(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-              itemCount: provider.recipes.length,
-              itemBuilder: (context, index) {
-                final recipe = provider.recipes[index];
-                return Container(
+              children: [
+                for (final entry in provider.byCategory.entries) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+                    child: Text(entry.key,
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blueGrey[400])),
+                  ),
+                  for (final recipe in entry.value)
+                    _recipeTile(recipe, isAdmin, provider),
+                ],
+              ],
+            ),
+      floatingActionButton: isAdmin
+          ? FloatingActionButton.extended(
+              onPressed: () => _showEditDialog(provider),
+              backgroundColor: Colors.blue[800],
+              icon: const Icon(Icons.add, color: Colors.white),
+              label: const Text('레시피 추가',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+            )
+          : null,
+    );
+  }
+
+  Widget _recipeTile(Recipe recipe, bool isAdmin, RecipeProvider provider) {
+    return Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -191,19 +231,6 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                     ),
                   ),
                 );
-              },
-            ),
-      floatingActionButton: isAdmin
-          ? FloatingActionButton.extended(
-              onPressed: () => _showEditDialog(provider),
-              backgroundColor: Colors.blue[800],
-              icon: const Icon(Icons.add, color: Colors.white),
-              label: const Text('레시피 추가',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
-            )
-          : null,
-    );
   }
 
   Widget _sectionLabel(String text) => Align(

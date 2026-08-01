@@ -42,9 +42,26 @@ class RecipeProvider with ChangeNotifier {
         .toList();
   }
 
-  Future<void> addRecipe(String name, String ingredients, String steps) async {
+  /// 카테고리 → 레시피 목록 (미지정은 맨 뒤)
+  Map<String, List<Recipe>> get byCategory {
+    final map = <String, List<Recipe>>{};
+    for (final r in _recipes) {
+      map.putIfAbsent(r.category.isEmpty ? '미지정' : r.category, () => []).add(r);
+    }
+    final keys = map.keys.toList()
+      ..sort((a, b) {
+        if (a == '미지정') return 1;
+        if (b == '미지정') return -1;
+        return a.compareTo(b);
+      });
+    return {for (final k in keys) k: map[k]!};
+  }
+
+  Future<void> addRecipe(
+      String name, String category, String ingredients, String steps) async {
     await _db.collection('recipes').add({
       'name': name.trim(),
+      'category': category.trim(),
       'ingredients': ingredients,
       'steps': steps,
       'createdAt': FieldValue.serverTimestamp(),

@@ -22,6 +22,11 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   /// 레시피 원클릭 삽입 시 입력칸을 다시 그리기 위한 논스
   int _insertNonce = 0;
 
+  /// 💡 버디표 방식: 수정할 칸을 먼저 선택하고 하단 픽커에서 메뉴를 딸깍
+  String? _selDayId;
+  String? _selField;
+  bool _pickerExpanded = false;
+
   static const Map<String, String> _fieldLabels = {
     'breakfast': '아침',
     'lunch': '점심',
@@ -33,6 +38,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   void _enterEditMode(MealPlanProvider provider) {
     setState(() {
       _isEditMode = true;
+      _selDayId = null;
+      _selField = null;
       _editingMeals = {
         for (var date in provider.dates)
           date['id']!: provider.meals.firstWhere(
@@ -48,7 +55,11 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     for (var meal in _editingMeals.values) {
       await provider.saveMeal(meal);
     }
-    setState(() => _isEditMode = false);
+    setState(() {
+      _isEditMode = false;
+      _selDayId = null;
+      _selField = null;
+    });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('모든 식단이 저장되었습니다.')),
@@ -108,12 +119,20 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             ),
         ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: chunkedDates.length,
-        itemBuilder: (context, index) {
-          return _buildMealTableBlock(chunkedDates[index], mealProvider);
-        },
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: chunkedDates.length,
+              itemBuilder: (context, index) {
+                return _buildMealTableBlock(chunkedDates[index], mealProvider);
+              },
+            ),
+          ),
+          // 💡 버디표처럼 하단 고정 메뉴 픽커 (수정 모드)
+          if (_isEditMode) _buildMenuPicker(mealProvider),
+        ],
       ),
     );
   }
@@ -215,46 +234,30 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   // 데이터 셀 (입력 및 표시)
   Widget _buildDataCell(String dayId, String field, String value) {
     if (_isEditMode) {
+      final selected = _selDayId == dayId && _selField == field;
       return Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+        padding: const EdgeInsets.all(10),
         alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextFormField(
-              // 💡 레시피 삽입 시 논스가 바뀌며 새 값으로 다시 그려진다
-              key: ValueKey('$dayId|$field|$_insertNonce'),
-              initialValue: value,
-              onChanged: (v) => _updateLocalMeal(dayId, field, v),
-              maxLines: null,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12, height: 1.3),
-              decoration: const InputDecoration(
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-                border: InputBorder.none,
-                hintText: '입력',
-                hintStyle: TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            ),
-            // 💡 원클릭 레시피 삽입 버튼
-            InkWell(
-              onTap: () => _showRecipePicker(dayId, field),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.menu_book_outlined,
-                        size: 11, color: Colors.blue[300]),
-                    const SizedBox(width: 3),
-                    Text('레시피',
-                        style: TextStyle(fontSize: 9.5, color: Colors.blue[300])),
-                  ],
-                ),
-              ),
-            ),
-          ],
+        color: selected ? const Color(0xFFBBDEFB) : null, // 선택된 칸 표시
+        child: TextFormField(
+          // 💡 픽커 삽입 시 논스가 바뀌며 새 값으로 다시 그려진다
+          key: ValueKey('$dayId|$field|$_insertNonce'),
+          initialValue: value,
+          onTap: () => setState(() {
+            _selDayId = dayId;
+            _selField = field;
+          }),
+          onChanged: (v) => _updateLocalMeal(dayId, field, v),
+          maxLines: null,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, height: 1.3),
+          decoration: const InputDecoration(
+            isDense: true,
+            contentPadding: EdgeInsets.zero,
+            border: InputBorder.none,
+            hintText: '입력',
+            hintStyle: TextStyle(fontSize: 11, color: Colors.grey),
+          ),
         ),
       );
     }
@@ -274,92 +277,174 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
-  /// 💡 레시피 선택 시트: 탭 한 번으로 식단 칸에 요리 이름을 추가한다.
-  void _showRecipePicker(String dayId, String field) {
-    final recipes = context.read<RecipeProvider>().recipes;
+  /// 💡 하단 고정 메뉴 픽커 (버디표의 참가자 픽커와 같은 사용감).
+  /// 칸을 선택하고 카테고리별 메뉴 칩을 탭하면 그 칸에 들어간다.
+  Widget _buildMenuPicker(MealPlanProvider mealProvider) {
+    final byCategory = context.watch<RecipeProvider>().byCategory;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    String? selectionLabel;
+    if (_selDayId != null && _selField != null) {
+      final title = mealProvider.dates.firstWhere(
+          (d) => d['id'] == _selDayId,
+          orElse: () => {'title': ''})['title'];
+      selectionLabel = '$title ${_fieldLabels[_selField]} 수정 중';
+    }
+
+    void insertMenu(String name) {
+      if (_selDayId == null || _selField == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('수정할 칸을 먼저 선택해주세요.'),
+            duration: Duration(seconds: 1)));
+        return;
+      }
+      _appendRecipe(_selDayId!, _selField!, name);
+    }
+
+    final expandedHeight = MediaQuery.of(context).size.height * 0.55;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      height: _pickerExpanded ? expandedHeight : 210,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withAlpha(26),
+              blurRadius: 10,
+              offset: const Offset(0, -2))
+        ],
       ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  Text('${_fieldLabels[field]}에 레시피 넣기',
-                      style: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold)),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const RecipeBookScreen()));
-                    },
-                    child: const Text('레시피북 관리',
-                        style: TextStyle(fontSize: 12)),
-                  ),
-                ],
-              ),
-              if (recipes.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('레시피가 없습니다. [레시피북 관리]에서 먼저 추가하세요.',
-                      style: TextStyle(fontSize: 12.5, color: Colors.grey)),
-                )
-              else
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: recipes.map((recipe) {
-                        return GestureDetector(
-                          onTap: () {
-                            _appendRecipe(dayId, field, recipe.name);
-                            Navigator.pop(sheetContext);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.blue[50],
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.blue[100]!),
-                            ),
-                            child: Text(recipe.name,
-                                style: const TextStyle(
-                                    fontSize: 13, fontWeight: FontWeight.w600)),
-                          ),
-                        );
-                      }).toList(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 드래그 핸들 + 헤더 (끌거나 탭하면 확장/축소)
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _pickerExpanded = !_pickerExpanded),
+            onVerticalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (velocity < 0) setState(() => _pickerExpanded = true);
+              if (velocity > 0) setState(() => _pickerExpanded = false);
+            },
+            child: Column(
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 6, bottom: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
-            ],
+                Row(
+                  children: [
+                    const Text('메뉴 선택',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue)),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: () {
+                        if (_selDayId == null || _selField == null) return;
+                        _updateLocalMeal(_selDayId!, _selField!, '');
+                        setState(() => _insertNonce++);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: const Text('❌ 비우기',
+                            style: TextStyle(fontSize: 11)),
+                      ),
+                    ),
+                    const Spacer(),
+                    if (selectionLabel != null)
+                      Flexible(
+                        child: Text(selectionLabel,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey)),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const RecipeBookScreen())),
+                        child: Text('레시피북 관리',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.blue[600])),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: byCategory.isEmpty
+                ? Center(
+                    child: TextButton(
+                      onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const RecipeBookScreen())),
+                      child: const Text('메뉴가 없습니다. 레시피북에서 추가하세요.',
+                          style: TextStyle(fontSize: 12.5)),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final entry in byCategory.entries) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6, bottom: 4),
+                            child: Text(entry.key,
+                                style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black54)),
+                          ),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: entry.value.map((recipe) {
+                              return GestureDetector(
+                                onTap: () => insertMenu(recipe.name),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(6),
+                                    border:
+                                        Border.all(color: Colors.blue[100]!),
+                                  ),
+                                  child: Text(recipe.name,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500)),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
