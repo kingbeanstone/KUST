@@ -1091,21 +1091,20 @@ class _BuddyScreenState extends State<BuddyScreen> {
       );
     }
 
-    // 💡 선택된 조/팀 기준의 검사 범위:
-    //  - assignedInBlock: 같은 조 안 중복 배치 방지
-    //  - conflictScope: 장비버디 충돌 범위 — 선택한 팀 + 입수 순서표에서
-    //    그 팀과 같은 회차에 함께 들어가는 모든 팀의 대원들
-    final assignedInBlock = <String>{};
+    // 💡 선택된 팀 기준의 검사 범위:
+    //  - selectedTeamNames: 같은 팀 안 중복 배치 방지
+    //  - conflictScope: 같은 회차 기준 — 선택한 팀 + 입수 순서표에서 그 팀과
+    //    같은 회차에 함께 들어가는 모든 팀의 대원들 (본인 중복·장비버디 검사)
+    //  같은 조의 다른 팀이라도 회차가 안 겹치면 중복 배치를 허용한다.
+    var selectedTeamNames = <String>{};
     var conflictScope = <String>{};
 
     if (_selBlockIdx != null && _selBlockIdx! < dayData.blocks.length) {
       final block = dayData.blocks[_selBlockIdx!];
-      for (final t in block.teams) {
-        assignedInBlock.addAll(_namesOf(t));
-      }
       if (_selTeamIdx != null && _selTeamIdx! < block.teams.length) {
         final selTeam = block.teams[_selTeamIdx!];
-        conflictScope = _namesOf(selTeam);
+        selectedTeamNames = _namesOf(selTeam);
+        conflictScope = {...selectedTeamNames};
         final allTeams = [for (final b in dayData.blocks) ...b.teams];
         for (final round in dayData.rounds) {
           if (!round.teamIds.contains(selTeam.id)) continue;
@@ -1197,7 +1196,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
                       spacing: 6,
                       runSpacing: 6,
                       children: section.value.map((member) {
-                        final isAssigned = assignedInBlock.contains(member.name);
+                        // 같은 팀 안 중복만 '배치됨'으로 취급
+                        final isAssigned = selectedTeamNames.contains(member.name);
                         // 💡 본인이 같은 회차의 다른 팀에 이미 배치된 경우 (리더 겸임 등)
                         final selfConflict =
                             !isAssigned && conflictScope.contains(member.name);
@@ -1217,7 +1217,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                             () {
                               if (isAssigned) {
                                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text('${member.name}님은 이미 이 조에 배치되어 있습니다.'),
+                                    content: Text('${member.name}님은 이미 이 팀에 배치되어 있습니다.'),
                                     duration: const Duration(seconds: 1)));
                                 return;
                               }
