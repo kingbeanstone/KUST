@@ -27,6 +27,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   String? _selField;
   bool _pickerExpanded = false;
 
+  /// 픽커에서 보고 있는 카테고리 탭
+  String? _pickerCategory;
+
   static const Map<String, String> _fieldLabels = {
     'breakfast': '아침',
     'lunch': '점심',
@@ -290,15 +293,20 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       selectionLabel = '$title ${_fieldLabels[_selField]} 수정 중';
     }
 
-    void insertMenu(String name) {
-      if (_selDayId == null || _selField == null) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('수정할 칸을 먼저 선택해주세요.'),
-            duration: Duration(seconds: 1)));
-        return;
-      }
-      _appendRecipe(_selDayId!, _selField!, name);
+    // 활성 카테고리 탭 (없어졌으면 첫 번째로)
+    final categories = byCategory.keys.toList();
+    var activeCategory = _pickerCategory;
+    if (activeCategory == null || !byCategory.containsKey(activeCategory)) {
+      activeCategory = categories.isEmpty ? null : categories.first;
     }
+
+    // 현재 선택된 칸에 이미 들어있는 메뉴 (토글/하이라이트 판정)
+    final cellLines = (_selDayId != null && _selField != null)
+        ? _cellValue(_selDayId!, _selField!)
+            .split('\n')
+            .map((l) => l.trim())
+            .toSet()
+        : <String>{};
 
     final expandedHeight = MediaQuery.of(context).size.height * 0.55;
 
@@ -390,75 +398,141 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Expanded(
-            child: byCategory.isEmpty
-                ? Center(
-                    child: TextButton(
-                      onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const RecipeBookScreen())),
-                      child: const Text('메뉴가 없습니다. 레시피북에서 추가하세요.',
-                          style: TextStyle(fontSize: 12.5)),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final entry in byCategory.entries) ...[
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6, bottom: 4),
-                            child: Text(entry.key,
-                                style: const TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black54)),
+          if (byCategory.isEmpty)
+            Expanded(
+              child: Center(
+                child: TextButton(
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const RecipeBookScreen())),
+                  child: const Text('메뉴가 없습니다. 레시피북에서 추가하세요.',
+                      style: TextStyle(fontSize: 12.5)),
+                ),
+              ),
+            )
+          else ...[
+            // ── 카테고리 가로 탭
+            SizedBox(
+              height: 30,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final cat in categories)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: GestureDetector(
+                        onTap: () => setState(() => _pickerCategory = cat),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: cat == activeCategory
+                                ? Colors.blue[800]
+                                : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(15),
                           ),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: entry.value.map((recipe) {
-                              return GestureDetector(
-                                onTap: () => insertMenu(recipe.name),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border:
-                                        Border.all(color: Colors.blue[100]!),
-                                  ),
-                                  child: Text(recipe.name,
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500)),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                        const SizedBox(height: 10),
-                      ],
+                          child: Text(cat,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: cat == activeCategory
+                                    ? Colors.white
+                                    : Colors.black54,
+                              )),
+                        ),
+                      ),
                     ),
-                  ),
-          ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            // ── 활성 카테고리의 메뉴 세로 목록 (탭=넣기, 다시 탭=빼기)
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 8),
+                children: [
+                  for (final recipe in byCategory[activeCategory] ?? [])
+                    Builder(builder: (context) {
+                      final included = cellLines.contains(recipe.name);
+                      return GestureDetector(
+                        onTap: () => _toggleMenu(recipe.name),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: included ? Colors.blue[800] : Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: included
+                                    ? Colors.blue[800]!
+                                    : Colors.grey[300]!),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(recipe.name,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: included
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    )),
+                              ),
+                              if (included)
+                                const Icon(Icons.check,
+                                    size: 14, color: Colors.white70),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  void _appendRecipe(String dayId, String field, String name) {
-    final current = _editingMeals[dayId]!;
-    String value = '';
-    if (field == 'breakfast') value = current.breakfast;
-    if (field == 'lunch') value = current.lunch;
-    if (field == 'dinner') value = current.dinner;
-    if (field == 'snack') value = current.snack;
+  String _cellValue(String dayId, String field) {
+    final current = _editingMeals[dayId];
+    if (current == null) return '';
+    switch (field) {
+      case 'breakfast':
+        return current.breakfast;
+      case 'lunch':
+        return current.lunch;
+      case 'dinner':
+        return current.dinner;
+      case 'snack':
+        return current.snack;
+    }
+    return '';
+  }
 
-    final appended = value.trim().isEmpty ? name : '$value\n$name';
-    _updateLocalMeal(dayId, field, appended);
+  /// 💡 메뉴 토글: 칸에 없으면 추가, 이미 있으면 그 줄을 제거한다.
+  void _toggleMenu(String name) {
+    if (_selDayId == null || _selField == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('수정할 칸을 먼저 선택해주세요.'),
+          duration: Duration(seconds: 1)));
+      return;
+    }
+    final lines = _cellValue(_selDayId!, _selField!)
+        .split('\n')
+        .where((l) => l.trim().isNotEmpty)
+        .toList();
+
+    if (lines.any((l) => l.trim() == name)) {
+      lines.removeWhere((l) => l.trim() == name);
+    } else {
+      lines.add(name);
+    }
+    _updateLocalMeal(_selDayId!, _selField!, lines.join('\n'));
     setState(() => _insertNonce++); // 입력칸을 새 값으로 다시 그린다
   }
 

@@ -13,6 +13,9 @@ class RecipeBookScreen extends StatefulWidget {
 }
 
 class _RecipeBookScreenState extends State<RecipeBookScreen> {
+  /// 보고 있는 카테고리 탭
+  String? _categoryTab;
+
   /// 다이얼로그 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _categoryController = TextEditingController();
@@ -146,23 +149,70 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
             )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-              children: [
-                for (final entry in provider.byCategory.entries) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
-                    child: Text(entry.key,
-                        style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blueGrey[400])),
+          : Builder(builder: (context) {
+              final byCategory = provider.byCategory;
+              final categories = byCategory.keys.toList();
+              var active = _categoryTab;
+              if (active == null || !byCategory.containsKey(active)) {
+                active = categories.first;
+              }
+
+              return Column(
+                children: [
+                  // ── 카테고리 가로 탭
+                  Container(
+                    height: 46,
+                    color: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      children: [
+                        for (final cat in categories)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: GestureDetector(
+                              onTap: () =>
+                                  setState(() => _categoryTab = cat),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: cat == active
+                                      ? Colors.blue[800]
+                                      : Colors.grey[100],
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: Text(
+                                  '$cat ${byCategory[cat]!.length}',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: cat == active
+                                        ? Colors.white
+                                        : Colors.black54,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                  for (final recipe in entry.value)
-                    _recipeTile(recipe, isAdmin, provider),
+                  // ── 활성 카테고리의 레시피 세로 목록
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 90),
+                      children: [
+                        for (final recipe in byCategory[active] ?? [])
+                          _recipeTile(recipe, isAdmin, provider),
+                      ],
+                    ),
+                  ),
                 ],
-              ],
-            ),
+              );
+            }),
       floatingActionButton: isAdmin
           ? FloatingActionButton.extended(
               onPressed: () => _showEditDialog(provider),
