@@ -8,11 +8,11 @@ import '../models/member_model.dart';
 /// key는 저장값, value는 표시명.
 const Map<String, String> kStaffRoles = {
   'leader': '대장',
-  'planning': '기획부장',
-  'training': '훈련부장',
-  'equipment': '장비부장',
-  'pr': '홍보부장',
-  'finance': '총무부장',
+  'planning': '기획',
+  'training': '훈련',
+  'equipment': '장비',
+  'pr': '홍보',
+  'finance': '총무',
 };
 
 /// 직책별 이모티콘

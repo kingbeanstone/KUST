@@ -23,10 +23,7 @@ class _MoreScreenState extends State<MoreScreen> {
   bool _isSettingUp = false;
   bool _showDebugConsole = false;
 
-  /// 💡 전화번호는 기본 숨김 — 탭한 사람만 공개 (가벼운 프라이버시)
-  final Set<String> _revealedPhones = {};
-
-  /// 한 줄 메시지 편집 다이얼로그용 (State 소유 — dispose 크래시 방지)
+  /// 한 줄 메시지 편집용 (State 소유 — dispose 크래시 방지)
   final TextEditingController _introController = TextEditingController();
 
   @override
@@ -322,7 +319,8 @@ class _MoreScreenState extends State<MoreScreen> {
                             border: Border(
                                 bottom: BorderSide(color: Colors.grey[100]!)),
                           ),
-                          child: _personRow(m, participantProvider, isAdmin),
+                          child: _personRow(m, participantProvider, isAdmin,
+                              emoji: '⭐', roleName: '강사'),
                         ),
                     ],
                   ),
@@ -366,7 +364,8 @@ class _MoreScreenState extends State<MoreScreen> {
                       for (final m in members)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 4),
-                          child: _personRow(m, participantProvider, isAdmin),
+                          child: _personRow(m, participantProvider, isAdmin,
+                              emoji: emoji, roleName: roleName),
                         ),
                     ],
                   ),
@@ -376,108 +375,125 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  /// 이름·기수 + [번호 보기] + 한 줄 메시지 (관리자는 메시지 편집 가능)
-  Widget _personRow(
-      MemberItem m, ParticipantProvider participantProvider, bool isAdmin) {
+  /// 이름·기수 + 한 마디 미리보기. 💡 탭하면 상세 미니 창이 뜬다.
+  Widget _personRow(MemberItem m, ParticipantProvider participantProvider, bool isAdmin,
+      {required String emoji, required String roleName}) {
     final intro = participantProvider.introOf(m.id);
-    final revealed = _revealedPhones.contains(m.id);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(m.name,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(width: 6),
-            if (m.generation.isNotEmpty)
-              Text('${m.generation}기',
-                  style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
-            const Spacer(),
-            // 💡 전화번호는 탭해야 보인다
-            if (m.phone.isNotEmpty)
-              GestureDetector(
-                onTap: () => setState(() {
-                  revealed
-                      ? _revealedPhones.remove(m.id)
-                      : _revealedPhones.add(m.id);
-                }),
-                child: revealed
-                    ? Text(m.phone,
-                        style: const TextStyle(fontSize: 12, color: Colors.black87))
-                    : Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text('번호 보기',
-                            style: TextStyle(
-                                fontSize: 10.5, color: Colors.grey[600])),
-                      ),
-              ),
-          ],
-        ),
-        // 한 줄 메시지 (관리자: 탭하여 편집)
-        if (intro.isNotEmpty || isAdmin)
-          GestureDetector(
-            onTap: isAdmin
-                ? () => _editIntroDialog(m, participantProvider)
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Row(
-                children: [
-                  Icon(Icons.format_quote, size: 13, color: Colors.grey[400]),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      intro.isEmpty ? '한 줄 메시지 입력' : intro,
-                      style: TextStyle(
-                        fontSize: 12.5,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showPersonDialog(m, participantProvider, isAdmin,
+          emoji: emoji, roleName: roleName),
+      child: Row(
+        children: [
+          Text(m.name,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(width: 6),
+          if (m.generation.isNotEmpty)
+            Text('${m.generation}기',
+                style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: intro.isEmpty
+                ? const SizedBox.shrink()
+                : Text(
+                    '❝ $intro',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12,
                         fontStyle: FontStyle.italic,
-                        color: intro.isEmpty ? Colors.grey[300] : Colors.black54,
-                      ),
-                    ),
+                        color: Colors.black54),
                   ),
-                  if (isAdmin)
-                    Icon(Icons.edit, size: 11, color: Colors.grey[300]),
-                ],
-              ),
-            ),
           ),
-      ],
+          Icon(Icons.chevron_right, size: 16, color: Colors.grey[300]),
+        ],
+      ),
     );
   }
 
-  void _editIntroDialog(MemberItem m, ParticipantProvider participantProvider) {
-    _introController.text = participantProvider.introOf(m.id);
+  /// 💡 사람 상세 미니 창: 역할·이름·기수·연락처·한 마디.
+  /// 관리자는 이 창에서 한 마디를 바로 수정할 수 있다.
+  void _showPersonDialog(
+      MemberItem m, ParticipantProvider participantProvider, bool isAdmin,
+      {required String emoji, required String roleName}) {
+    final intro = participantProvider.introOf(m.id);
+    _introController.text = intro;
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('${m.name} 한 줄 메시지',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: _introController,
-          autofocus: true,
-          maxLength: 40,
-          decoration: const InputDecoration(
-            hintText: '예: 안전 다이빙! 무리하지 맙시다',
-            border: OutlineInputBorder(),
-            isDense: true,
-          ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '$roleName ${m.name}'
+                '${m.generation.isNotEmpty ? ' · ${m.generation}기' : ''}',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.phone, size: 15, color: Colors.blue),
+                const SizedBox(width: 8),
+                Text(
+                  m.phone.isEmpty ? '연락처 미등록' : m.phone,
+                  style: TextStyle(
+                      fontSize: 14,
+                      color: m.phone.isEmpty ? Colors.grey : Colors.black87),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (isAdmin)
+              TextField(
+                controller: _introController,
+                maxLength: 40,
+                decoration: const InputDecoration(
+                  labelText: '한 마디',
+                  hintText: '예: 안전 다이빙! 무리하지 맙시다',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              )
+            else if (intro.isNotEmpty)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.format_quote, size: 15, color: Colors.grey[400]),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: Text(intro,
+                        style: const TextStyle(
+                            fontSize: 13.5,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.black54,
+                            height: 1.4)),
+                  ),
+                ],
+              ),
+          ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
-          ElevatedButton(
-            onPressed: () {
-              participantProvider.setIntro(m.id, _introController.text);
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('저장'),
-          ),
+              onPressed: () => Navigator.pop(dialogContext), child: const Text('닫기')),
+          if (isAdmin)
+            ElevatedButton(
+              onPressed: () {
+                participantProvider.setIntro(m.id, _introController.text);
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('저장'),
+            ),
         ],
       ),
     );
