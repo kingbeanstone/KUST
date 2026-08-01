@@ -226,6 +226,21 @@ class EquipmentProvider with ChangeNotifier {
   }
 
   // --- 장비 체크리스트 CRUD ---
+
+  /// 💡 동시 수정 안전 저장: 대원별로 '바뀐 장비 값'만 merge로 쓴다.
+  /// 체크 상태·편성 필드는 건드리지 않으므로, 저장하는 동안 다른 임원이
+  /// 한 체크/수정이 덮이지 않는다.
+  /// changes: { 대원ID: { 장비명: {'value': 새값}, ... }, ... }
+  Future<void> saveGearValueChanges(Map<String, Map<String, dynamic>> changes) async {
+    if (!_isAdmin || _expeditionId == null || changes.isEmpty) return;
+    final batch = _db.batch();
+    changes.forEach((id, fields) {
+      batch.set(_membersCol.doc(id), fields, SetOptions(merge: true));
+    });
+    await batch.commit();
+    addLog('장비 값 부분 저장 (${changes.length}명)');
+  }
+
   Future<void> saveBulkChanges(List<MemberEquipment> updatedList) async {
     if (!_isAdmin) return;
     final batch = _db.batch();
@@ -414,9 +429,11 @@ class EquipmentProvider with ChangeNotifier {
     if (!_isAdmin) return;
     final batch = _db.batch();
     for (var member in _data) {
+      // 💡 checked만 초기화 — value를 같이 쓰면 그 사이 남이 고친 번호가
+      //    로컬의 옛 값으로 덮인다 (동시 수정 사고 방지)
       Map<String, dynamic> resetGears = {};
       member.gears.forEach((key, gear) {
-        resetGears[key] = {'value': gear.value, 'checked': false};
+        resetGears[key] = {'checked': false};
       });
       batch.set(_membersCol.doc(member.id), resetGears, SetOptions(merge: true));
     }

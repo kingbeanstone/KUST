@@ -120,6 +120,10 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   /// 수정 모드 진입 시 만들어지는 편집용 사본 (id -> 사본)
   final Map<String, MemberEquipment> _editing = {};
 
+  /// 💡 진입 시점의 원본 스냅샷 — 저장할 때 이것과 비교해 '바뀐 값만' 쓴다.
+  /// (전체 덮어쓰기는 그 사이 다른 임원이 한 체크/수정을 날려버린다)
+  final Map<String, MemberEquipment> _editBaseline = {};
+
   /// 접혀 있는 그룹 섹션의 key 모음
   final Set<String> _collapsed = {};
 
@@ -279,6 +283,9 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
       _editing
         ..clear()
         ..addEntries(provider.data.map((m) => MapEntry(m.id, m.copy())));
+      _editBaseline
+        ..clear()
+        ..addEntries(provider.data.map((m) => MapEntry(m.id, m.copy())));
     });
   }
 
@@ -286,23 +293,30 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
     setState(() {
       _isEditMode = false;
       _editing.clear();
+      _editBaseline.clear();
     });
   }
 
   Future<void> _saveEdits(EquipmentProvider provider) async {
     FocusManager.instance.primaryFocus?.unfocus();
     await Future.delayed(const Duration(milliseconds: 100));
-    // 💡 편집 도중 버디/그룹 편성이 바뀌었을 수 있으므로, 사본의 편성 정보를
-    //    최신 데이터로 갱신한 뒤 저장한다. (안 하면 저장 시 편성이 과거로 되돌아감)
-    for (final m in provider.data) {
-      final copy = _editing[m.id];
-      if (copy != null) {
-        copy.pairId = m.pairId;
-        copy.sharedGears = List<String>.from(m.sharedGears);
-        copy.groupId = m.groupId;
-      }
+
+    // 💡 동시 수정 안전: 진입 시점과 비교해 '내가 바꾼 장비 값'만 추려 저장한다.
+    //    체크 상태·편성(pairId/그룹/순서)은 각자의 흐름이 관리하므로 안 쓴다.
+    final changes = <String, Map<String, dynamic>>{};
+    for (final entry in _editing.entries) {
+      final baseline = _editBaseline[entry.key];
+      if (baseline == null) continue;
+
+      final diff = <String, dynamic>{};
+      entry.value.gears.forEach((gear, status) {
+        final oldValue = baseline.gears[gear]?.value ?? '';
+        if (status.value != oldValue) diff[gear] = {'value': status.value};
+      });
+      if (diff.isNotEmpty) changes[entry.key] = diff;
     }
-    await provider.saveBulkChanges(_editing.values.toList());
+
+    await provider.saveGearValueChanges(changes);
     if (mounted) _exitEditMode();
   }
 
