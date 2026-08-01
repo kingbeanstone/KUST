@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
+import '../providers/expedition_provider.dart';
 import '../providers/schedule_provider.dart';
 import '../providers/member_provider.dart';
 import '../providers/participant_provider.dart';
@@ -34,6 +35,34 @@ class _BuddyScreenState extends State<BuddyScreen> {
   int _selectedDateIndex = 0;
   bool _isEditMode = false;
 
+  /// 💡 처음 열릴 때 오늘 날짜의 일차 탭을 자동 선택 (한 번만)
+  bool _autoSelectedDay = false;
+  final ScrollController _dayTabScroll = ScrollController();
+
+  /// 오늘에 해당하는 일차 인덱스. 정확히 일치하는 날이 없으면
+  /// 가장 최근에 지난 일차, 원정 전이면 첫 일차.
+  int _todayIndex(List<Map<String, String>> dates) {
+    final year =
+        context.read<ExpeditionProvider>().selected?.year ?? DateTime.now().year;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    var best = 0;
+    DateTime? bestDate;
+    for (var i = 0; i < dates.length; i++) {
+      final match =
+          RegExp(r'^(\d{1,2})\.(\d{1,2})$').firstMatch((dates[i]['id'] ?? '').trim());
+      if (match == null) continue;
+      final d = DateTime(year, int.parse(match.group(1)!), int.parse(match.group(2)!));
+      if (d.isAtSameMomentAs(today)) return i;
+      if (d.isBefore(today) && (bestDate == null || d.isAfter(bestDate))) {
+        best = i;
+        bestDate = d;
+      }
+    }
+    return bestDate == null ? 0 : best;
+  }
+
   /// 하단 픽커 확장 여부 (끌거나 탭해서 전환)
   bool _pickerExpanded = false;
 
@@ -48,6 +77,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _dayTabScroll.dispose();
     super.dispose();
   }
 
@@ -66,6 +96,20 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
     if (scheduleProvider.dates.isEmpty) {
       return const Scaffold(body: Center(child: Text('일정 정보를 먼저 등록해주세요.')));
+    }
+
+    // 💡 데이터가 처음 도착했을 때 오늘 일차로 자동 이동
+    if (!_autoSelectedDay) {
+      _autoSelectedDay = true;
+      _selectedDateIndex = _todayIndex(scheduleProvider.dates);
+      if (_selectedDateIndex > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_dayTabScroll.hasClients) return;
+          final target = (_selectedDateIndex * 100.0 - 80.0)
+              .clamp(0.0, _dayTabScroll.position.maxScrollExtent);
+          _dayTabScroll.jumpTo(target);
+        });
+      }
     }
 
     final dateIndex = _selectedDateIndex.clamp(0, scheduleProvider.dates.length - 1);
@@ -186,6 +230,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           color: Colors.white,
           border: Border(bottom: BorderSide(color: Colors.grey[200]!))),
       child: ListView.builder(
+        controller: _dayTabScroll,
         scrollDirection: Axis.horizontal,
         itemCount: provider.dates.length,
         itemBuilder: (context, index) {
