@@ -1376,7 +1376,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
         _selTeamIdx == teamIdx &&
         _selSlotIdx == slotIdx;
 
-    Color bgColor = isLeader ? _leaderTint : Colors.white;
+    // 리더 버디(-2)는 일반 대원처럼 — 리더 색·굵은 글씨 없이 표시한다
+    final isPlainBuddy = slotIdx == -2;
+    Color bgColor = isLeader && !isPlainBuddy ? _leaderTint : Colors.white;
     if (isSelected) bgColor = Colors.blue[200]!;
 
     return GestureDetector(
@@ -1399,8 +1401,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
               ? (slotIdx == -2 ? '버디' : '리더/강사')
               : value,
           style: TextStyle(
-            fontSize: isLeader ? 13 : 12,
-            fontWeight: isLeader ? FontWeight.bold : FontWeight.normal,
+            fontSize: isLeader && !isPlainBuddy ? 13 : 12,
+            fontWeight:
+                isLeader && !isPlainBuddy ? FontWeight.bold : FontWeight.normal,
             color: isLeader && value.isEmpty ? Colors.grey[400] : Colors.black87,
           ),
         ),
