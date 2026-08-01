@@ -5,9 +5,11 @@ import '../app_version.dart';
 import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/executive_provider.dart';
+import '../providers/member_provider.dart';
+import '../providers/participant_provider.dart';
 import '../providers/qna_provider.dart';
 import '../providers/notice_provider.dart';
-import '../models/executive_model.dart';
+import '../models/member_model.dart';
 
 class MoreScreen extends StatefulWidget {
   const MoreScreen({super.key});
@@ -103,22 +105,18 @@ class _MoreScreenState extends State<MoreScreen> {
                   // 2. 실시간 알림 설정
                   _buildSettingTile(noticeProv),
 
-                  // 3. 👥 임원단 소개 섹션
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('👥 임원단 소개', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        if (auth.isAdmin)
-                          IconButton(
-                              onPressed: () => _showExecutiveDialog(context, execProv),
-                              icon: const Icon(Icons.person_add_alt_1, color: Colors.blue, size: 20)
-                          ),
-                      ],
-                    ),
+                  // 3. 👥 이번 원정 임원단 — 참가자 관리의 역할 지정과 자동 연동
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 24, 16, 2),
+                    child: Text('👥 이번 원정 임원단',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                  _buildExecutiveList(execProv, auth.isAdmin),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Text('원정 참가자 관리의 역할 지정과 자동으로 연동됩니다.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ),
+                  _buildExpeditionStaffList(context),
 
                   // 4. 📱 앱 정보 섹션 (정보 삭제 기능 포함)
                   _buildAppInfoSection(context, auth, equipProv, noticeProv, execProv, qnaProv),
@@ -225,68 +223,111 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  Widget _buildExecutiveList(ExecutiveProvider provider, bool isAdmin) {
-    if (provider.executives.isEmpty) {
-      return const Center(child: Padding(padding: EdgeInsets.all(16), child: Text('등록된 임원단이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13))));
+  /// 💡 현재 원정 참가자의 직책(대장~총무)과 강사를 자동으로 보여준다.
+  /// 이름·기수·연락처는 동아리원 명단에서 조인 — 별도 입력 불필요.
+  Widget _buildExpeditionStaffList(BuildContext context) {
+    final participantProvider = context.watch<ParticipantProvider>();
+    final memberProvider = context.watch<MemberProvider>();
+    final byId = {for (final m in memberProvider.members) m.id: m};
+
+    // 직책별 담당자 수집
+    final roleHolders = <String, List<MemberItem>>{};
+    final instructors = <MemberItem>[];
+    for (final id in participantProvider.participantIds) {
+      final member = byId[id];
+      if (member == null) continue;
+      final role = participantProvider.staffRoleOf(id);
+      if (role != null) roleHolders.putIfAbsent(role, () => []).add(member);
+      if (participantProvider.isInstructor(id)) instructors.add(member);
+    }
+
+    if (roleHolders.isEmpty && instructors.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('아직 지정된 임원이 없습니다.\n[원정 참가자 관리] 수정 모드에서 역할을 지정하세요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey, fontSize: 13)),
+        ),
+      );
     }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        children: provider.executives.map((ex) {
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(ex.gender == "male" ? "👦" : "👧", style: const TextStyle(fontSize: 24)),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                            const SizedBox(width: 6),
-                            Text(ex.generation, style: const TextStyle(fontSize: 12, color: Colors.blueGrey))
-                          ]),
-                          const SizedBox(height: 2),
-                          Text(ex.position, style: const TextStyle(fontSize: 13, color: Colors.blue, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(ex.phone, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-                        if (isAdmin)
-                          GestureDetector(
-                              onTap: () => _showExecutiveDialog(context, provider, existing: ex),
-                              child: const Padding(
-                                  padding: EdgeInsets.only(top: 4.0),
-                                  child: Text('수정', style: TextStyle(color: Colors.grey, fontSize: 11, decoration: TextDecoration.underline))
-                              )
-                          )
-                      ],
-                    ),
-                  ],
-                ),
-                if (ex.intro.isNotEmpty) ...[
-                  const Padding(padding: EdgeInsets.symmetric(vertical: 8.0), child: Divider(height: 1, thickness: 0.5)),
-                  Row(children: [
-                    const Icon(Icons.format_quote, size: 14, color: Colors.grey),
-                    const SizedBox(width: 4),
-                    Expanded(child: Text(ex.intro, style: const TextStyle(fontSize: 13, color: Colors.black54, fontStyle: FontStyle.italic)))
-                  ])
-                ]
-              ],
-            ),
-          );
-        }).toList(),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          children: [
+            for (final entry in kStaffRoles.entries)
+              _staffTile(
+                emoji: kStaffRoleEmoji[entry.key] ?? '',
+                roleName: entry.value,
+                members: roleHolders[entry.key] ?? const [],
+              ),
+            if (instructors.isNotEmpty)
+              _staffTile(emoji: '⭐', roleName: '강사', members: instructors),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _staffTile({
+    required String emoji,
+    required String roleName,
+    required List<MemberItem> members,
+  }) {
+    final hasHolder = members.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.grey[100]!)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 64,
+            child: Text(roleName,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: Colors.blueGrey)),
+          ),
+          Expanded(
+            child: !hasHolder
+                ? Text('미지정',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[400]))
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: members
+                        .map((m) => Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Row(
+                                children: [
+                                  Text(m.name,
+                                      style: const TextStyle(
+                                          fontSize: 14, fontWeight: FontWeight.bold)),
+                                  const SizedBox(width: 6),
+                                  if (m.generation.isNotEmpty)
+                                    Text(m.generation,
+                                        style: const TextStyle(
+                                            fontSize: 12, color: Colors.blueGrey)),
+                                  const Spacer(),
+                                  Text(m.phone,
+                                      style: const TextStyle(
+                                          fontSize: 12, color: Colors.black87)),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -432,74 +473,6 @@ class _MoreScreenState extends State<MoreScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showExecutiveDialog(BuildContext context, ExecutiveProvider provider, {ExecutiveItem? existing}) {
-    final bool isEdit = existing != null;
-    final nameController = TextEditingController(text: existing?.name ?? "");
-    final genController = TextEditingController(text: existing?.generation ?? "");
-    final posController = TextEditingController(text: existing?.position ?? "");
-    final phoneController = TextEditingController(text: existing?.phone ?? "");
-    final introController = TextEditingController(text: existing?.intro ?? "");
-    String selectedGender = existing?.gender ?? "male";
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(isEdit ? '임원 정보 수정' : '새 임원 등록', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _genderOption(setDialogState, "male", "👦 남자", selectedGender == "male", (v) => selectedGender = v),
-                    const SizedBox(width: 20),
-                    _genderOption(setDialogState, "female", "👧 여자", selectedGender == "female", (v) => selectedGender = v),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: '이름', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                TextField(controller: genController, decoration: const InputDecoration(labelText: '기수', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                TextField(controller: posController, decoration: const InputDecoration(labelText: '직책', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '전화번호', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-                TextField(controller: introController, maxLength: 30, decoration: const InputDecoration(labelText: '한 줄 소개', border: OutlineInputBorder())),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-            if (isEdit) TextButton(onPressed: () { provider.deleteExecutive(existing.id); Navigator.pop(context); }, child: const Text('삭제', style: TextStyle(color: Colors.red))),
-            ElevatedButton(
-              onPressed: () {
-                if (nameController.text.isEmpty) return;
-                final item = ExecutiveItem(id: existing?.id ?? "", gender: selectedGender, name: nameController.text, generation: genController.text, position: posController.text, phone: phoneController.text, intro: introController.text);
-                isEdit ? provider.updateExecutive(item) : provider.addExecutive(item);
-                Navigator.pop(context);
-              },
-              child: const Text('저장'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _genderOption(StateSetter setDialogState, String value, String label, bool isSelected, Function(String) onSelect) {
-    return GestureDetector(
-      onTap: () => setDialogState(() => onSelect(value)),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(color: isSelected ? Colors.blue[50] : Colors.grey[100], borderRadius: BorderRadius.circular(20), border: Border.all(color: isSelected ? Colors.blue : Colors.transparent)),
-        child: Text(label, style: TextStyle(color: isSelected ? Colors.blue : Colors.black54, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
       ),
     );
   }

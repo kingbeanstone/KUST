@@ -116,8 +116,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
+  /// 'HH:MM' 형태를 분 단위로 파싱 ('~14:30' 같은 접두어 허용, 실패 시 null)
+  int? _parseMinutes(String time) {
+    final match = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(time);
+    if (match == null) return null;
+    return int.parse(match.group(1)!) * 60 + int.parse(match.group(2)!);
+  }
+
+  /// 새 일정을 시간순으로 끼워 넣을 위치 (파싱 불가면 맨 뒤)
+  int _autoInsertIndex(List<ScheduleItem> items, String time) {
+    final newMinutes = _parseMinutes(time);
+    if (newMinutes == null) return items.length;
+    for (var i = 0; i < items.length; i++) {
+      final t = _parseMinutes(items[i].time);
+      if (t != null && t > newMinutes) return i;
+    }
+    return items.length;
+  }
+
   // 일정 항목 다이얼로그 (ScheduleProvider와 연결)
-  void _showItemDialog(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, {ScheduleItem? item, int? index, int? insertAtIndex}) {
+  void _showItemDialog(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, {ScheduleItem? item, int? index}) {
     if (!isAdmin) return;
     final TextEditingController _timeController = TextEditingController(text: item?.time ?? "");
     final TextEditingController _descController = TextEditingController(text: item?.description ?? "");
@@ -127,7 +145,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          item == null ? (insertAtIndex != null ? '사이에 일정 삽입' : '새 일정 추가') : '일정 수정',
+          item == null ? '새 일정 추가' : '일정 수정',
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         content: Column(
@@ -161,7 +179,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               final newItem = ScheduleItem(time: _timeController.text, description: _descController.text);
               final dayId = scheduleProvider.dates[_selectedDateIndex]['id']!;
               if (item == null) {
-                scheduleProvider.saveScheduleItem(dayId, newItem, atIndex: insertAtIndex);
+                // 💡 새 일정은 시간순으로 자동 삽입 (사이 + 버튼 대체)
+                final items = scheduleProvider.schedules
+                    .firstWhere((s) => s.id == dayId,
+                        orElse: () => DailySchedule(id: dayId, items: []))
+                    .items;
+                scheduleProvider.saveScheduleItem(dayId, newItem,
+                    atIndex: _autoInsertIndex(items, newItem.time));
               } else {
                 scheduleProvider.updateScheduleItem(dayId, index!, newItem);
               }
@@ -281,7 +305,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ? _buildEmptyState()
                 : isAdmin
                 ? ReorderableListView.builder(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
+              padding: const EdgeInsets.fromLTRB(12, 16, 16, 80),
               itemCount: dailySchedule.items.length,
               onReorder: (oldIndex, newIndex) {
                 setState(() {
@@ -294,28 +318,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               proxyDecorator: (child, index, animation) {
                 return Material(
                   elevation: 5, color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(10),
                   child: child,
                 );
               },
               itemBuilder: (context, index) {
                 final item = dailySchedule.items[index];
-                return Column(
+                return KeyedSubtree(
                   key: ValueKey('${item.time}_${item.description}_$index'),
-                  children: [
-                    _buildTimelineItem(context, scheduleProvider, isAdmin, item, index),
-                    if (index < dailySchedule.items.length - 1)
-                      _buildInsertPoint(context, scheduleProvider, isAdmin, index + 1),
-                  ],
+                  child: _buildTimelineItem(
+                      context, scheduleProvider, isAdmin, dailySchedule.items, index),
                 );
               },
             )
                 : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 80),
+              padding: const EdgeInsets.fromLTRB(12, 16, 16, 80),
               itemCount: dailySchedule.items.length,
               itemBuilder: (context, index) {
-                final item = dailySchedule.items[index];
-                return _buildTimelineItem(context, scheduleProvider, isAdmin, item, index);
+                return _buildTimelineItem(
+                    context, scheduleProvider, isAdmin, dailySchedule.items, index);
               },
             ),
           ),
@@ -345,71 +366,155 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
   }
 
-  Widget _buildInsertPoint(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, int atIndex) {
-    return Row(
-      children: [
-        const SizedBox(width: 5),
-        Container(width: 2, height: 30, color: Colors.blue[100]),
-        const SizedBox(width: 10),
-        IconButton(
-          onPressed: () => _showItemDialog(context, scheduleProvider, isAdmin, insertAtIndex: atIndex),
-          icon: Icon(Icons.add_circle, color: Colors.blue[200], size: 24),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          visualDensity: VisualDensity.compact,
-        ),
-        const Expanded(child: Divider(color: Colors.transparent)),
-      ],
-    );
-  }
+  /// 💡 구글 캘린더식 타임라인: 다음 일정까지의 시간 간격에 비례해
+  /// 블록 높이가 정해져서 각 일정의 '길이감'이 한눈에 보인다.
+  Widget _buildTimelineItem(BuildContext context, ScheduleProvider scheduleProvider,
+      bool isAdmin, List<ScheduleItem> items, int index) {
+    final item = items[index];
 
-  Widget _buildTimelineItem(BuildContext context, ScheduleProvider scheduleProvider, bool isAdmin, ScheduleItem item, int index) {
-    return IntrinsicHeight(
+    // 다음 시간 파싱 가능한 항목까지의 간격으로 높이 계산
+    final start = _parseMinutes(item.time);
+    int? next;
+    for (var j = index + 1; j < items.length; j++) {
+      final t = _parseMinutes(items[j].time);
+      if (t != null) {
+        next = t;
+        break;
+      }
+    }
+
+    const minHeight = 48.0;
+    const maxHeight = 150.0; // 밤샘 이동 같은 긴 공백이 화면을 다 먹지 않게
+    double height = minHeight;
+    if (start != null && next != null && next > start) {
+      height = ((next - start) * 1.1).clamp(minHeight, maxHeight);
+    }
+    final isLast = next == null;
+    final compact = height < 68;
+
+    return SizedBox(
+      height: height,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Column(
-            children: [
-              Container(
-                width: 12, height: 12,
-                decoration: BoxDecoration(color: Colors.blue[800], shape: BoxShape.circle),
+          // 시간 라벨 열
+          SizedBox(
+            width: 52,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4, right: 6),
+              child: Text(
+                item.time,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey[600]),
               ),
-              Expanded(child: Container(width: 2, color: Colors.blue[100])),
-            ],
+            ),
           ),
-          const SizedBox(width: 20),
+          // 타임라인 레일 (점 + 세로선)
+          SizedBox(
+            width: 14,
+            child: Column(
+              children: [
+                const SizedBox(height: 5),
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration:
+                      BoxDecoration(color: Colors.blue[800], shape: BoxShape.circle),
+                ),
+                if (!isLast)
+                  Expanded(child: Container(width: 2, color: Colors.blue[100])),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 일정 블록 — 높이가 곧 시간 길이
           Expanded(
             child: GestureDetector(
-              onTap: isAdmin ? () => _showItemDialog(context, scheduleProvider, isAdmin, item: item, index: index) : null,
+              onTap: isAdmin
+                  ? () => _showItemDialog(context, scheduleProvider, isAdmin,
+                      item: item, index: index)
+                  : null,
               child: Container(
-                margin: const EdgeInsets.only(bottom: 10, top: 2),
-                padding: const EdgeInsets.all(16),
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border(
+                      left: BorderSide(color: Colors.blue[800]!, width: 3.5)),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2)),
                   ],
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
+                child: compact
+                    ? Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.description,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF212121)),
+                            ),
+                          ),
+                          if (isAdmin)
+                            const Icon(Icons.drag_indicator,
+                                color: Colors.grey, size: 18),
+                        ],
+                      )
+                    : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(item.time, style: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold, fontSize: 13)),
-                          const SizedBox(height: 4),
-                          Text(item.description, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Color(0xFF212121))),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.description,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF212121)),
+                                ),
+                              ),
+                              if (isAdmin)
+                                const Icon(Icons.drag_indicator,
+                                    color: Colors.grey, size: 18),
+                            ],
+                          ),
+                          const Spacer(),
+                          if (start != null && next != null)
+                            Text(
+                              _durationLabel(next - start),
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.blueGrey[300]),
+                            ),
                         ],
                       ),
-                    ),
-                    if (isAdmin) const Icon(Icons.drag_indicator, color: Colors.grey, size: 20),
-                  ],
-                ),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// 분 → '1시간 30분' 형태 라벨
+  String _durationLabel(int minutes) {
+    final h = minutes ~/ 60;
+    final m = minutes % 60;
+    if (h == 0) return '$m분';
+    if (m == 0) return '$h시간';
+    return '$h시간 $m분';
   }
 }
