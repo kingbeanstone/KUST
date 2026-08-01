@@ -17,6 +17,8 @@ import 'providers/participant_provider.dart';
 import 'providers/qna_provider.dart';
 import 'providers/executive_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/recipe_provider.dart';
+import 'providers/ingredient_provider.dart';
 
 
 // ✅ 모든 Screen Import
@@ -112,6 +114,16 @@ void main() async {
           create: (_) => BuddyProvider(),
           update: (_, expedition, buddy) =>
               buddy!..setExpedition(expedition.selectedId),
+        ),
+
+        // 7-1. 레시피북 (동아리 공용)
+        ChangeNotifierProvider(create: (_) => RecipeProvider()),
+
+        // 7-2. 남은 재료 (원정별)
+        ChangeNotifierProxyProvider<ExpeditionProvider, IngredientProvider>(
+          create: (_) => IngredientProvider(),
+          update: (_, expedition, ingredient) =>
+              ingredient!..setExpedition(expedition.selectedId),
         ),
 
         // 8. QnA 게시판
@@ -245,6 +257,8 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
       context.read<BuddyProvider>().resubscribe();
       context.read<ParticipantProvider>().resubscribe();
       context.read<MemberProvider>().resubscribe();
+      context.read<RecipeProvider>().resubscribe();
+      context.read<IngredientProvider>().resubscribe();
     }
   }
 

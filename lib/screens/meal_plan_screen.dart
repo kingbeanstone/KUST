@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/meal_plan_provider.dart';
+import '../providers/recipe_provider.dart';
 import '../models/meal_plan_model.dart';
+import '../models/recipe_model.dart';
+import 'recipe_book_screen.dart';
+import 'ingredient_screen.dart';
 
 class MealPlanScreen extends StatefulWidget {
   const MealPlanScreen({super.key});
@@ -14,6 +18,16 @@ class MealPlanScreen extends StatefulWidget {
 class _MealPlanScreenState extends State<MealPlanScreen> {
   bool _isEditMode = false;
   Map<String, MealPlan> _editingMeals = {};
+
+  /// 레시피 원클릭 삽입 시 입력칸을 다시 그리기 위한 논스
+  int _insertNonce = 0;
+
+  static const Map<String, String> _fieldLabels = {
+    'breakfast': '아침',
+    'lunch': '점심',
+    'dinner': '저녁',
+    'snack': '야식',
+  };
 
   // 편집 모드 진입
   void _enterEditMode(MealPlanProvider provider) {
@@ -69,6 +83,18 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         elevation: 0.5,
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.menu_book_outlined, color: Colors.blueGrey),
+            tooltip: '레시피북',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const RecipeBookScreen())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.shopping_basket_outlined, color: Colors.blueGrey),
+            tooltip: '남은 재료',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const IngredientScreen())),
+          ),
           if (equipmentProvider.isAdmin)
             TextButton(
               onPressed: () => _isEditMode ? _saveAllMeals(mealProvider) : _enterEditMode(mealProvider),
@@ -188,28 +214,272 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   // 데이터 셀 (입력 및 표시)
   Widget _buildDataCell(String dayId, String field, String value) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      alignment: Alignment.center,
-      child: _isEditMode
-          ? TextFormField(
-        initialValue: value,
-        onChanged: (v) => _updateLocalMeal(dayId, field, v),
-        maxLines: null,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 12, height: 1.3),
-        decoration: const InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.zero,
-          border: InputBorder.none,
-          hintText: '입력',
-          hintStyle: TextStyle(fontSize: 11, color: Colors.grey),
+    if (_isEditMode) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              // 💡 레시피 삽입 시 논스가 바뀌며 새 값으로 다시 그려진다
+              key: ValueKey('$dayId|$field|$_insertNonce'),
+              initialValue: value,
+              onChanged: (v) => _updateLocalMeal(dayId, field, v),
+              maxLines: null,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, height: 1.3),
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                hintText: '입력',
+                hintStyle: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ),
+            // 💡 원클릭 레시피 삽입 버튼
+            InkWell(
+              onTap: () => _showRecipePicker(dayId, field),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.menu_book_outlined,
+                        size: 11, color: Colors.blue[300]),
+                    const SizedBox(width: 3),
+                    Text('레시피',
+                        style: TextStyle(fontSize: 9.5, color: Colors.blue[300])),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      )
-          : Text(
-        value.isEmpty ? '-' : value,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.3),
+      );
+    }
+
+    // 보기 모드: 탭하면 전체 내용 + 등장하는 요리의 레시피를 보여준다
+    return InkWell(
+      onTap: value.isEmpty ? null : () => _showMealDetail(dayId, field, value),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        alignment: Alignment.center,
+        child: Text(
+          value.isEmpty ? '-' : value,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.3),
+        ),
+      ),
+    );
+  }
+
+  /// 💡 레시피 선택 시트: 탭 한 번으로 식단 칸에 요리 이름을 추가한다.
+  void _showRecipePicker(String dayId, String field) {
+    final recipes = context.read<RecipeProvider>().recipes;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Text('${_fieldLabels[field]}에 레시피 넣기',
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const RecipeBookScreen()));
+                    },
+                    child: const Text('레시피북 관리',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+              if (recipes.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text('레시피가 없습니다. [레시피북 관리]에서 먼저 추가하세요.',
+                      style: TextStyle(fontSize: 12.5, color: Colors.grey)),
+                )
+              else
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: recipes.map((recipe) {
+                        return GestureDetector(
+                          onTap: () {
+                            _appendRecipe(dayId, field, recipe.name);
+                            Navigator.pop(sheetContext);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.blue[100]!),
+                            ),
+                            child: Text(recipe.name,
+                                style: const TextStyle(
+                                    fontSize: 13, fontWeight: FontWeight.w600)),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _appendRecipe(String dayId, String field, String name) {
+    final current = _editingMeals[dayId]!;
+    String value = '';
+    if (field == 'breakfast') value = current.breakfast;
+    if (field == 'lunch') value = current.lunch;
+    if (field == 'dinner') value = current.dinner;
+    if (field == 'snack') value = current.snack;
+
+    final appended = value.trim().isEmpty ? name : '$value\n$name';
+    _updateLocalMeal(dayId, field, appended);
+    setState(() => _insertNonce++); // 입력칸을 새 값으로 다시 그린다
+  }
+
+  /// 보기 모드: 식단 내용 + 그 칸에 등장하는 요리의 레시피 상세
+  void _showMealDetail(String dayId, String field, String value) {
+    final matches = context.read<RecipeProvider>().matchesIn(value);
+    final dayLabel = context
+        .read<MealPlanProvider>()
+        .dates
+        .firstWhere((d) => d['id'] == dayId, orElse: () => {'title': ''})['title'];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.7),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text('$dayLabel · ${_fieldLabels[field]}',
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text(value, style: const TextStyle(fontSize: 13.5, height: 1.5)),
+              if (matches.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Divider(color: Colors.grey[200], height: 1),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.only(top: 10),
+                    children: [
+                      for (final recipe in matches) _recipeCard(recipe),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _recipeCard(Recipe recipe) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.menu_book_outlined, size: 14, color: Colors.blueGrey),
+              const SizedBox(width: 5),
+              Text(recipe.name,
+                  style: const TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          if (recipe.ingredients.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('재료',
+                style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey[400])),
+            const SizedBox(height: 2),
+            Text(recipe.ingredients.trim(),
+                style: const TextStyle(fontSize: 12.5, height: 1.5)),
+          ],
+          if (recipe.steps.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('조리법',
+                style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey[400])),
+            const SizedBox(height: 2),
+            Text(recipe.steps.trim(),
+                style: const TextStyle(fontSize: 12.5, height: 1.5)),
+          ],
+        ],
       ),
     );
   }
