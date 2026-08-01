@@ -957,13 +957,20 @@ class _BuddyScreenState extends State<BuddyScreen> {
           MapEntry(i, day.teamById(block.teamIds[i])!),
     ];
 
-    // 회차별 열 배정 (여러 회차에 속한 팀은 첫 회차 열로)
+    // 회차별 열 배정 — 여러 회차에 입수하는 팀은 각 회차 열마다 반복해 그린다.
+    // (예: 오전 1 = A·B, 오전 2 = A·B 같은 연속 입수 패턴)
     final columns =
         List.generate(day.rounds.length, (_) => <MapEntry<int, BuddyTeam>>[]);
     final unassigned = <MapEntry<int, BuddyTeam>>[];
     for (final e in entries) {
-      final ri = _firstRoundIndexOf(day, e.value);
-      (ri < day.rounds.length ? columns[ri] : unassigned).add(e);
+      var placed = false;
+      for (var r = 0; r < day.rounds.length; r++) {
+        if (day.rounds[r].teamIds.contains(e.value.id)) {
+          columns[r].add(e);
+          placed = true;
+        }
+      }
+      if (!placed) unassigned.add(e);
     }
 
     final teams = [for (final e in entries) e.value];
