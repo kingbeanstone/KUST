@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
@@ -26,9 +28,6 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   String? _selDayId;
   String? _selField;
   bool _pickerExpanded = false;
-
-  /// 픽커에서 보고 있는 카테고리 탭
-  String? _pickerCategory;
 
   static const Map<String, String> _fieldLabels = {
     'breakfast': '아침',
@@ -293,12 +292,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
       selectionLabel = '$title ${_fieldLabels[_selField]} 수정 중';
     }
 
-    // 활성 카테고리 탭 (없어졌으면 첫 번째로)
     final categories = byCategory.keys.toList();
-    var activeCategory = _pickerCategory;
-    if (activeCategory == null || !byCategory.containsKey(activeCategory)) {
-      activeCategory = categories.isEmpty ? null : categories.first;
-    }
 
     // 현재 선택된 칸에 이미 들어있는 메뉴 (토글/하이라이트 판정)
     final cellLines = (_selDayId != null && _selField != null)
@@ -411,88 +405,94 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                 ),
               ),
             )
-          else ...[
-            // ── 카테고리 가로 탭
-            SizedBox(
-              height: 30,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  for (final cat in categories)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: GestureDetector(
-                        onTap: () => setState(() => _pickerCategory = cat),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: cat == activeCategory
-                                ? Colors.blue[800]
-                                : Colors.grey[100],
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: Text(cat,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: cat == activeCategory
-                                    ? Colors.white
-                                    : Colors.black54,
-                              )),
-                        ),
+          else
+            // ── 카테고리 = 열, 메뉴 = 세로 나열. 전 카테고리가 한눈에 보인다.
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final colWidth = math.max(
+                      92.0, constraints.maxWidth / categories.length);
+                  return SingleChildScrollView(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final cat in categories)
+                            SizedBox(
+                              width: colWidth,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 3),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[100],
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                      ),
+                                      child: Text(cat,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.black54)),
+                                    ),
+                                    for (final recipe in byCategory[cat]!)
+                                      Builder(builder: (context) {
+                                        final included =
+                                            cellLines.contains(recipe.name);
+                                        return GestureDetector(
+                                          onTap: () =>
+                                              _toggleMenu(recipe.name),
+                                          child: Container(
+                                            width: double.infinity,
+                                            margin: const EdgeInsets.only(
+                                                top: 4),
+                                            padding:
+                                                const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                    vertical: 7),
+                                            decoration: BoxDecoration(
+                                              color: included
+                                                  ? Colors.blue[800]
+                                                  : Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              border: Border.all(
+                                                  color: included
+                                                      ? Colors.blue[800]!
+                                                      : Colors.grey[300]!),
+                                            ),
+                                            child: Text(
+                                              recipe.name,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: included
+                                                    ? Colors.white
+                                                    : Colors.black87,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                ],
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 6),
-            // ── 활성 카테고리의 메뉴 세로 목록 (탭=넣기, 다시 탭=빼기)
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.only(bottom: 8),
-                children: [
-                  for (final recipe in byCategory[activeCategory] ?? [])
-                    Builder(builder: (context) {
-                      final included = cellLines.contains(recipe.name);
-                      return GestureDetector(
-                        onTap: () => _toggleMenu(recipe.name),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: included ? Colors.blue[800] : Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: included
-                                    ? Colors.blue[800]!
-                                    : Colors.grey[300]!),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(recipe.name,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w600,
-                                      color: included
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    )),
-                              ),
-                              if (included)
-                                const Icon(Icons.check,
-                                    size: 14, color: Colors.white70),
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );

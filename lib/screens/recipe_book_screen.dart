@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
@@ -13,9 +15,6 @@ class RecipeBookScreen extends StatefulWidget {
 }
 
 class _RecipeBookScreenState extends State<RecipeBookScreen> {
-  /// 보고 있는 카테고리 탭
-  String? _categoryTab;
-
   /// 다이얼로그 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _categoryController = TextEditingController();
@@ -149,68 +148,75 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                 style: const TextStyle(color: Colors.grey, fontSize: 13),
               ),
             )
-          : Builder(builder: (context) {
+          : LayoutBuilder(builder: (context, constraints) {
+              // 💡 카테고리 = 열, 레시피 = 세로 나열 — 전부 한눈에 보인다.
               final byCategory = provider.byCategory;
               final categories = byCategory.keys.toList();
-              var active = _categoryTab;
-              if (active == null || !byCategory.containsKey(active)) {
-                active = categories.first;
-              }
+              final colWidth = math.max(
+                  104.0, (constraints.maxWidth - 16) / categories.length);
 
-              return Column(
-                children: [
-                  // ── 카테고리 가로 탭
-                  Container(
-                    height: 46,
-                    color: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      children: [
-                        for (final cat in categories)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: GestureDetector(
-                              onTap: () =>
-                                  setState(() => _categoryTab = cat),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: cat == active
-                                      ? Colors.blue[800]
-                                      : Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                child: Text(
-                                  '$cat ${byCategory[cat]!.length}',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.bold,
-                                    color: cat == active
-                                        ? Colors.white
-                                        : Colors.black54,
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(8, 10, 8, 90),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final cat in categories)
+                        SizedBox(
+                          width: colWidth,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: double.infinity,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 7),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueGrey[600],
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '$cat ${byCategory[cat]!.length}',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white),
                                   ),
                                 ),
-                              ),
+                                for (final recipe in byCategory[cat]!)
+                                  GestureDetector(
+                                    onTap: () => _showRecipeDetail(
+                                        recipe, isAdmin, provider),
+                                    child: Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.only(top: 5),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 5, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: Colors.grey[300]!),
+                                      ),
+                                      child: Text(
+                                        recipe.name,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
-                  // ── 활성 카테고리의 레시피 세로 목록
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 90),
-                      children: [
-                        for (final recipe in byCategory[active] ?? [])
-                          _recipeTile(recipe, isAdmin, provider),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               );
             }),
       floatingActionButton: isAdmin
@@ -226,61 +232,50 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
     );
   }
 
-  Widget _recipeTile(Recipe recipe, bool isAdmin, RecipeProvider provider) {
-    return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Theme(
-                    // ExpansionTile 기본 구분선 제거
-                    data: Theme.of(context)
-                        .copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      tilePadding: const EdgeInsets.symmetric(horizontal: 14),
-                      childrenPadding:
-                          const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                      title: Row(
-                        children: [
-                          Expanded(
-                            child: Text(recipe.name,
-                                style: const TextStyle(
-                                    fontSize: 14, fontWeight: FontWeight.bold)),
-                          ),
-                          if (isAdmin)
-                            IconButton(
-                              icon: const Icon(Icons.edit_outlined,
-                                  size: 17, color: Colors.blueGrey),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () =>
-                                  _showEditDialog(provider, recipe: recipe),
-                            ),
-                        ],
-                      ),
-                      children: [
-                        if (recipe.ingredients.trim().isNotEmpty) ...[
-                          _sectionLabel('재료'),
-                          _sectionText(recipe.ingredients),
-                          const SizedBox(height: 8),
-                        ],
-                        if (recipe.steps.trim().isNotEmpty) ...[
-                          _sectionLabel('조리법'),
-                          _sectionText(recipe.steps),
-                        ],
-                        if (recipe.ingredients.trim().isEmpty &&
-                            recipe.steps.trim().isEmpty)
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text('내용이 아직 없습니다.',
-                                style: TextStyle(
-                                    fontSize: 12, color: Colors.grey)),
-                          ),
-                      ],
-                    ),
-                  ),
-                );
+  /// 레시피 상세 (탭하면 열림) — 관리자는 여기서 바로 수정으로 이동
+  void _showRecipeDetail(Recipe recipe, bool isAdmin, RecipeProvider provider) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(recipe.name,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (recipe.ingredients.trim().isNotEmpty) ...[
+                _sectionLabel('재료'),
+                _sectionText(recipe.ingredients),
+                const SizedBox(height: 10),
+              ],
+              if (recipe.steps.trim().isNotEmpty) ...[
+                _sectionLabel('조리법'),
+                _sectionText(recipe.steps),
+              ],
+              if (recipe.ingredients.trim().isEmpty &&
+                  recipe.steps.trim().isEmpty)
+                const Text('내용이 아직 없습니다.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        ),
+        actions: [
+          if (isAdmin)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _showEditDialog(provider, recipe: recipe);
+              },
+              child: const Text('수정'),
+            ),
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('닫기')),
+        ],
+      ),
+    );
   }
 
   Widget _sectionLabel(String text) => Align(
