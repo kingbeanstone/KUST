@@ -51,7 +51,13 @@ class ExpeditionProvider with ChangeNotifier {
       _savedId = prefs.getString(_prefsKey);
     } catch (_) {}
 
-    _db.collection('expeditions').snapshots().listen((snapshot) {
+    _listen();
+  }
+
+  StreamSubscription? _sub;
+
+  void _listen() {
+    _sub = _db.collection('expeditions').snapshots().listen((snapshot) {
       _expeditions = snapshot.docs
           .map((doc) => Expedition.fromMap(doc.id, doc.data()))
           .toList()
@@ -67,7 +73,16 @@ class ExpeditionProvider with ChangeNotifier {
             : (_expeditions.isNotEmpty ? _expeditions.first.id : null);
       }
       notifyListeners();
+    }, onError: (e) {
+      debugPrint('원정 스트림 오류: $e — 재연결 예약');
+      Future.delayed(const Duration(seconds: 3), _listen);
     });
+  }
+
+  /// 앱 복귀 시 끊겼을 수 있는 실시간 연결 복구
+  void resubscribe() {
+    _sub?.cancel();
+    _listen();
   }
 
   Future<void> select(String id) async {

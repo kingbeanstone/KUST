@@ -75,6 +75,11 @@ class ParticipantProvider with ChangeNotifier {
     notifyListeners();
 
     if (expeditionId == null) return;
+    _listen();
+  }
+
+  void _listen() {
+    final expId = _expeditionId;
     _sub = _col.orderBy('order').snapshots().listen((snapshot) {
       _ids = snapshot.docs.map((d) => d.id).toList();
       _idSet = _ids.toSet();
@@ -88,7 +93,19 @@ class ParticipantProvider with ChangeNotifier {
       };
       notifyListeners();
       _reconcileGearRows(); // 💡 참가자인데 장비 행이 없는 사람을 자동 보충
+    }, onError: (e) {
+      debugPrint('참가자 스트림 오류: $e — 재연결 예약');
+      Future.delayed(const Duration(seconds: 3), () {
+        if (_expeditionId == expId && expId != null) _listen();
+      });
     });
+  }
+
+  /// 앱 복귀 시 끊겼을 수 있는 실시간 연결 복구
+  void resubscribe() {
+    if (_expeditionId == null) return;
+    _sub?.cancel();
+    _listen();
   }
 
   /// 이번 원정의 강사 지정/해제 (참가자만 가능)

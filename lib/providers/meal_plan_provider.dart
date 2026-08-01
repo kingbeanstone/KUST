@@ -46,10 +46,28 @@ class MealPlanProvider with ChangeNotifier {
     notifyListeners();
 
     if (expeditionId == null) return;
+    _listen();
+    _loadTabConfig();
+  }
+
+  void _listen() {
+    final expId = _expeditionId;
     _sub = _expRef.collection('meals').snapshots().listen((snapshot) {
       _meals = snapshot.docs.map((doc) => MealPlan.fromFirestore(doc.id, doc.data())).toList();
       notifyListeners();
+    }, onError: (e) {
+      debugPrint('식단 스트림 오류: $e — 재연결 예약');
+      Future.delayed(const Duration(seconds: 3), () {
+        if (_expeditionId == expId && expId != null) _listen();
+      });
     });
+  }
+
+  /// 앱 복귀 시 끊겼을 수 있는 실시간 연결 복구
+  void resubscribe() {
+    if (_expeditionId == null) return;
+    _sub?.cancel();
+    _listen();
     _loadTabConfig();
   }
 

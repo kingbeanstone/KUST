@@ -198,7 +198,7 @@ class MainTabScreen extends StatefulWidget {
   State<MainTabScreen> createState() => _MainTabScreenState();
 }
 
-class _MainTabScreenState extends State<MainTabScreen> {
+class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   // 💡 메인 탭에 들어갈 화면들
@@ -212,6 +212,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 포그라운드 메시지 리스너
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       if (message.notification != null && mounted) {
@@ -224,6 +225,27 @@ class _MainTabScreenState extends State<MainTabScreen> {
         );
       }
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 💡 백그라운드에 다녀오면 Firestore 실시간 스트림이 죽어있을 수 있다.
+    //    포그라운드 복귀 시 전부 다시 구독해 실시간 동기화를 보장한다.
+    if (state == AppLifecycleState.resumed && mounted) {
+      context.read<ExpeditionProvider>().resubscribe();
+      context.read<EquipmentProvider>().resubscribe();
+      context.read<ScheduleProvider>().resubscribe();
+      context.read<MealPlanProvider>().resubscribe();
+      context.read<BuddyProvider>().resubscribe();
+      context.read<ParticipantProvider>().resubscribe();
+      context.read<MemberProvider>().resubscribe();
+    }
   }
 
   @override

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/member_model.dart';
@@ -7,6 +9,7 @@ import '../models/member_model.dart';
 class MemberProvider with ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   List<MemberItem> _members = [];
+  StreamSubscription? _sub;
 
   /// 💡 항상 정렬된 목록을 돌려준다: 기수 오름차순("3기" < "12기") → 이름순,
   ///    기수 미입력은 맨 뒤. 읽는 시점에 정렬하므로 데이터가 언제 왔든 순서가 보장된다.
@@ -29,12 +32,21 @@ class MemberProvider with ChangeNotifier {
   }
 
   void _listenToMembers() {
-    _db.collection('club_members').snapshots().listen((snapshot) {
+    _sub = _db.collection('club_members').snapshots().listen((snapshot) {
       _members = snapshot.docs
           .map((doc) => MemberItem.fromMap(doc.id, doc.data()))
           .toList();
       notifyListeners();
+    }, onError: (e) {
+      debugPrint('동아리원 스트림 오류: $e — 재연결 예약');
+      Future.delayed(const Duration(seconds: 3), _listenToMembers);
     });
+  }
+
+  /// 앱 복귀 시 끊겼을 수 있는 실시간 연결 복구
+  void resubscribe() {
+    _sub?.cancel();
+    _listenToMembers();
   }
 
   /// 저장 전 앞뒤 공백 정리 (보이지 않는 공백이 정렬·이름 매칭을 망가뜨린다)

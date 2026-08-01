@@ -48,6 +48,7 @@ class EquipmentProvider with ChangeNotifier {
   //    (BCD·호흡기·공용장비 인벤토리는 동아리 자산이라 원정과 무관하게 최상위 유지)
   String? _expeditionId;
   final List<StreamSubscription> _expSubs = [];
+  final List<StreamSubscription> _clubSubs = []; // 인벤토리 등 동아리 공용 구독
 
   // 원정 미선택 상태에서 쓰기가 일어나면 조용히 엉뚱한 경로(auto-id)에 쓰는 대신
   // 즉시 에러가 나도록 non-null 단언을 건다.
@@ -143,42 +144,86 @@ class EquipmentProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  /// 💡 앱이 포그라운드로 돌아왔을 때 등, 끊겼을 수 있는 실시간 연결을 다시 붙인다.
+  /// (모바일 웹은 백그라운드에서 스트림이 조용히 죽는 일이 흔하다)
+  void resubscribe() {
+    for (final sub in _clubSubs) {
+      sub.cancel();
+    }
+    _clubSubs.clear();
+    _listenToInventory();
+    _listenToGeneralGears();
+
+    if (_expeditionId != null) {
+      for (final sub in _expSubs) {
+        sub.cancel();
+      }
+      _expSubs.clear();
+      _listenToMembers();
+      _listenToGroups();
+    }
+  }
+
+  /// 스트림 에러 시 3초 뒤 재구독 예약 (에러가 나면 스트림이 죽은 채로 남기 때문)
+  void _retryLater(String tag, void Function() resub, {bool Function()? stillValid}) {
+    addLog('실시간 연결 오류($tag) — 재연결 예약');
+    Future.delayed(const Duration(seconds: 3), () {
+      if (stillValid == null || stillValid()) resub();
+    });
+  }
+
   // --- 실시간 데이터 리스너 (Firestore) ---
   void _listenToMembers() {
+    final expId = _expeditionId;
     _expSubs.add(_membersCol.orderBy('order').snapshots().listen((snapshot) {
       _data = snapshot.docs.map((doc) => MemberEquipment.fromMap(doc.id, doc.data())).toList();
       notifyListeners();
+    }, onError: (e) {
+      _retryLater('장비표', _listenToMembers,
+          stillValid: () => _expeditionId == expId && expId != null);
     }));
   }
 
   void _listenToInventory() {
-    _db.collection('bcds').snapshots().listen((snapshot) {
+    _listenToBcds();
+    _listenToRegulators();
+  }
+
+  void _listenToBcds() {
+    _clubSubs.add(_db.collection('bcds').snapshots().listen((snapshot) {
       _bcds = snapshot.docs.map((doc) => BcdItem.fromMap(doc.id, doc.data())).toList();
       _bcds.sort((a, b) => int.tryParse(a.id)?.compareTo(int.tryParse(b.id) ?? 0) ?? a.id.compareTo(b.id));
       notifyListeners();
-    });
-    _db.collection('regulators').snapshots().listen((snapshot) {
+    }, onError: (e) => _retryLater('BCD', _listenToBcds)));
+  }
+
+  void _listenToRegulators() {
+    _clubSubs.add(_db.collection('regulators').snapshots().listen((snapshot) {
       _regulators = snapshot.docs.map((doc) => RegulatorItem.fromMap(doc.id, doc.data())).toList();
       _regulators.sort((a, b) => int.tryParse(a.id)?.compareTo(int.tryParse(b.id) ?? 0) ?? a.id.compareTo(b.id));
       notifyListeners();
-    });
+    }, onError: (e) => _retryLater('호흡기', _listenToRegulators)));
   }
 
   void _listenToGroups() {
+    final expId = _expeditionId;
     _expSubs.add(_groupsDoc.snapshots().listen((doc) {
       final list = (doc.data()?['groups'] as List?) ?? [];
       _groups = list
           .map((g) => EquipmentGroup.fromMap(Map<String, dynamic>.from(g)))
           .toList();
       notifyListeners();
+    }, onError: (e) {
+      _retryLater('그룹', _listenToGroups,
+          stillValid: () => _expeditionId == expId && expId != null);
     }));
   }
 
   void _listenToGeneralGears() {
-    _db.collection('general_gears').snapshots().listen((snapshot) {
+    _clubSubs.add(_db.collection('general_gears').snapshots().listen((snapshot) {
       _generalGears = snapshot.docs.map((doc) => GeneralGearItem.fromMap(doc.id, doc.data())).toList();
       notifyListeners();
-    });
+    }, onError: (e) => _retryLater('공용장비', _listenToGeneralGears)));
   }
 
   // --- SearchScreen 필수 메서드 (인벤토리 관리) ---
