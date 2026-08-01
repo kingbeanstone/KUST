@@ -100,6 +100,18 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   const SizedBox(height: 8),
 
                   if (_isEditMode) ...[
+                    // ── 불러와서 고치는 흐름이 기본이라 맨 위에 둔다
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showImportSheet(
+                            buddyData, buddyProvider, scheduleProvider),
+                        icon: const Icon(Icons.copy_outlined, size: 15),
+                        label: const Text('다른 일차 편성 불러오기',
+                            style: TextStyle(fontSize: 13)),
+                      ),
+                    ),
+
                     // ── 빈 편성이면 템플릿 제안
                     if (buddyData.teams.isEmpty && buddyData.blocks.isEmpty)
                       _buildTemplateButtons(buddyData, buddyProvider),
@@ -124,6 +136,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
                       ),
                   ],
 
+                  // ── 보기 모드: 입수 순서를 조 표보다 먼저 (일차 제목 바로 아래)
+                  if (!_isEditMode) _buildRoundsSection(buddyData, buddyProvider),
+
                   // ── 조별 표 (보기: 편성 결과 / 수정: 사람 배치)
                   if (buddyData.blocks.isEmpty && !_isEditMode)
                     const Padding(
@@ -136,21 +151,6 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   for (var b = 0; b < buddyData.blocks.length; b++)
                     _buildBlockTable(b, buddyData, buddyProvider),
 
-                  if (!_isEditMode) _buildRoundsSection(buddyData, buddyProvider),
-
-                  if (_isEditMode) ...[
-                    const SizedBox(height: 4),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _showImportSheet(
-                            buddyData, buddyProvider, scheduleProvider),
-                        icon: const Icon(Icons.copy_outlined, size: 15),
-                        label: const Text('다른 일차 편성 불러오기',
-                            style: TextStyle(fontSize: 13)),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 40),
                 ],
               ),
