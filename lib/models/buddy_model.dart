@@ -146,6 +146,11 @@ class BuddyTeam {
   final String id;
   String name;
   String leader; // 강사/리더 (없으면 '')
+
+  /// 리더 버디 모드: 켜면 리더 칸이 [리더|버디] 둘로 쪼개진다.
+  bool leaderBuddyOn;
+  String leaderBuddy;
+
   List<String> members;
 
   BuddyTeam({
@@ -153,12 +158,16 @@ class BuddyTeam {
     required this.name,
     required this.leader,
     required this.members,
+    this.leaderBuddyOn = false,
+    this.leaderBuddy = '',
   });
 
   Map<String, dynamic> toMap() => {
         'id': id,
         'name': name,
         'leader': leader,
+        'leaderBuddyOn': leaderBuddyOn,
+        'leaderBuddy': leaderBuddy,
         'members': members,
       };
 
@@ -171,6 +180,8 @@ class BuddyTeam {
             : map['id'] as String,
         name: map['name'] ?? '',
         leader: map['leader'] ?? '',
+        leaderBuddyOn: map['leaderBuddyOn'] == true,
+        leaderBuddy: map['leaderBuddy'] ?? '',
         members: List<String>.from(map['members'] ?? []),
       );
 }

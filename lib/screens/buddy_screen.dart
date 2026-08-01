@@ -450,7 +450,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
       setState(_clearSelection);
     }
 
-    final hasMembers = team.leader.isNotEmpty || team.members.any((m) => m.isNotEmpty);
+    final hasMembers = team.leader.isNotEmpty ||
+        team.leaderBuddy.isNotEmpty ||
+        team.members.any((m) => m.isNotEmpty);
     if (!hasMembers) {
       doDelete();
       return;
@@ -846,11 +848,125 @@ class _BuddyScreenState extends State<BuddyScreen> {
     );
   }
 
-  /// 팀에 배치된 사람 이름들 (리더 포함)
+  /// 팀에 배치된 사람 이름들 (리더·리더 버디 포함)
   Set<String> _namesOf(BuddyTeam t) => {
         if (t.leader.isNotEmpty) t.leader,
+        if (t.leaderBuddy.isNotEmpty) t.leaderBuddy,
         ...t.members.where((m) => m.isNotEmpty),
       };
+
+  /// 💡 리더 버디 모드 토글: 켜면 리더 칸이 [리더|버디]로 쪼개진다.
+  void _toggleLeaderBuddy(BuddyTeam team, BuddyDay day, BuddyProvider provider) {
+    if (team.leaderBuddyOn && team.leaderBuddy.isNotEmpty) {
+      showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('리더 버디 끄기'),
+          content: Text('[${team.name}]의 리더 버디 ${team.leaderBuddy}님 배치가 해제됩니다.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('취소')),
+            TextButton(
+              onPressed: () {
+                team.leaderBuddyOn = false;
+                team.leaderBuddy = '';
+                provider.saveBuddyDay(day);
+                setState(_clearSelection);
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('끄기', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    setState(() {
+      team.leaderBuddyOn = !team.leaderBuddyOn;
+      if (!team.leaderBuddyOn) {
+        team.leaderBuddy = '';
+        _clearSelection();
+      }
+    });
+    provider.saveBuddyDay(day);
+  }
+
+  /// 팀 이름 헤더 셀 — 수정 모드에선 리더 버디 on/off 토글이 붙는다
+  Widget _teamHeaderCell(BuddyTeam team, BuddyDay day, BuddyProvider provider,
+      {double height = 28}) {
+    return Container(
+      height: height,
+      color: Colors.grey[100],
+      child: Row(
+        children: [
+          if (_isEditMode) const SizedBox(width: 4),
+          Expanded(
+            child: Center(
+              child: Text(team.name,
+                  overflow: TextOverflow.ellipsis,
+                  style:
+                      const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+            ),
+          ),
+          if (_isEditMode)
+            Padding(
+              padding: const EdgeInsets.only(right: 3),
+              child: InkWell(
+                onTap: () => _toggleLeaderBuddy(team, day, provider),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: team.leaderBuddyOn ? Colors.blue[700] : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: team.leaderBuddyOn
+                            ? Colors.blue[700]!
+                            : Colors.grey[400]!),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.link,
+                          size: 10,
+                          color:
+                              team.leaderBuddyOn ? Colors.white : Colors.grey[600]),
+                      const SizedBox(width: 2),
+                      Text(
+                        '리더버디',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              team.leaderBuddyOn ? Colors.white : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 리더 행: 리더 버디 모드면 [리더|버디] 두 칸, 아니면 한 칸
+  Widget _leaderRowCell(int blockIdx, int teamIdx, BuddyTeam team) {
+    if (!team.leaderBuddyOn) {
+      return _buildCell(blockIdx, teamIdx, -1, team.leader, isLeader: true);
+    }
+    return Row(
+      children: [
+        Expanded(child: _buildCell(blockIdx, teamIdx, -1, team.leader, isLeader: true)),
+        Container(width: 1, height: 35, color: Colors.black),
+        Expanded(
+            child:
+                _buildCell(blockIdx, teamIdx, -2, team.leaderBuddy, isLeader: true)),
+      ],
+    );
+  }
 
   /// 💡 회차에 팀을 추가하기 전 검증.
   String? _roundAddViolation(BuddyDay day, BuddyRound round, BuddyTeam team) {
@@ -974,7 +1090,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
     }
 
     final teams = [for (final e in entries) e.value];
-    final showLeaderRow = _isEditMode || teams.any((t) => t.leader.isNotEmpty);
+    final showLeaderRow = _isEditMode ||
+        teams.any((t) => t.leader.isNotEmpty || t.leaderBuddy.isNotEmpty);
 
     int slotsOf(BuddyTeam t) {
       var n = t.members.length + (_isEditMode ? 1 : 0);
@@ -992,17 +1109,11 @@ class _BuddyScreenState extends State<BuddyScreen> {
         border: TableBorder.all(color: Colors.black, width: 1),
         children: [
           TableRow(children: [
-            Container(
-              height: 28,
-              color: Colors.grey[100],
-              alignment: Alignment.center,
-              child: Text(team.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
-            ),
+            _teamHeaderCell(team, day, provider),
           ]),
           if (showLeaderRow)
             TableRow(children: [
-              _buildCell(blockIdx, teamIdx, -1, team.leader, isLeader: true),
+              _leaderRowCell(blockIdx, teamIdx, team),
             ]),
           for (var r = 0; r < rowCount; r++)
             TableRow(children: [
@@ -1133,7 +1244,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
     }
 
     final teams = [for (final e in entries) e.value];
-    final showLeaderRow = _isEditMode || teams.any((t) => t.leader.isNotEmpty);
+    final showLeaderRow = _isEditMode ||
+        teams.any((t) => t.leader.isNotEmpty || t.leaderBuddy.isNotEmpty);
 
     int slotsOf(BuddyTeam t) {
       var n = t.members.length + (_isEditMode ? 1 : 0);
@@ -1217,14 +1329,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   children: [
                     for (final team in teams)
                       TableCell(
-                        child: Container(
-                          height: 30,
-                          color: Colors.grey[100],
-                          alignment: Alignment.center,
-                          child: Text(team.name,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 13)),
-                        ),
+                        child: _teamHeaderCell(team, day, provider, height: 30),
                       ),
                   ],
                 ),
@@ -1232,8 +1337,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   TableRow(
                     children: [
                       for (var t = 0; t < teams.length; t++)
-                        _buildCell(blockIdx, entries[t].key, -1, teams[t].leader,
-                            isLeader: true),
+                        _leaderRowCell(blockIdx, entries[t].key, teams[t]),
                     ],
                   ),
                 for (var r = 0; r < rowCount; r++)
@@ -1291,7 +1395,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
         alignment: Alignment.center,
         color: bgColor,
         child: Text(
-          isLeader && value.isEmpty && _isEditMode ? '리더/강사' : value,
+          isLeader && value.isEmpty && _isEditMode
+              ? (slotIdx == -2 ? '버디' : '리더/강사')
+              : value,
           style: TextStyle(
             fontSize: isLeader ? 13 : 12,
             fontWeight: isLeader ? FontWeight.bold : FontWeight.normal,
@@ -1462,7 +1568,13 @@ class _BuddyScreenState extends State<BuddyScreen> {
       ..clear()
       ..addAll([
         for (final t in source.teams)
-          BuddyTeam(id: t.id, name: t.name, leader: t.leader, members: List.of(t.members)),
+          BuddyTeam(
+              id: t.id,
+              name: t.name,
+              leader: t.leader,
+              leaderBuddyOn: t.leaderBuddyOn,
+              leaderBuddy: t.leaderBuddy,
+              members: List.of(t.members)),
       ]);
     target.blocks
       ..clear()
@@ -1501,6 +1613,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
     if (_selSlotIdx == -1) {
       team.leader = name;
+    } else if (_selSlotIdx == -2) {
+      team.leaderBuddy = name;
     } else {
       while (team.members.length <= _selSlotIdx!) {
         team.members.add('');
