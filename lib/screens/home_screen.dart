@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../app_version.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/expedition_provider.dart';
 import '../providers/notice_provider.dart';
@@ -358,7 +359,7 @@ class HomeScreen extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('v2.0.0', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const Text(kAppVersion, style: TextStyle(color: Colors.grey, fontSize: 12)),
                 if (isAdmin)
                   TextButton.icon(
                     onPressed: () {

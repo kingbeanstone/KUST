@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import '../app_version.dart';
 import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/executive_provider.dart';
@@ -123,7 +124,7 @@ class _MoreScreenState extends State<MoreScreen> {
                   _buildAppInfoSection(context, auth, equipProv, noticeProv, execProv, qnaProv),
 
                   const SizedBox(height: 40),
-                  const Center(child: Text('버전 정보 v3.2.2', style: TextStyle(color: Colors.grey, fontSize: 11))),
+                  const Center(child: Text('버전 정보 $kAppVersion', style: TextStyle(color: Colors.grey, fontSize: 11))),
                   const SizedBox(height: 20),
                 ],
               ),
