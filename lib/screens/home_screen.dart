@@ -13,6 +13,7 @@ import 'participant_screen.dart';
 import 'buddy_screen.dart';
 import 'personal_checklist_screen.dart';
 import 'guide_screen.dart';
+import 'dive_log_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -105,6 +106,10 @@ class HomeScreen extends StatelessWidget {
                     title: '신입생 가이드',
                     icon: Icons.school_outlined, color: Colors.orange,
                     target: const GuideScreen()),
+                _buildMenuCard(context,
+                    title: '다이브 로그',
+                    icon: Icons.show_chart_rounded, color: Colors.purple,
+                    target: const DiveLogScreen()),
               ],
             ),
 
