@@ -1296,6 +1296,154 @@ class _BuddyScreenState extends State<BuddyScreen> {
     final rest = byGroup.values.expand((x) => x).toList();
     if (rest.isNotEmpty) sections.add(MapEntry('미지정', rest));
 
+    // 💡 섹션 안에서 장비버디 짝을 한 단위로 묶는다 (캡슐 하나 = 한 짝)
+    List<List<MemberItem>> unitsOf(List<MemberItem> members) {
+      final byId = {for (final m in members) m.id: m};
+      final units = <List<MemberItem>>[];
+      final taken = <String>{};
+      for (final m in members) {
+        if (taken.contains(m.id)) continue;
+        taken.add(m.id);
+
+        MemberItem? partner;
+        final row = gearRows[m.id];
+        if (row != null && row.pairId.isNotEmpty) {
+          for (final r in equipProvider.data) {
+            if (r.pairId == row.pairId && r.id != m.id) {
+              partner = byId[r.id];
+              break;
+            }
+          }
+        }
+        if (partner != null && !taken.contains(partner.id)) {
+          taken.add(partner.id);
+          units.add([m, partner]);
+        } else {
+          units.add([m]);
+        }
+      }
+      return units;
+    }
+
+    // 대원 한 명의 버튼 (bare=true면 캡슐 내부용 — 테두리 없이 절반만)
+    Widget memberButton(MemberItem member, {required bool bare}) {
+      final isAssigned = selectedTeamNames.contains(member.name);
+      final selfConflict = !isAssigned && conflictScope.contains(member.name);
+      final partner = gearPartnerName(member);
+      final conflict = !isAssigned &&
+          !selfConflict &&
+          partner != null &&
+          conflictScope.contains(partner);
+      final gray = isAssigned || selfConflict || conflict;
+
+      void handleTap() {
+        if (isAssigned) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('${member.name}님은 이미 이 팀에 배치되어 있습니다.'),
+              duration: const Duration(seconds: 1)));
+          return;
+        }
+        if (selfConflict) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('${member.name}님은 같은 회차에 입수하는 다른 팀에 이미 배치되어 있습니다.'),
+              duration: const Duration(seconds: 2)));
+          return;
+        }
+        if (conflict) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('장비버디 $partner님과 같은 회차에 입수하게 되어 배치할 수 없습니다.'),
+              duration: const Duration(seconds: 2)));
+          return;
+        }
+        _assignMember(member.name, dayData, buddyProvider);
+      }
+
+      final roleEmoji = participantProvider.staffRoleOf(member.id) == 'leader'
+          ? kStaffRoleEmoji['leader']!
+          : '';
+      final isInstructor = participantProvider.isInstructor(member.id);
+
+      if (!bare) {
+        return SizedBox(
+          width: 76,
+          height: 30,
+          child: _buildPickerItem(
+            member.name,
+            gray,
+            handleTap,
+            isPaired: partner != null, // 짝이 다른 섹션에 있는 예외 케이스 표시
+            isInstructor: isInstructor,
+            roleEmoji: roleEmoji,
+          ),
+        );
+      }
+
+      // 캡슐 내부 절반: 테두리 없이 자기 상태(회색)만 표현
+      return InkWell(
+        onTap: handleTap,
+        child: Container(
+          width: 70,
+          height: 30,
+          alignment: Alignment.center,
+          color: gray ? Colors.grey[100] : Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (roleEmoji.isNotEmpty) ...[
+                Text(roleEmoji,
+                    style: TextStyle(
+                        fontSize: 9.5, color: gray ? Colors.grey[300] : null)),
+                const SizedBox(width: 2),
+              ],
+              if (isInstructor) ...[
+                Icon(Icons.star_rounded,
+                    size: 11, color: gray ? Colors.grey[300] : Colors.amber[600]),
+                const SizedBox(width: 2),
+              ],
+              Flexible(
+                child: Text(
+                  member.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: gray ? Colors.grey[400] : Colors.black87,
+                      fontWeight: gray ? FontWeight.normal : FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 💡 짝 캡슐: 두 명을 초록 테두리 하나로 감싸 "이 둘이 한 짝"임을 보여준다
+    Widget buildUnit(List<MemberItem> unit) {
+      if (unit.length == 1) return memberButton(unit[0], bare: false);
+
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF00796B), width: 1.2),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            memberButton(unit[0], bare: true),
+            Container(
+              width: 16,
+              height: 30,
+              color: const Color(0xFFDCEFEC),
+              child: const Icon(Icons.link, size: 11, color: Color(0xFF00796B)),
+            ),
+            memberButton(unit[1], bare: true),
+          ],
+        ),
+      );
+    }
+
     // 선택 중인 팀 이름 안내
     String? selectionLabel;
     if (_selBlockIdx != null && _selBlockIdx! < dayData.blocks.length) {
@@ -1356,58 +1504,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
-                      children: section.value.map((member) {
-                        // 같은 팀 안 중복만 '배치됨'으로 취급
-                        final isAssigned = selectedTeamNames.contains(member.name);
-                        // 💡 본인이 같은 회차의 다른 팀에 이미 배치된 경우
-                        final selfConflict =
-                            !isAssigned && conflictScope.contains(member.name);
-                        final partner = gearPartnerName(member);
-                        // 💡 장비버디 짝이 충돌 범위 안에 있으면 선택 불가(회색)
-                        final conflict = !isAssigned &&
-                            !selfConflict &&
-                            partner != null &&
-                            conflictScope.contains(partner);
-
-                        return SizedBox(
-                          width: 76,
-                          height: 30,
-                          child: _buildPickerItem(
-                            member.name,
-                            isAssigned || selfConflict || conflict,
-                            () {
-                              if (isAssigned) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text('${member.name}님은 이미 이 팀에 배치되어 있습니다.'),
-                                    duration: const Duration(seconds: 1)));
-                                return;
-                              }
-                              if (selfConflict) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text(
-                                        '${member.name}님은 같은 회차에 입수하는 다른 팀에 이미 배치되어 있습니다.'),
-                                    duration: const Duration(seconds: 2)));
-                                return;
-                              }
-                              if (conflict) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                    content: Text(
-                                        '장비버디 $partner님과 같은 회차에 입수하게 되어 배치할 수 없습니다.'),
-                                    duration: const Duration(seconds: 2)));
-                                return;
-                              }
-                              _assignMember(member.name, dayData, buddyProvider);
-                            },
-                            isPaired: partner != null,
-                            isInstructor: participantProvider.isInstructor(member.id),
-                            // 💡 편성 판단에 필요한 대장만 표시 (그 외 직책은 생략)
-                            roleEmoji:
-                                participantProvider.staffRoleOf(member.id) == 'leader'
-                                    ? kStaffRoleEmoji['leader']!
-                                    : '',
-                          ),
-                        );
-                      }).toList(),
+                      children: unitsOf(section.value).map(buildUnit).toList(),
                     ),
                   ],
                 ],
