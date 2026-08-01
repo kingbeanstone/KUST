@@ -107,7 +107,7 @@ class HomeScreen extends StatelessWidget {
                     icon: Icons.school_outlined, color: Colors.orange,
                     target: const GuideScreen()),
                 _buildMenuCard(context,
-                    title: '다이브 로그',
+                    title: '성장 그래프',
                     icon: Icons.show_chart_rounded, color: Colors.purple,
                     target: const DiveLogScreen()),
               ],

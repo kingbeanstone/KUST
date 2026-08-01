@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dive_log_model.dart';
 
-/// 💡 나의 다이브 로그 + 성장 그래프.
-/// 개인 체크리스트처럼 이 기기(브라우저)에만 저장한다 — 열면 바로 내 로그.
+/// 💡 성장 그래프: 로그 기록 → 티어 · 능력치 레이더 · 잔여 바/분당 소모 그래프.
+/// 이 기기(브라우저)에만 저장된다 — 열면 바로 내 기록.
 class DiveLogScreen extends StatefulWidget {
   const DiveLogScreen({super.key});
 
@@ -19,9 +19,6 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
 
   List<DiveLog> _logs = [];
   bool _loaded = false;
-
-  /// 그래프 기준: 'end'(잔여 바) | 'sac'(분당 소모)
-  String _metric = 'end';
 
   /// 로그 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _dateController = TextEditingController();
@@ -92,6 +89,56 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
   String _fmt(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 
+  // ------------------------------------------------------------- 티어
+
+  /// 로그 수 → 티어 (이름, 색, 다음 티어까지 남은 횟수)
+  (String, Color, int?) _tierOf(int n) {
+    const steps = [
+      (100, '챌린저'),
+      (75, '마스터'),
+      (50, '다이아'),
+      (35, '플래티넘'),
+      (20, '골드'),
+      (10, '실버'),
+      (5, '브론즈'),
+      (1, '아이언'),
+    ];
+    const colors = {
+      '챌린저': Color(0xFFF57F17),
+      '마스터': Color(0xFF7B1FA2),
+      '다이아': Color(0xFF29B6F6),
+      '플래티넘': Color(0xFF00897B),
+      '골드': Color(0xFFF9A825),
+      '실버': Color(0xFF78909C),
+      '브론즈': Color(0xFF8D6E63),
+      '아이언': Color(0xFF616161),
+    };
+
+    for (var i = 0; i < steps.length; i++) {
+      if (n >= steps[i].$1) {
+        final next = i == 0 ? null : steps[i - 1].$1 - n;
+        return (steps[i].$2, colors[steps[i].$2]!, next);
+      }
+    }
+    return ('언랭', const Color(0xFFBDBDBD), 1 - n);
+  }
+
+  /// 요소별 평가 평균 (평가된 로그만)
+  Map<String, double> _skillAverages() {
+    final sums = <String, int>{};
+    final counts = <String, int>{};
+    for (final log in _logs) {
+      for (final e in log.scores.entries) {
+        sums[e.key] = (sums[e.key] ?? 0) + e.value;
+        counts[e.key] = (counts[e.key] ?? 0) + 1;
+      }
+    }
+    return {
+      for (final key in kDiveSkills.keys)
+        if ((counts[key] ?? 0) > 0) key: sums[key]! / counts[key]!,
+    };
+  }
+
   // ------------------------------------------------------------- build
 
   @override
@@ -100,26 +147,31 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // 그래프 값 (기준에 따라)
-    final values = <double>[];
-    final labels = <String>[];
+    // 꺾은선 그래프 데이터
+    final endValues = <double>[];
+    final endLabels = <String>[];
+    final sacValues = <double>[];
+    final sacLabels = <String>[];
     for (final log in _logs) {
-      final v = _metric == 'end'
-          ? (log.endBar > 0 ? log.endBar : null)
-          : log.consumptionPerMin;
-      if (v == null) continue;
-      values.add(v);
-      // 'YYYY-MM-DD' → 'M/D'
-      final parts = log.date.split('-');
-      labels.add(parts.length == 3
-          ? '${int.tryParse(parts[1]) ?? parts[1]}/${int.tryParse(parts[2]) ?? parts[2]}'
-          : log.date);
+      final label = _shortDate(log.date);
+      if (log.endBar > 0) {
+        endValues.add(log.endBar);
+        endLabels.add(label);
+      }
+      final sac = log.consumptionPerMin;
+      if (sac != null) {
+        sacValues.add(sac);
+        sacLabels.add(label);
+      }
     }
+
+    final averages = _skillAverages();
+    final (tierName, tierColor, tierNext) = _tierOf(_logs.length);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('📈 나의 다이브 로그',
+        title: const Text('📈 성장 그래프',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
@@ -127,7 +179,7 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 90),
         children: [
-          // ── 요약
+          // ── 티어 + 로그 수
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -136,73 +188,102 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
             ),
             child: Row(
               children: [
-                const Text('나의 로그',
-                    style:
-                        TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold)),
-                const Spacer(),
-                Text('총 ${_logs.length}회',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[800])),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: tierColor,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(tierName,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('총 ${_logs.length}회 로그',
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.bold)),
+                      if (tierNext != null)
+                        Text('다음 티어까지 $tierNext회',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey[500])),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 12),
 
-          // ── 성장 그래프
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text('성장 그래프',
-                        style: TextStyle(
-                            fontSize: 13.5, fontWeight: FontWeight.bold)),
-                    const Spacer(),
-                    _metricChip('end', '잔여 바'),
-                    const SizedBox(width: 6),
-                    _metricChip('sac', '분당 소모'),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _metric == 'end'
-                      ? '다이빙 후 남은 공기. 높아질수록 성장!'
-                      : '1분에 쓰는 공기(bar/min). 낮아질수록 성장!',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 170,
-                  width: double.infinity,
-                  child: values.length < 2
-                      ? Center(
-                          child: Text(
-                            '로그가 2개 이상 쌓이면 그래프가 그려집니다.',
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey[400]),
-                          ),
-                        )
-                      : CustomPaint(
-                          painter: _LineChartPainter(
-                            values: values,
-                            labels: labels,
-                            color: _metric == 'end'
-                                ? Colors.blue[700]!
-                                : Colors.teal[600]!,
-                            unit: _metric == 'end' ? 'bar' : '',
+          // ── 능력치 레이더
+          _card(
+            title: '능력치',
+            subtitle: '로그마다 셀프 평가한 점수의 평균 — 강점과 약점이 보입니다.',
+            child: averages.isEmpty
+                ? _placeholder('로그 기록 시 셀프 평가를 하면 능력치가 그려집니다.')
+                : Column(
+                    children: [
+                      SizedBox(
+                        height: 210,
+                        width: double.infinity,
+                        child: CustomPaint(
+                          painter: _RadarChartPainter(
+                            labels: kDiveSkills.values.toList(),
+                            // 미평가 요소는 0으로 (비어 보이게)
+                            values: [
+                              for (final key in kDiveSkills.keys)
+                                (averages[key] ?? 0) / 4.0,
+                            ],
+                            color: Colors.blue[700]!,
                           ),
                         ),
-                ),
-              ],
-            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 5,
+                        children: [
+                          for (final e in kDiveSkills.entries)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Text(
+                                '${e.value} ${averages[e.key] == null ? '-' : averages[e.key]!.toStringAsFixed(1)}',
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 잔여 바 그래프
+          _card(
+            title: '잔여 바',
+            subtitle: '다이빙 후 남은 공기. 높아질수록 성장!',
+            child: _lineChart(endValues, endLabels, Colors.blue[700]!, 'bar'),
+          ),
+          const SizedBox(height: 12),
+
+          // ── 분당 소모 그래프
+          _card(
+            title: '분당 소모',
+            subtitle: '1분에 쓰는 공기(bar/min). 낮아질수록 성장!',
+            child: _lineChart(sacValues, sacLabels, Colors.teal[600]!, ''),
           ),
           const SizedBox(height: 12),
 
@@ -220,7 +301,7 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
 
           const SizedBox(height: 10),
           Center(
-            child: Text('이 로그는 내 기기에만 저장됩니다.',
+            child: Text('이 기록은 내 기기에만 저장됩니다.',
                 style: TextStyle(fontSize: 11, color: Colors.grey[500])),
           ),
         ],
@@ -235,33 +316,71 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     );
   }
 
-  Widget _metricChip(String key, String label) {
-    final selected = _metric == key;
-    return GestureDetector(
-      onTap: () => setState(() => _metric = key),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: selected ? Colors.blue[800] : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
+  String _shortDate(String date) {
+    final parts = date.split('-');
+    return parts.length == 3
+        ? '${int.tryParse(parts[1]) ?? parts[1]}/${int.tryParse(parts[2]) ?? parts[2]}'
+        : date;
+  }
+
+  Widget _card(
+      {required String title, required String subtitle, required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style:
+                  const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 3),
+          Text(subtitle,
+              style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _placeholder(String text) => SizedBox(
+        height: 80,
+        child: Center(
+          child: Text(text,
+              style: TextStyle(fontSize: 12, color: Colors.grey[400])),
         ),
-        child: Text(label,
-            style: TextStyle(
-              fontSize: 11.5,
-              fontWeight: FontWeight.bold,
-              color: selected ? Colors.white : Colors.black54,
-            )),
+      );
+
+  Widget _lineChart(
+      List<double> values, List<String> labels, Color color, String unit) {
+    if (values.length < 2) {
+      return _placeholder('로그가 2개 이상 쌓이면 그래프가 그려집니다.');
+    }
+    return SizedBox(
+      height: 160,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _LineChartPainter(
+            values: values, labels: labels, color: color, unit: unit),
       ),
     );
   }
 
   Widget _logRow(int index, DiveLog log) {
     final sac = log.consumptionPerMin;
+    final scoreAvg = log.scores.isEmpty
+        ? null
+        : log.scores.values.reduce((a, b) => a + b) / log.scores.length;
     final infoParts = <String>[
       if (log.depth > 0) '${_fmt(log.depth)}m',
       if (log.duration > 0) '${_fmt(log.duration)}분',
       if (log.startBar > 0) '${_fmt(log.startBar)}→${_fmt(log.endBar)}bar',
       if (sac != null) '소모 ${sac.toStringAsFixed(1)}/분',
+      if (scoreAvg != null) '평가 ${scoreAvg.toStringAsFixed(1)}',
     ];
 
     return GestureDetector(
@@ -329,6 +448,9 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     _endBarController.text =
         log != null && log.endBar > 0 ? _fmt(log.endBar) : '';
 
+    // 셀프 평가 점수 (다이얼로그 안 로컬 상태)
+    final scores = Map<String, int>.from(log?.scores ?? {});
+
     Widget numField(TextEditingController c, String label) => Expanded(
           child: TextField(
             controller: c,
@@ -339,93 +461,161 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(log == null ? '로그 추가' : '로그 수정',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _dateController,
-                      decoration: const InputDecoration(
-                          labelText: '날짜 (YYYY-MM-DD)', isDense: true),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(log == null ? '로그 추가' : '로그 수정',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _dateController,
+                        decoration: const InputDecoration(
+                            labelText: '날짜 (YYYY-MM-DD)', isDense: true),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _siteController,
+                        decoration: const InputDecoration(
+                            labelText: '장소', isDense: true),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    numField(_depthController, '수심 m'),
+                    const SizedBox(width: 8),
+                    numField(_durationController, '시간 분'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    numField(_startBarController, '시작 bar'),
+                    const SizedBox(width: 8),
+                    numField(_endBarController, '종료 bar'),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text('셀프 평가',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[600])),
+                const SizedBox(height: 6),
+                for (final skill in kDiveSkills.entries) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 34,
+                          child: Text(skill.value,
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600)),
+                        ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              for (final grade in kSkillGrades.entries)
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setDialogState(() {
+                                      // 같은 등급 다시 탭 = 평가 해제
+                                      if (scores[skill.key] == grade.key) {
+                                        scores.remove(skill.key);
+                                      } else {
+                                        scores[skill.key] = grade.key;
+                                      }
+                                    }),
+                                    child: Container(
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 1.5),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 5),
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: scores[skill.key] == grade.key
+                                            ? Colors.blue[700]
+                                            : Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(7),
+                                      ),
+                                      child: Text(
+                                        grade.value,
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: scores[skill.key] == grade.key
+                                              ? Colors.white
+                                              : Colors.black54,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _siteController,
-                      decoration: const InputDecoration(
-                          labelText: '장소', isDense: true),
-                    ),
-                  ),
                 ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  numField(_depthController, '수심 m'),
-                  const SizedBox(width: 8),
-                  numField(_durationController, '시간 분'),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  numField(_startBarController, '시작 bar'),
-                  const SizedBox(width: 8),
-                  numField(_endBarController, '종료 bar'),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        actions: [
-          if (log != null)
+          actions: [
+            if (log != null)
+              TextButton(
+                onPressed: () {
+                  setState(() => _logs.removeWhere((l) => l.id == log.id));
+                  _save();
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('삭제', style: TextStyle(color: Colors.red)),
+              ),
             TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('취소')),
+            ElevatedButton(
               onPressed: () {
-                setState(() => _logs.removeWhere((l) => l.id == log.id));
+                double num0(TextEditingController c) =>
+                    double.tryParse(c.text.trim()) ?? 0;
+
+                final date = _dateController.text.trim();
+                if (date.isEmpty) return;
+                final newLog = DiveLog(
+                  id: log?.id ??
+                      DateTime.now().microsecondsSinceEpoch.toString(),
+                  date: date,
+                  site: _siteController.text.trim(),
+                  depth: num0(_depthController),
+                  duration: num0(_durationController),
+                  startBar: num0(_startBarController),
+                  endBar: num0(_endBarController),
+                  scores: Map<String, int>.from(scores),
+                );
+                setState(() {
+                  _logs.removeWhere((l) => l.id == newLog.id);
+                  _logs.add(newLog);
+                  _sort(_logs);
+                });
                 _save();
                 Navigator.pop(dialogContext);
               },
-              child: const Text('삭제', style: TextStyle(color: Colors.red)),
+              child: const Text('저장'),
             ),
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('취소')),
-          ElevatedButton(
-            onPressed: () {
-              double num0(TextEditingController c) =>
-                  double.tryParse(c.text.trim()) ?? 0;
-
-              final date = _dateController.text.trim();
-              if (date.isEmpty) return;
-              final newLog = DiveLog(
-                id: log?.id ??
-                    DateTime.now().microsecondsSinceEpoch.toString(),
-                date: date,
-                site: _siteController.text.trim(),
-                depth: num0(_depthController),
-                duration: num0(_durationController),
-                startBar: num0(_startBarController),
-                endBar: num0(_endBarController),
-              );
-              setState(() {
-                _logs.removeWhere((l) => l.id == newLog.id);
-                _logs.add(newLog);
-                _sort(_logs);
-              });
-              _save();
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('저장'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -456,7 +646,6 @@ class _LineChartPainter extends CustomPainter {
     var minV = values.reduce(math.min);
     var maxV = values.reduce(math.max);
     if ((maxV - minV).abs() < 0.001) {
-      // 값이 전부 같으면 위아래 여유를 준다
       maxV += 1;
       minV -= 1;
     } else {
@@ -471,7 +660,6 @@ class _LineChartPainter extends CustomPainter {
         : leftPad + chartW * i / (values.length - 1);
     double y(double v) => topPad + chartH * (1 - (v - minV) / (maxV - minV));
 
-    // ── 가로 격자 3줄 + 축 라벨
     final gridPaint = Paint()
       ..color = const Color(0xFFECEFF1)
       ..strokeWidth = 1;
@@ -483,7 +671,6 @@ class _LineChartPainter extends CustomPainter {
       _text(canvas, _fmtV(gv), Offset(0, gy - 6), 9.5, Colors.grey[500]!);
     }
 
-    // ── 꺾은선 + 점
     final linePaint = Paint()
       ..color = color
       ..strokeWidth = 2
@@ -506,7 +693,6 @@ class _LineChartPainter extends CustomPainter {
       canvas.drawCircle(Offset(x(i), y(values[i])), 3, dotPaint);
     }
 
-    // 마지막 값 강조
     final last = values.length - 1;
     _text(
       canvas,
@@ -517,7 +703,6 @@ class _LineChartPainter extends CustomPainter {
       bold: true,
     );
 
-    // ── X축 날짜 라벨 (겹치지 않게 최대 6개만)
     final step = math.max(1, (values.length / 6).ceil());
     for (var i = 0; i < values.length; i += step) {
       _text(canvas, labels[i], Offset(x(i) - 12, size.height - 13), 9,
@@ -547,5 +732,100 @@ class _LineChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LineChartPainter old) =>
+      old.values != values || old.color != color;
+}
+
+/// 5각 능력치 레이더 차트
+class _RadarChartPainter extends CustomPainter {
+  final List<String> labels;
+  final List<double> values; // 0.0 ~ 1.0
+  final Color color;
+
+  _RadarChartPainter({
+    required this.labels,
+    required this.values,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = values.length;
+    final center = Offset(size.width / 2, size.height / 2 + 4);
+    final radius = math.min(size.width, size.height) / 2 - 26;
+
+    Offset point(int i, double r) {
+      final angle = -math.pi / 2 + 2 * math.pi * i / n;
+      return Offset(
+          center.dx + r * math.cos(angle), center.dy + r * math.sin(angle));
+    }
+
+    // ── 배경 격자 (4단계 링) + 축선
+    final gridPaint = Paint()
+      ..color = const Color(0xFFE3E8EE)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    for (var level = 1; level <= 4; level++) {
+      final path = Path();
+      for (var i = 0; i < n; i++) {
+        final p = point(i, radius * level / 4);
+        if (i == 0) {
+          path.moveTo(p.dx, p.dy);
+        } else {
+          path.lineTo(p.dx, p.dy);
+        }
+      }
+      path.close();
+      canvas.drawPath(path, gridPaint);
+    }
+    for (var i = 0; i < n; i++) {
+      canvas.drawLine(center, point(i, radius), gridPaint);
+    }
+
+    // ── 데이터 다각형
+    final fillPaint = Paint()..color = color.withAlpha(56);
+    final strokePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
+    final dataPath = Path();
+    for (var i = 0; i < n; i++) {
+      final p = point(i, radius * values[i].clamp(0.0, 1.0));
+      if (i == 0) {
+        dataPath.moveTo(p.dx, p.dy);
+      } else {
+        dataPath.lineTo(p.dx, p.dy);
+      }
+    }
+    dataPath.close();
+    canvas.drawPath(dataPath, fillPaint);
+    canvas.drawPath(dataPath, strokePaint);
+
+    final dotPaint = Paint()..color = color;
+    for (var i = 0; i < n; i++) {
+      final p = point(i, radius * values[i].clamp(0.0, 1.0));
+      canvas.drawCircle(p, 3, dotPaint);
+    }
+
+    // ── 축 라벨
+    for (var i = 0; i < n; i++) {
+      final p = point(i, radius + 14);
+      final painter = TextPainter(
+        text: TextSpan(
+          text: labels[i],
+          style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      painter.paint(
+          canvas, Offset(p.dx - painter.width / 2, p.dy - painter.height / 2));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RadarChartPainter old) =>
       old.values != values || old.color != color;
 }
