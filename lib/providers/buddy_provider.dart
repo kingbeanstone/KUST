@@ -40,7 +40,7 @@ class BuddyProvider with ChangeNotifier {
   BuddyDay getDayOrDefault(String dayId, String title) {
     return _buddyDays.firstWhere(
           (d) => d.id == dayId,
-      orElse: () => BuddyDay(id: dayId, title: title, blocks: [], rounds: []),
+      orElse: () => BuddyDay(id: dayId, title: title, teams: [], blocks: [], rounds: []),
     );
   }
 

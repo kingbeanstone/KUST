@@ -1,7 +1,7 @@
 /// 다이빙 버디 편성.
-/// 계층: BuddyDay(일차) > BuddyBlock(조: 팀 묶음) + BuddyRound(입수 순서).
-///  - 팀 구성(누가 어느 팀인가)과 입수 순서(어느 회차에 어느 팀이 들어가는가)를 분리한다.
-///  - 같은 팀을 여러 회차에 넣을 수 있어 (AB)(AB), AA BB 등 어떤 패턴도 표현 가능.
+/// 계층: BuddyDay(일차)가 팀 풀(teams)을 소유하고,
+/// 조(blocks)와 입수 순서(rounds)는 팀을 ID로 참조한다.
+/// 편성 순서: 팀 만들기 → 조에 팀 배정 → 입수 순서 → 사람 배치.
 class BuddyDay {
   final String id; // 일차 ID (schedule의 id와 매칭)
   final String title;
@@ -9,47 +9,89 @@ class BuddyDay {
   /// 일차 유형: 'beach'(비치) | 'boating'(보팅) | ''(미지정)
   String type;
 
+  /// 팀 풀 — 팀의 유일한 원본. 조/회차는 여기의 id만 참조한다.
+  final List<BuddyTeam> teams;
+
   final List<BuddyBlock> blocks;
   final List<BuddyRound> rounds;
 
   BuddyDay({
     required this.id,
     required this.title,
+    required this.teams,
     required this.blocks,
     required this.rounds,
     this.type = '',
   });
 
+  BuddyTeam? teamById(String teamId) {
+    for (final t in teams) {
+      if (t.id == teamId) return t;
+    }
+    return null;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'title': title,
       'type': type,
+      'teams': teams.map((t) => t.toMap()).toList(),
       'blocks': blocks.map((b) => b.toMap()).toList(),
       'rounds': rounds.map((r) => r.toMap()).toList(),
     };
   }
 
   factory BuddyDay.fromMap(String id, Map<String, dynamic> map) {
-    // v2 형식 (blocks)
-    if (map['blocks'] is List) {
+    final rounds = (map['rounds'] as List? ?? [])
+        .map((r) => BuddyRound.fromMap(Map<String, dynamic>.from(r)))
+        .toList();
+
+    // v3 형식: 일차 레벨 팀 풀
+    if (map['teams'] is List) {
       return BuddyDay(
         id: id,
         title: map['title'] ?? '',
         type: map['type'] ?? '',
-        blocks: (map['blocks'] as List)
+        teams: (map['teams'] as List)
+            .map((t) => BuddyTeam.fromMap(Map<String, dynamic>.from(t)))
+            .toList(),
+        blocks: (map['blocks'] as List? ?? [])
             .map((b) => BuddyBlock.fromMap(Map<String, dynamic>.from(b)))
             .toList(),
-        rounds: (map['rounds'] as List? ?? [])
-            .map((r) => BuddyRound.fromMap(Map<String, dynamic>.from(r)))
-            .toList(),
+        rounds: rounds,
       );
     }
 
-    // 💡 v1 호환: tanks(1탱크/2탱크 × A/B팀)를 변환해서 읽는다.
-    //    v1의 탱크는 '한 회차'였으므로, 블록 하나 + 회차(두 팀 동시 입수)로 만든다.
+    // 💡 v2 호환: 팀이 조 안에 중첩된 형식 → 팀을 풀로 끌어올린다
+    if (map['blocks'] is List) {
+      final teams = <BuddyTeam>[];
+      final blocks = <BuddyBlock>[];
+      for (final raw in map['blocks'] as List) {
+        final blockMap = Map<String, dynamic>.from(raw);
+        final teamIds = <String>[];
+        for (final rawTeam in blockMap['teams'] as List? ?? []) {
+          final team = BuddyTeam.fromMap(Map<String, dynamic>.from(rawTeam));
+          teams.add(team);
+          teamIds.add(team.id);
+        }
+        blocks.add(BuddyBlock(name: blockMap['name'] ?? '', teamIds: teamIds));
+      }
+      return BuddyDay(
+        id: id,
+        title: map['title'] ?? '',
+        type: map['type'] ?? '',
+        teams: teams,
+        blocks: blocks,
+        rounds: rounds,
+      );
+    }
+
+    // 💡 v1 호환: tanks(1탱크/2탱크 × A/B팀).
+    //    v1의 탱크는 '한 회차'였으므로 조 + 회차(두 팀 동시 입수)로 변환한다.
     final tanks = map['tanks'] as List? ?? [];
+    final teams = <BuddyTeam>[];
     final blocks = <BuddyBlock>[];
-    final rounds = <BuddyRound>[];
+    final v1Rounds = <BuddyRound>[];
 
     for (var i = 0; i < tanks.length; i++) {
       final tankMap = Map<String, dynamic>.from(tanks[i]);
@@ -68,41 +110,39 @@ class BuddyDay {
 
       final teamA = teamFrom('teamA', 'A');
       final teamB = teamFrom('teamB', 'B');
-      blocks.add(BuddyBlock(name: tankName, teams: [teamA, teamB]));
-      rounds.add(BuddyRound(name: tankName, teamIds: [teamA.id, teamB.id]));
+      teams.addAll([teamA, teamB]);
+      blocks.add(BuddyBlock(name: tankName, teamIds: [teamA.id, teamB.id]));
+      v1Rounds.add(BuddyRound(name: tankName, teamIds: [teamA.id, teamB.id]));
     }
 
     return BuddyDay(
       id: id,
       title: map['title'] ?? '',
+      type: map['type'] ?? '',
+      teams: teams,
       blocks: blocks,
-      rounds: rounds,
+      rounds: v1Rounds,
     );
   }
 }
 
-/// 조(블록): 팀들을 묶는 구성 단위. 예: YB, 교육 1조. (시간 의미 없음)
+/// 조(블록): 팀들을 묶는 구성 단위. 예: YB, 교육팀. 팀은 ID로 참조한다.
 class BuddyBlock {
   String name;
-  List<BuddyTeam> teams;
+  List<String> teamIds;
 
-  BuddyBlock({required this.name, required this.teams});
+  BuddyBlock({required this.name, required this.teamIds});
 
-  Map<String, dynamic> toMap() => {
-        'name': name,
-        'teams': teams.map((t) => t.toMap()).toList(),
-      };
+  Map<String, dynamic> toMap() => {'name': name, 'teamIds': teamIds};
 
   factory BuddyBlock.fromMap(Map<String, dynamic> map) => BuddyBlock(
         name: map['name'] ?? '',
-        teams: (map['teams'] as List? ?? [])
-            .map((t) => BuddyTeam.fromMap(Map<String, dynamic>.from(t)))
-            .toList(),
+        teamIds: List<String>.from(map['teamIds'] ?? []),
       );
 }
 
 class BuddyTeam {
-  /// 회차(rounds)가 참조하는 고유 ID. 팀 이름을 바꿔도 참조가 유지된다.
+  /// 조/회차가 참조하는 고유 ID. 팀 이름을 바꿔도 참조가 유지된다.
   final String id;
   String name;
   String leader; // 강사/리더 (없으면 '')
@@ -136,7 +176,7 @@ class BuddyTeam {
 }
 
 /// 회차(입수 순서 한 줄): 이 회차에 함께 물에 들어가는 팀들.
-/// 이름은 자유(1탱크, 2탱크…)이고 중복도 허용된다.
+/// 이름은 자유(오전, 오후, 1탱크…)이고 중복도 허용된다.
 class BuddyRound {
   String name;
   List<String> teamIds;
