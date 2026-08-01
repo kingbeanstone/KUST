@@ -200,7 +200,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   for (var b = 0; b < buddyData.blocks.length; b++)
                     _buildBlock(b, buddyData, buddyProvider),
 
-                  if (_isEditMode)
+                  if (_isEditMode) ...[
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
@@ -209,6 +209,19 @@ class _BuddyScreenState extends State<BuddyScreen> {
                         label: const Text('조 추가', style: TextStyle(fontSize: 13)),
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    // 💡 전날 편성 복사 → 몇 명만 교체하는 흐름
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showImportSheet(
+                            buddyData, buddyProvider, scheduleProvider),
+                        icon: const Icon(Icons.copy_outlined, size: 15),
+                        label: const Text('다른 일차 편성 불러오기',
+                            style: TextStyle(fontSize: 13)),
+                      ),
+                    ),
+                  ],
 
                   _buildRoundsSection(buddyData, buddyProvider),
                   const SizedBox(height: 40),
@@ -536,6 +549,159 @@ class _BuddyScreenState extends State<BuddyScreen> {
       BuddyRound(name: '오후 2', teamIds: [b.id]),
     ]);
     provider.saveBuddyDay(day);
+  }
+
+  // ---------------------------------------------------------------- 편성 불러오기
+
+  /// 💡 편성이 있는 다른 일차 목록에서 골라 통째로 복사한다.
+  void _showImportSheet(
+      BuddyDay currentDay, BuddyProvider provider, ScheduleProvider scheduleProvider) {
+    // 일정 탭 순서대로 정렬
+    final order = {
+      for (var i = 0; i < scheduleProvider.dates.length; i++)
+        scheduleProvider.dates[i]['id']!: i
+    };
+    final labels = {
+      for (final d in scheduleProvider.dates)
+        d['id']!: '${d['title']} · ${d['date']}'
+    };
+
+    final candidates = provider.buddyDays
+        .where((d) => d.id != currentDay.id && d.blocks.isNotEmpty)
+        .toList()
+      ..sort((a, b) => (order[a.id] ?? 999).compareTo(order[b.id] ?? 999));
+
+    if (candidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('불러올 편성이 있는 일차가 없습니다.')),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const Text('편성 불러오기',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text('선택한 일차의 조/팀/입수 순서가 그대로 복사됩니다.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: candidates.map((source) {
+                    final teamCount =
+                        source.blocks.fold<int>(0, (s, b) => s + b.teams.length);
+                    final memberCount = source.blocks.fold<int>(
+                        0, (s, b) => s + b.teams.fold<int>(0, (s2, t) => s2 + _namesOf(t).length));
+                    final typeLabel = source.type == 'beach'
+                        ? '🏖'
+                        : (source.type == 'boating' ? '🚤' : '');
+
+                    return ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      leading: Text(typeLabel, style: const TextStyle(fontSize: 18)),
+                      title: Text(labels[source.id] ?? source.title,
+                          style: const TextStyle(
+                              fontSize: 13.5, fontWeight: FontWeight.w600)),
+                      subtitle: Text(
+                          '조 ${source.blocks.length} · 팀 $teamCount · 배치 $memberCount명 · 회차 ${source.rounds.length}',
+                          style: const TextStyle(fontSize: 11.5)),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        if (currentDay.blocks.isNotEmpty || currentDay.rounds.isNotEmpty) {
+                          _confirmImportOverwrite(source, currentDay, provider);
+                        } else {
+                          _importFrom(source, currentDay, provider);
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmImportOverwrite(
+      BuddyDay source, BuddyDay target, BuddyProvider provider) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('편성 덮어쓰기'),
+        content: const Text('현재 일차의 편성이 불러온 내용으로 교체됩니다. 계속할까요?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('취소')),
+          TextButton(
+            onPressed: () {
+              _importFrom(source, target, provider);
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('덮어쓰기', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 조/팀/회차/유형을 깊은 복사로 가져온다 (원본 일차와 독립적으로 수정 가능)
+  void _importFrom(BuddyDay source, BuddyDay target, BuddyProvider provider) {
+    target.blocks
+      ..clear()
+      ..addAll([
+        for (final b in source.blocks)
+          BuddyBlock(
+            name: b.name,
+            teams: [
+              for (final t in b.teams)
+                BuddyTeam(
+                  id: t.id,
+                  name: t.name,
+                  leader: t.leader,
+                  members: List.of(t.members),
+                ),
+            ],
+          ),
+      ]);
+    target.rounds
+      ..clear()
+      ..addAll([
+        for (final r in source.rounds)
+          BuddyRound(name: r.name, teamIds: List.of(r.teamIds)),
+      ]);
+    target.type = source.type;
+
+    provider.saveBuddyDay(target);
+    setState(_clearSelection);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('✅ 편성을 불러왔습니다. 필요한 대원만 교체하세요.')),
+    );
   }
 
   /// 팀에 배치된 사람 이름들 (리더 포함)
