@@ -27,6 +27,9 @@
       key: "AIzaSyAHdaMlLRf4p5Qzrxg62nQ3X97ZObI03dw",
       v: "weekly",
     });
+    // 💡 지도 상수(MapTypeId 등)가 위젯 생성보다 먼저 준비되도록 미리 로드
+    google.maps.importLibrary("maps");
+    google.maps.importLibrary("marker");
   </script>
 
   <style id="splash-screen-style">
