@@ -1,11 +1,11 @@
 {
-    "name": "KUST Winter Expedition",
-    "short_name": "KUST W.E",
+    "name": "KUST 원정",
+    "short_name": "KUST",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#9ed4f7",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "theme_color": "#1565C0",
+    "description": "경북대 스킨스쿠버 동아리 KUST 원정 운영 앱 — 장비 체크, 버디 편성, 일정·식단",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

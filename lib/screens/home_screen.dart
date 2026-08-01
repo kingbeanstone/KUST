@@ -69,7 +69,13 @@ class HomeScreen extends StatelessWidget {
           children: [
             const Text('안녕하세요, 대원님!', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('오늘의 장비 점검을 잊지 마세요.', style: TextStyle(color: Colors.black54)),
+            // 💡 선택된 원정과 연동된 부제 (시즌 중립)
+            Text(
+              expeditionProvider.selected != null
+                  ? '${expeditionProvider.selected!.label} — 오늘의 장비 점검을 잊지 마세요.'
+                  : '상단에서 원정을 선택해주세요.',
+              style: const TextStyle(color: Colors.black54),
+            ),
             const SizedBox(height: 24),
 
             // 💡 v2: 장비 3분할을 하나로 통합하여 1행 2열로 단순화

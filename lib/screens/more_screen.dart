@@ -531,14 +531,16 @@ class _MoreScreenState extends State<MoreScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text('안녕하세요! KUST 동계 원정 앱입니다.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
+                    const Text('안녕하세요! KUST 원정 앱입니다.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
                     const SizedBox(height: 12),
                     const Text(
-                      '본 애플리케이션은 경북대학교 스킨스쿠버 동아리 KUST 동계 원정에서 대원들의 원활한 장비 관리와 정보 공유를 위해 제작되었습니다.\n\n'
+                      '본 애플리케이션은 경북대학교 스킨스쿠버 동아리 KUST의 원정 운영을 위해 제작되었습니다. '
+                          '춘계·하계·추계·동계 모든 원정의 데이터를 시즌별로 관리합니다.\n\n'
                           '주요 기능:\n'
-                          '• 공용 장비 실시간 현황 확인\n'
-                          '• 식단 및 원정 일정 공유\n'
-                          '• 관리자 알림 및 QnA 게시판\n\n'
+                          '• 장비 체크 — 가방 단위 준비 현황과 장비 버디 공유 관리\n'
+                          '• 버디 시스템 — 팀 편성, 입수 순서, 충돌 자동 검사\n'
+                          '• 원정별 일정·식단 공유\n'
+                          '• 동아리원 명단과 원정 참가자 관리\n\n'
                           'KUST 대원 여러분의 안전하고 즐거운 다이빙을 응원합니다!',
                       style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.6),
                     ),

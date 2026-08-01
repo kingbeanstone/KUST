@@ -172,7 +172,7 @@ class KustApp extends StatelessWidget {
     }
 
     return MaterialApp(
-      title: 'KUST 동계 원정',
+      title: 'KUST 원정',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue[800]!),
