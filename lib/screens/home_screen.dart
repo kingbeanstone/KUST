@@ -178,8 +178,8 @@ class HomeScreen extends StatelessWidget {
                             label: '$year',
                             selected: isSel,
                             width: 62,
-                            onTap: () =>
-                                expProvider.createExpedition(year, selSeason),
+                            // 💡 둘러보기는 선택만 — 문서를 만들지 않는다
+                            onTap: () => expProvider.select('${year}_$selSeason'),
                           );
                         }),
                       ),
@@ -203,8 +203,9 @@ class HomeScreen extends StatelessWidget {
                               label: entry.value,
                               selected: isSel,
                               width: 74,
+                              // 💡 둘러보기는 선택만 — 문서를 만들지 않는다
                               onTap: () =>
-                                  expProvider.createExpedition(selYear, entry.key),
+                                  expProvider.select('${selYear}_${entry.key}'),
                             );
                           }).toList(),
                         ),

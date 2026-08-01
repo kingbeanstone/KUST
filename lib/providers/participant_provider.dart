@@ -163,6 +163,13 @@ class ParticipantProvider with ChangeNotifier {
       batch.delete(partRef);
       batch.delete(gearRef);
     } else {
+      // 💡 참가자가 처음 생길 때 원정 문서도 함께 만든다.
+      //    (실제로 쓰는 원정만 목록에 남아 기본 선택이 어긋나지 않게)
+      final parts = _expeditionId!.split('_');
+      if (parts.length == 2 && int.tryParse(parts[0]) != null) {
+        batch.set(expRef, {'year': int.parse(parts[0]), 'season': parts[1]},
+            SetOptions(merge: true));
+      }
       batch.set(partRef, {
         'order': _ids.length,
         'addedAt': FieldValue.serverTimestamp(),
