@@ -877,12 +877,46 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
   // ---------------------------------------------------------------- 4️⃣ 조별 표
 
+  /// 팀이 속한 첫 회차의 순번 (미배정은 맨 뒤)
+  int _firstRoundIndexOf(BuddyDay day, BuddyTeam team) {
+    for (var r = 0; r < day.rounds.length; r++) {
+      if (day.rounds[r].teamIds.contains(team.id)) return r;
+    }
+    return day.rounds.length;
+  }
+
+  /// 팀이 속한 회차 이름들 (예: 오전 / 오전·오후)
+  String _roundLabelOf(BuddyDay day, BuddyTeam team) {
+    final names = [
+      for (final r in day.rounds)
+        if (r.teamIds.contains(team.id)) r.name,
+    ];
+    return names.isEmpty ? '회차 미정' : names.join('·');
+  }
+
   Widget _buildBlockTable(int blockIdx, BuddyDay day, BuddyProvider provider) {
     final block = day.blocks[blockIdx];
-    final teams = [
-      for (final id in block.teamIds)
-        if (day.teamById(id) != null) day.teamById(id)!,
+
+    // (실제 teamIds 안의 위치, 팀) — 선택/배치는 실제 위치 기준을 유지한다
+    var entries = <MapEntry<int, BuddyTeam>>[
+      for (var i = 0; i < block.teamIds.length; i++)
+        if (day.teamById(block.teamIds[i]) != null)
+          MapEntry(i, day.teamById(block.teamIds[i])!),
     ];
+
+    // 💡 비치: 열 순서를 입수 순서(오전→오후)에 맞춰 정렬해
+    //    모든 조에서 왼쪽=오전, 오른쪽=오후로 통일한다.
+    final isBeachColumns = day.type == 'beach' && day.rounds.isNotEmpty;
+    if (isBeachColumns) {
+      entries = List.of(entries)
+        ..sort((a, b) {
+          final d = _firstRoundIndexOf(day, a.value)
+              .compareTo(_firstRoundIndexOf(day, b.value));
+          return d != 0 ? d : a.key.compareTo(b.key);
+        });
+    }
+
+    final teams = [for (final e in entries) e.value];
     final showLeaderRow = _isEditMode || teams.any((t) => t.leader.isNotEmpty);
 
     int slotsOf(BuddyTeam t) {
@@ -925,6 +959,44 @@ class _BuddyScreenState extends State<BuddyScreen> {
             Table(
               border: TableBorder.all(color: Colors.black, width: 1),
               children: [
+                // 💡 비치: 각 열이 어느 회차(오전/오후)인지 라벨로 못박는다
+                if (isBeachColumns)
+                  TableRow(
+                    children: [
+                      for (final team in teams)
+                        TableCell(
+                          child: Builder(builder: (context) {
+                            final ri = _firstRoundIndexOf(day, team);
+                            final unassigned = ri >= day.rounds.length;
+                            final label = _roundLabelOf(day, team);
+                            // 이름 우선(오전=햇살/오후=물빛), 그 외는 순번으로
+                            final isMorning = label.contains('오전') ||
+                                (!label.contains('오후') && ri == 0);
+                            return Container(
+                              height: 24,
+                              alignment: Alignment.center,
+                              color: unassigned
+                                  ? Colors.white
+                                  : (isMorning
+                                      ? const Color(0xFFFFF3E0)
+                                      : const Color(0xFFE3F2FD)),
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: unassigned
+                                      ? Colors.grey[400]
+                                      : (isMorning
+                                          ? const Color(0xFFE65100)
+                                          : const Color(0xFF1565C0)),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                    ],
+                  ),
                 TableRow(
                   children: [
                     for (final team in teams)
@@ -944,7 +1016,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   TableRow(
                     children: [
                       for (var t = 0; t < teams.length; t++)
-                        _buildCell(blockIdx, t, -1, teams[t].leader, isLeader: true),
+                        _buildCell(blockIdx, entries[t].key, -1, teams[t].leader,
+                            isLeader: true),
                     ],
                   ),
                 for (var r = 0; r < rowCount; r++)
@@ -955,12 +1028,12 @@ class _BuddyScreenState extends State<BuddyScreen> {
                           child: Row(
                             children: [
                               Expanded(
-                                  child: _buildCell(blockIdx, t, r * 2,
+                                  child: _buildCell(blockIdx, entries[t].key, r * 2,
                                       _memberAt(teams[t], r * 2))),
                               Container(width: 1, height: 35, color: Colors.black),
                               Expanded(
-                                  child: _buildCell(blockIdx, t, r * 2 + 1,
-                                      _memberAt(teams[t], r * 2 + 1))),
+                                  child: _buildCell(blockIdx, entries[t].key,
+                                      r * 2 + 1, _memberAt(teams[t], r * 2 + 1))),
                             ],
                           ),
                         ),
