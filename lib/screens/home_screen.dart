@@ -12,6 +12,7 @@ import 'member_management_screen.dart';
 import 'participant_screen.dart';
 import 'buddy_screen.dart';
 import 'personal_checklist_screen.dart';
+import 'guide_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -100,6 +101,10 @@ class HomeScreen extends StatelessWidget {
                     title: '개인 체크리스트',
                     icon: Icons.luggage_outlined, color: Colors.indigo,
                     target: const PersonalChecklistScreen()),
+                _buildMenuCard(context,
+                    title: '신입생 가이드',
+                    icon: Icons.school_outlined, color: Colors.orange,
+                    target: const GuideScreen()),
               ],
             ),
 

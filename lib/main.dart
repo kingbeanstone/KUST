@@ -19,6 +19,7 @@ import 'providers/executive_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/recipe_provider.dart';
 import 'providers/ingredient_provider.dart';
+import 'providers/guide_provider.dart';
 
 
 // ✅ 모든 Screen Import
@@ -118,6 +119,9 @@ void main() async {
 
         // 7-1. 레시피북 (동아리 공용)
         ChangeNotifierProvider(create: (_) => RecipeProvider()),
+
+        // 7-3. 신입생 가이드 (동아리 공용)
+        ChangeNotifierProvider(create: (_) => GuideProvider()),
 
         // 7-2. 남은 재료 (원정별)
         ChangeNotifierProxyProvider<ExpeditionProvider, IngredientProvider>(
@@ -259,6 +263,7 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
       context.read<MemberProvider>().resubscribe();
       context.read<RecipeProvider>().resubscribe();
       context.read<IngredientProvider>().resubscribe();
+      context.read<GuideProvider>().resubscribe();
     }
   }
 
