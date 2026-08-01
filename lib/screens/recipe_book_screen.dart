@@ -152,17 +152,29 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
               // 💡 카테고리 = 열, 레시피 = 세로 나열 — 전부 한눈에 보인다.
               final byCategory = provider.byCategory;
               final categories = byCategory.keys.toList();
-              final colWidth = math.max(
-                  104.0, (constraints.maxWidth - 16) / categories.length);
+              // 💡 화면 폭에 들어가는 만큼만 열로 놓고, 넘치면 다음 줄로
+              final perRow = ((constraints.maxWidth - 16) / 104.0)
+                  .floor()
+                  .clamp(1, math.max(1, categories.length))
+                  .toInt();
+              final colWidth = (constraints.maxWidth - 16) / perRow;
+              final rows = <List<String>>[];
+              for (var i = 0; i < categories.length; i += perRow) {
+                rows.add(categories.sublist(
+                    i, math.min(i + perRow, categories.length)));
+              }
 
               return SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(8, 10, 8, 90),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final cat in categories)
+                child: Column(
+                  children: [
+                    for (final row in rows)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final cat in row)
                         SizedBox(
                           width: colWidth,
                           child: Padding(
@@ -214,8 +226,10 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                             ),
                           ),
                         ),
-                    ],
-                  ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
               );
             }),

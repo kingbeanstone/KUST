@@ -410,15 +410,27 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final colWidth = math.max(
-                      92.0, constraints.maxWidth / categories.length);
+                  // 💡 화면 폭에 들어가는 만큼만 열로 놓고, 넘치면 다음 줄로
+                  final perRow = (constraints.maxWidth / 92.0)
+                      .floor()
+                      .clamp(1, math.max(1, categories.length))
+                      .toInt();
+                  final colWidth = constraints.maxWidth / perRow;
+                  final rows = <List<String>>[];
+                  for (var i = 0; i < categories.length; i += perRow) {
+                    rows.add(categories.sublist(
+                        i, math.min(i + perRow, categories.length)));
+                  }
                   return SingleChildScrollView(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          for (final cat in categories)
+                    child: Column(
+                      children: [
+                        for (final row in rows)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final cat in row)
                             SizedBox(
                               width: colWidth,
                               child: Padding(
@@ -486,8 +498,10 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                                 ),
                               ),
                             ),
-                        ],
-                      ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   );
                 },
