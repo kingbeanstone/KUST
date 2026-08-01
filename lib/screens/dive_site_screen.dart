@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/dive_site_provider.dart';
 
-/// 💡 다이브 사이트: 울릉도 포인트를 지도 마커로.
+/// 💡 다이브 사이트: 울릉도 포인트를 구글맵 마커로.
 /// 마커/목록 탭 = 상세, 관리자는 지도를 길게 눌러 포인트 추가.
 class DiveSiteScreen extends StatefulWidget {
   const DiveSiteScreen({super.key});
@@ -15,11 +14,13 @@ class DiveSiteScreen extends StatefulWidget {
 }
 
 class _DiveSiteScreenState extends State<DiveSiteScreen> {
-  final MapController _mapController = MapController();
+  GoogleMapController? _mapController;
+
+  /// 위성 뷰 토글 (hybrid = 위성 + 지명)
+  bool _satellite = true;
 
   // 울릉도 중심
   static const _ulleungCenter = LatLng(37.505, 130.868);
-  static const _initialZoom = 11.4;
 
   /// 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _nameController = TextEditingController();
@@ -30,7 +31,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
 
   @override
   void dispose() {
-    _mapController.dispose();
+    _mapController?.dispose();
     _nameController.dispose();
     _depthController.dispose();
     _levelController.dispose();
@@ -68,65 +69,65 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
           // ── 지도
           Expanded(
             flex: 11,
-            child: FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _ulleungCenter,
-                initialZoom: _initialZoom,
-                onLongPress: isAdmin
-                    ? (tapPos, latLng) => _showEditDialog(provider,
-                        presetLat: latLng.latitude, presetLng: latLng.longitude)
-                    : null,
-              ),
+            child: Stack(
               children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.kust.expedition',
-                ),
-                MarkerLayer(
-                  markers: [
+                GoogleMap(
+                  initialCameraPosition: const CameraPosition(
+                      target: _ulleungCenter, zoom: 11.3),
+                  mapType: _satellite ? MapType.hybrid : MapType.normal,
+                  onMapCreated: (c) => _mapController = c,
+                  zoomControlsEnabled: false,
+                  mapToolbarEnabled: false,
+                  myLocationButtonEnabled: false,
+                  onLongPress: isAdmin
+                      ? (latLng) => _showEditDialog(provider,
+                          presetLat: latLng.latitude,
+                          presetLng: latLng.longitude)
+                      : null,
+                  markers: {
                     for (final site in sites)
                       Marker(
-                        point: LatLng(site.lat, site.lng),
-                        width: 86,
-                        height: 52,
-                        alignment: Alignment.topCenter,
-                        child: GestureDetector(
-                          onTap: () => _showSiteSheet(site, isAdmin, provider),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.location_on,
-                                  size: 28, color: Colors.blue[800]),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 1),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(7),
-                                  border:
-                                      Border.all(color: Colors.blue[200]!),
-                                ),
-                                child: Text(
-                                  site.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        markerId: MarkerId(site.id),
+                        position: LatLng(site.lat, site.lng),
+                        infoWindow: InfoWindow(title: site.name),
+                        onTap: () => _showSiteSheet(site, isAdmin, provider),
                       ),
-                  ],
+                  },
                 ),
-                const Align(
-                  alignment: Alignment.bottomRight,
-                  child: Padding(
-                    padding: EdgeInsets.all(3),
-                    child: Text('© OpenStreetMap',
-                        style: TextStyle(fontSize: 9, color: Colors.black45)),
+                // 일반/위성 토글
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _satellite = !_satellite),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 11, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(9),
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black.withAlpha(40),
+                              blurRadius: 6),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                              _satellite
+                                  ? Icons.map_outlined
+                                  : Icons.satellite_alt_outlined,
+                              size: 14,
+                              color: Colors.blue[800]),
+                          const SizedBox(width: 4),
+                          Text(_satellite ? '일반' : '위성',
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -162,8 +163,10 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         for (final site in sites)
                           GestureDetector(
                             onTap: () {
-                              _mapController.move(
-                                  LatLng(site.lat, site.lng), 13.5);
+                              _mapController?.animateCamera(
+                                CameraUpdate.newLatLngZoom(
+                                    LatLng(site.lat, site.lng), 14),
+                              );
                               _showSiteSheet(site, isAdmin, provider);
                             },
                             child: Container(
