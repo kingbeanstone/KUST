@@ -20,11 +20,13 @@ import 'providers/auth_provider.dart';
 import 'providers/recipe_provider.dart';
 import 'providers/ingredient_provider.dart';
 import 'providers/guide_provider.dart';
+import 'providers/dive_site_provider.dart';
 
 
 // ✅ 모든 Screen Import
 import 'screens/home_screen.dart';
 import 'screens/schedule_screen.dart';
+import 'screens/dive_site_screen.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/more_screen.dart';
 
@@ -122,6 +124,9 @@ void main() async {
 
         // 7-3. 신입생 가이드 (동아리 공용)
         ChangeNotifierProvider(create: (_) => GuideProvider()),
+
+        // 7-4. 다이브 사이트 (동아리 공용, 지도 마커)
+        ChangeNotifierProvider(create: (_) => DiveSiteProvider()),
 
         // 7-2. 남은 재료 (원정별)
         ChangeNotifierProxyProvider<ExpeditionProvider, IngredientProvider>(
@@ -221,6 +226,7 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
   final List<Widget> _screens = [
     const HomeScreen(),
     const ScheduleScreen(),
+    const DiveSiteScreen(),
     const MealPlanScreen(),
     const MoreScreen(),
   ];
@@ -264,6 +270,7 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
       context.read<RecipeProvider>().resubscribe();
       context.read<IngredientProvider>().resubscribe();
       context.read<GuideProvider>().resubscribe();
+      context.read<DiveSiteProvider>().resubscribe();
     }
   }
 
@@ -285,6 +292,7 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: '홈'),
           BottomNavigationBarItem(icon: Icon(Icons.calendar_month), label: '일정'),
+          BottomNavigationBarItem(icon: Icon(Icons.map_outlined), label: '사이트'),
           BottomNavigationBarItem(icon: Icon(Icons.restaurant), label: '식단'),
           BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: '더보기'),
         ],
