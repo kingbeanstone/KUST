@@ -1,6 +1,5 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/member_provider.dart';
@@ -32,6 +31,42 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
   static const double _wDelete = 32;
 
   static const Color _line = Color(0xFFD6D6D6);
+
+  /// 고정(No·기수·이름) 열을 제외한 오른쪽 영역 가로 스크롤 동기화
+  final ScrollController _hHead = ScrollController();
+  final ScrollController _hBody = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _hHead.addListener(() {
+      if (_hBody.hasClients && _hBody.offset != _hHead.offset) {
+        _hBody.jumpTo(_hHead.offset);
+      }
+    });
+    _hBody.addListener(() {
+      if (_hHead.hasClients && _hHead.offset != _hBody.offset) {
+        _hHead.jumpTo(_hBody.offset);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _hHead.dispose();
+    _hBody.dispose();
+    super.dispose();
+  }
+
+  void _copyToClipboard(String label, String value) {
+    if (value.trim().isEmpty) return;
+    Clipboard.setData(ClipboardData(text: value.trim()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          content: Text('$label 복사됨: ${value.trim()}'),
+          duration: const Duration(seconds: 1)),
+    );
+  }
 
   void _enterEditMode(List<MemberItem> remoteMembers) {
     setState(() {
@@ -72,10 +107,8 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
     }
   }
 
-  double get _tableWidth =>
-      _wNo +
-      _wGen +
-      _wName +
+  /// 오른쪽(스크롤) 영역 전체 폭
+  double get _rightWidth =>
       _wType +
       _wGender +
       _wBlood +
@@ -127,30 +160,75 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
       body: displayData.isEmpty
           ? const Center(
               child: Text('대원을 추가해주세요.', style: TextStyle(color: Colors.grey)))
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final width = math.max(_tableWidth, constraints.maxWidth);
-                return SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(
-                    width: width,
-                    height: constraints.maxHeight,
-                    child: Column(
+          : Column(
+              children: [
+                // ── 헤더: 왼쪽 고정 + 오른쪽 가로 스크롤 (본문과 동기화)
+                Container(
+                  color: const Color(0xFFF3F4F6),
+                  child: Row(
+                    children: [
+                      _cell(_wNo, _headText('No'), height: 32),
+                      _cell(_wGen, _headText('기수'), height: 32),
+                      _cell(_wName, _headText('이름'), height: 32),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          controller: _hHead,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: _rightWidth,
+                            child: Row(
+                              children: [
+                                _cell(_wType, _headText('구분'), height: 32),
+                                _cell(_wGender, _headText('성별'), height: 32),
+                                _cell(_wBlood, _headText('혈액형'), height: 32),
+                                _cell(_wPhone, _headText('연락처'), height: 32),
+                                _cell(_wEmergency, _headText('비상연락처'), height: 32),
+                                _cell(_wHeight, _headText('신장'), height: 32),
+                                _cell(_wShoe, _headText('족장'), height: 32),
+                                if (_isEditMode)
+                                  _cell(_wDelete, const SizedBox(), height: 32),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // ── 본문: 세로 스크롤 하나에 [고정 열들 | 가로 스크롤 열들]
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.only(bottom: 100),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildHeaderRow(),
+                        Column(
+                          children: [
+                            for (var i = 0; i < displayData.length; i++)
+                              _buildLeftCells(displayData[i], i),
+                          ],
+                        ),
                         Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.only(bottom: 100),
-                            itemCount: displayData.length,
-                            itemBuilder: (context, index) => _buildMemberRow(
-                                auth, memberProvider, displayData[index], index),
+                          child: SingleChildScrollView(
+                            controller: _hBody,
+                            scrollDirection: Axis.horizontal,
+                            child: SizedBox(
+                              width: _rightWidth,
+                              child: Column(
+                                children: [
+                                  for (var i = 0; i < displayData.length; i++)
+                                    _buildRightCells(
+                                        auth, memberProvider, displayData[i], i),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                );
-              },
+                ),
+              ],
             ),
       floatingActionButton: (auth.isAdmin && _isEditMode)
           ? FloatingActionButton.extended(
@@ -201,50 +279,24 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
       style: TextStyle(
           fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.grey[700]));
 
-  Widget _buildHeaderRow() {
-    return Container(
-      color: const Color(0xFFF3F4F6),
-      child: Row(
-        children: [
-          _cell(_wNo, _headText('No'), height: 32),
-          _cell(_wGen, _headText('기수'), height: 32),
-          _cell(_wName, _headText('이름'), height: 32),
-          _cell(_wType, _headText('구분'), height: 32),
-          _cell(_wGender, _headText('성별'), height: 32),
-          _cell(_wBlood, _headText('혈액형'), height: 32),
-          _cell(_wPhone, _headText('연락처'), height: 32),
-          _cell(_wEmergency, _headText('비상연락처'), height: 32),
-          _cell(_wHeight, _headText('신장'), height: 32),
-          _cell(_wShoe, _headText('족장'), height: 32),
-          if (_isEditMode) _cell(_wDelete, const SizedBox(), height: 32),
-        ],
-      ),
-    );
-  }
+  Text _plain(String text, {bool bold = false, Color? color}) => Text(
+        text,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+          color: color ?? Colors.black87,
+        ),
+      );
 
-  Widget _buildMemberRow(EquipmentProvider auth, MemberProvider provider,
-      MemberItem member, int index) {
-    final bool enabled = auth.isAdmin && _isEditMode;
-    final bool isMale = member.gender == 'male';
-    final bool isOb = member.memberType == 'OB';
-
-    Text plain(String text, {bool bold = false, Color? color}) => Text(
-          text,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
-            color: color ?? Colors.black87,
-          ),
-        );
-
-    // 수정 모드에서 탭 전환 셀임을 알리는 옅은 배경
-    final toggleBg = enabled ? const Color(0xFFF0F6FF) : null;
-
+  /// 왼쪽 고정 열: No · 기수 · 이름 (가로 스크롤해도 남는다)
+  Widget _buildLeftCells(MemberItem member, int index) {
+    final bool enabled = _isEditMode;
     return Row(
-      key: ValueKey(member.id.isEmpty ? 'new_${member.hashCode}_$index' : member.id),
+      key: ValueKey(
+          'L_${member.id.isEmpty ? 'new_${member.hashCode}_$index' : member.id}'),
       children: [
-        _cell(_wNo, plain('${index + 1}', color: Colors.grey[500])),
+        _cell(_wNo, _plain('${index + 1}', color: Colors.grey[500])),
         enabled
             ? _cell(
                 _wGen,
@@ -256,7 +308,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                   onChanged: (v) => _updateLocalItem(index, generation: v),
                 ))
             : _cell(_wGen,
-                plain(member.generation.isEmpty ? '' : '${member.generation}기')),
+                _plain(member.generation.isEmpty ? '' : '${member.generation}기')),
         enabled
             ? _cell(
                 _wName,
@@ -268,7 +320,46 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                   enabled: enabled,
                   onChanged: (v) => _updateLocalItem(index, name: v),
                 ))
-            : _cell(_wName, plain(member.name, bold: true)),
+            : _cell(_wName, _plain(member.name, bold: true)),
+      ],
+    );
+  }
+
+  /// 오른쪽 스크롤 열: 구분부터 끝까지
+  Widget _buildRightCells(EquipmentProvider auth, MemberProvider provider,
+      MemberItem member, int index) {
+    final bool enabled = auth.isAdmin && _isEditMode;
+    final bool isMale = member.gender == 'male';
+    final bool isOb = member.memberType == 'OB';
+
+    final plain = _plain;
+
+    // 수정 모드에서 탭 전환 셀임을 알리는 옅은 배경
+    final toggleBg = enabled ? const Color(0xFFF0F6FF) : null;
+
+    // 💡 보기 모드에서 연락처 셀은 탭하면 복사된다
+    Widget phoneCell(double width, String label, String value) {
+      if (enabled) return const SizedBox.shrink();
+      return _cell(
+        width,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(child: plain(value)),
+            if (value.trim().isNotEmpty) ...[
+              const SizedBox(width: 3),
+              Icon(Icons.copy, size: 10, color: Colors.grey[400]),
+            ],
+          ],
+        ),
+        onTap: () => _copyToClipboard(label, value),
+      );
+    }
+
+    return Row(
+      key: ValueKey(
+          'R_${member.id.isEmpty ? 'new_${member.hashCode}_$index' : member.id}'),
+      children: [
         _cell(
           _wType,
           plain(member.memberType),
@@ -308,7 +399,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                   enabled: enabled,
                   onChanged: (v) => _updateLocalItem(index, phone: v),
                 ))
-            : _cell(_wPhone, plain(member.phone)),
+            : phoneCell(_wPhone, '연락처', member.phone),
         enabled
             ? _cell(
                 _wEmergency,
@@ -319,7 +410,7 @@ class _MemberManagementScreenState extends State<MemberManagementScreen> {
                   enabled: enabled,
                   onChanged: (v) => _updateLocalItem(index, emergencyContact: v),
                 ))
-            : _cell(_wEmergency, plain(member.emergencyContact)),
+            : phoneCell(_wEmergency, '비상연락처', member.emergencyContact),
         enabled
             ? _cell(
                 _wHeight,

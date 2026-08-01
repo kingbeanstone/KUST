@@ -400,39 +400,24 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                 return Column(
                   children: [
-                    // ── 원정 진행률 (날짜 헤더 위 1줄)
-                    if (progress != null)
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-                        child: Row(
-                          children: [
-                            Text('원정 진행률',
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey[600])),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(3),
-                                child: LinearProgressIndicator(
-                                  value: progress,
-                                  minHeight: 6,
-                                  backgroundColor: Colors.grey[200],
-                                  valueColor: AlwaysStoppedAnimation(
-                                      progress >= 1.0
-                                          ? Colors.green
-                                          : Colors.blue[700]!),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text('${(progress * 100).round()}%',
-                                style: const TextStyle(
-                                    fontSize: 11.5, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
+                    // ── 진행률 (날짜 헤더 위): 원정 전체 + 오늘 하루(07~24시)
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+                      child: Column(
+                        children: [
+                          if (progress != null)
+                            _progressRow('원정 진행률', progress,
+                                barColor: Colors.blue[700]!),
+                          if (progress != null) const SizedBox(height: 5),
+                          _progressRow(
+                            '오늘 진행률',
+                            ((nowMinutes - 7 * 60) / (24 * 60 - 7 * 60))
+                                .clamp(0.0, 1.0),
+                            barColor: Colors.teal[600]!,
+                          ),
+                        ],
                       ),
+                    ),
 
                     // ── 일차 헤더 행 (세로 스크롤과 무관하게 고정)
                     SizedBox(
@@ -584,6 +569,43 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 );
               },
             ),
+    );
+  }
+
+  /// 얇은 진행률 한 줄 (라벨 + 바 + %)
+  Widget _progressRow(String label, double value, {required Color barColor}) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 62,
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600])),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: value,
+              minHeight: 6,
+              backgroundColor: Colors.grey[200],
+              valueColor: AlwaysStoppedAnimation(
+                  value >= 1.0 ? Colors.green : barColor),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 36,
+          child: Text('${(value * 100).round()}%',
+              textAlign: TextAlign.right,
+              style:
+                  const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
+        ),
+      ],
     );
   }
 
