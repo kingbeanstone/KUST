@@ -32,71 +32,12 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
 
   /// 대장의 구글 어스 프로젝트 (울릉도 포인트 지도).
   /// 어스는 iframe 임베드를 차단해서 외부 브라우저로 연다.
+  /// 💡 fdl=1: 모바일 접속 시 플레이스토어로 보내는 리다이렉트를 건너뛴다.
   static const _earthUrl =
-      'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEZFNDkwQkUwRTQwRjgwQkRGMzQgAUICCABKCAiN_bqqBxAB?hl=ko';
+      'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEZFNDkwQkUwRTQwRjgwQkRGMzQgAUICCABKCAiN_bqqBxAB?hl=ko&fdl=1';
 
-  /// 구글 어스 열기 — 첫 이용자를 위한 데스크톱 모드 안내 포함
   void _openEarth() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('🌍 구글 어스로 보기',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              const Text(
-                '고화질 3D로 울릉도 포인트를 볼 수 있습니다.\n'
-                '휴대폰은 처음 한 번만 설정이 필요해요:',
-                style: TextStyle(fontSize: 13, height: 1.5),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text(
-                  '어스가 열리면 → 브라우저 메뉴(⋮) →\n'
-                  '"데스크톱 사이트" 체크 ✓\n\n'
-                  '한 번 켜두면 다음부터는 바로 보입니다.',
-                  style: TextStyle(fontSize: 12.5, height: 1.6),
-                ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(sheetContext);
-                    launchUrlString(_earthUrl,
-                        mode: LaunchMode.externalApplication);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[800],
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  icon: const Icon(Icons.public, size: 18),
-                  label: const Text('구글 어스 열기',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    launchUrlString(_earthUrl, mode: LaunchMode.externalApplication);
   }
 
   /// 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
