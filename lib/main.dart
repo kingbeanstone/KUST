@@ -277,10 +277,10 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      // 💡 IndexedStack을 쓰지 않는다: 숨겨진 채 생성된 구글맵 platform view가
+      //    모바일 크롬에서 빈 화면으로 남는 문제가 있어, 활성 탭만 그린다.
+      //    (화면 상태는 어차피 Provider가 들고 있어 다시 그려도 데이터는 유지된다)
+      body: _screens[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) => setState(() => _selectedIndex = index),
