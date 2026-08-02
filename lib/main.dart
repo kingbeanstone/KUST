@@ -40,6 +40,19 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 💡 진단용 전역 오류 핸들러: 잡히지 않는 오류의 본문을 콘솔에 그대로 찍는다.
+  //    (모바일에서 원인 불명 흰 화면을 추적하기 위함)
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('KUST 위젯 오류: ${details.exceptionAsString()}');
+  };
+  WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+    debugPrint('KUST 전역 오류: $error');
+    debugPrint('KUST 전역 오류 스택: $stack');
+    return true; // 오류를 삼켜서 앱이 계속 돌게 한다
+  };
+
   bool isFirebaseInitialized = false;
 
   try {
