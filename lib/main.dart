@@ -249,6 +249,12 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
     const MoreScreen(),
   ];
 
+  /// 💡 한 번이라도 방문한 탭 — IndexedStack으로 상태를 유지하되,
+  /// 화면 생성은 첫 방문(=보이는 순간)에 한다.
+  /// (숨겨진 채 생성된 지도가 모바일에서 깨지는 문제 회피)
+  late final List<bool> _visited =
+      List.generate(_screens.length, (i) => i == 0);
+
   @override
   void initState() {
     super.initState();
@@ -295,13 +301,21 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 💡 IndexedStack을 쓰지 않는다: 숨겨진 채 생성된 구글맵 platform view가
-      //    모바일 크롬에서 빈 화면으로 남는 문제가 있어, 활성 탭만 그린다.
-      //    (화면 상태는 어차피 Provider가 들고 있어 다시 그려도 데이터는 유지된다)
-      body: _screens[_selectedIndex],
+      // 💡 방문한 탭은 IndexedStack으로 살아있게 유지 (편집 상태·스크롤 보존),
+      //    아직 안 가본 탭은 빈 자리 — 첫 방문 때 보이는 상태로 생성된다.
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          for (var i = 0; i < _screens.length; i++)
+            _visited[i] ? _screens[i] : const SizedBox.shrink(),
+        ],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (index) => setState(() {
+          _selectedIndex = index;
+          _visited[index] = true;
+        }),
         selectedItemColor: Colors.blue[800],
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
