@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +19,9 @@ class DiveSiteScreen extends StatefulWidget {
 
 class _DiveSiteScreenState extends State<DiveSiteScreen> {
   GoogleMapController? _mapController;
+
+  /// 💡 세부 포인트가 펼쳐진 핵심 포인트 (클러스터 확장 상태)
+  String? _expandedSiteId;
 
   /// 💡 구글맵 JS가 준비된 뒤에만 지도 위젯을 만든다 (타이밍 크래시 방지)
   late final Future<bool> _mapsReady = waitForGoogleMaps();
@@ -42,11 +47,60 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     super.dispose();
   }
 
+  /// 세부 포인트 마커 위치: 저장된 좌표가 있으면 그대로, 없으면
+  /// 부모 포인트 주변에 도식적으로 원형 배치한다 (실측 아님).
+  LatLng _subPos(DiveSite site, int index) {
+    final sp = site.subPoints[index];
+    final lat = double.tryParse(sp['lat'] ?? '');
+    final lng = double.tryParse(sp['lng'] ?? '');
+    if (lat != null && lng != null) return LatLng(lat, lng);
+
+    final n = site.subPoints.length;
+    final angle = 2 * math.pi * index / n - math.pi / 2;
+    const radius = 0.0038; // 약 400m
+    return LatLng(
+      site.lat + radius * math.cos(angle),
+      site.lng + radius * math.sin(angle) * 1.27,
+    );
+  }
+
+  /// 난이도 → 마커 색조 (지도에서 난이도 분포가 바로 보이게)
+  double _levelHue(String level) {
+    if (level.contains('중상')) return 15; // 주홍
+    if (level.contains('상급')) return BitmapDescriptor.hueRed;
+    if (level.contains('중급')) return BitmapDescriptor.hueOrange;
+    if (level.contains('초') || level.contains('오픈')) {
+      return BitmapDescriptor.hueGreen;
+    }
+    return BitmapDescriptor.hueViolet;
+  }
+
+  void _onMainMarkerTap(DiveSite site, bool isAdmin, DiveSiteProvider provider) {
+    if (site.subPoints.isEmpty) {
+      _showSiteSheet(site, isAdmin, provider);
+      return;
+    }
+    if (_expandedSiteId == site.id) {
+      // 이미 펼쳐진 상태에서 한 번 더 탭 = 상세 시트
+      _showSiteSheet(site, isAdmin, provider);
+    } else {
+      setState(() => _expandedSiteId = site.id);
+      _mapController?.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(site.lat, site.lng), 14.2),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isAdmin = context.watch<EquipmentProvider>().isAdmin;
     final provider = context.watch<DiveSiteProvider>();
     final sites = provider.sites;
+
+    DiveSite? expanded;
+    for (final s in sites) {
+      if (s.id == _expandedSiteId) expanded = s;
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -90,7 +144,9 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     ),
                   );
                 }
-                return GoogleMap(
+                return Stack(
+                  children: [
+                    GoogleMap(
                   initialCameraPosition: const CameraPosition(
                       target: _ulleungCenter, zoom: 11.3),
                   onMapCreated: (c) => _mapController = c,
@@ -99,28 +155,99 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
                   myLocationButtonEnabled: false,
+                  // 빈 지도를 탭하면 펼쳐진 세부 포인트를 접는다
+                  onTap: (_) {
+                    if (_expandedSiteId != null) {
+                      setState(() => _expandedSiteId = null);
+                    }
+                  },
                   onLongPress: isAdmin
                       ? (latLng) => _showEditDialog(provider,
                           presetLat: latLng.latitude,
                           presetLng: latLng.longitude)
                       : null,
                   markers: {
+                    // ── 핵심 포인트 마커
                     for (final site in sites)
                       Marker(
                         markerId: MarkerId(site.id),
                         position: LatLng(site.lat, site.lng),
-                        // 💡 베이스 포인트는 노란 마커로 특별하게
                         icon: BitmapDescriptor.defaultMarkerWithHue(
                             site.isBase
                                 ? BitmapDescriptor.hueYellow
                                 : BitmapDescriptor.hueAzure),
                         infoWindow: InfoWindow(
-                            title: site.isBase
-                                ? '⭐ ${site.name} (베이스)'
-                                : site.name),
-                        onTap: () => _showSiteSheet(site, isAdmin, provider),
+                          title: site.isBase
+                              ? '⭐ ${site.name} (베이스)'
+                              : site.name,
+                          snippet: site.subPoints.isNotEmpty
+                              ? '한 번 더 탭 = 상세 · 세부 ${site.subPoints.length}곳 펼침'
+                              : null,
+                        ),
+                        onTap: () =>
+                            _onMainMarkerTap(site, isAdmin, provider),
                       ),
+                    // ── 펼쳐진 핵심 포인트의 세부 마커 (색 = 난이도)
+                    if (expanded != null)
+                      for (var i = 0; i < expanded.subPoints.length; i++)
+                        Marker(
+                          markerId: MarkerId('${expanded.id}_sub_$i'),
+                          position: _subPos(expanded, i),
+                          icon: BitmapDescriptor.defaultMarkerWithHue(
+                              _levelHue(
+                                  expanded.subPoints[i]['level'] ?? '')),
+                          infoWindow: InfoWindow(
+                            title: expanded.subPoints[i]['name'] ?? '',
+                            snippet: [
+                              if ((expanded.subPoints[i]['depth'] ?? '')
+                                  .isNotEmpty)
+                                expanded.subPoints[i]['depth'],
+                              if ((expanded.subPoints[i]['level'] ?? '')
+                                  .isNotEmpty)
+                                expanded.subPoints[i]['level'],
+                            ].join(' · '),
+                          ),
+                          onTap: () => _showSubPointSheet(
+                              expanded!, expanded.subPoints[i]),
+                        ),
                   },
+                    ),
+                    // 펼침 상태 안내 칩
+                    if (expanded != null)
+                      Positioned(
+                        top: 10,
+                        left: 10,
+                        child: GestureDetector(
+                          onTap: () =>
+                              setState(() => _expandedSiteId = null),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 11, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black.withAlpha(40),
+                                    blurRadius: 6),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('${expanded.name} 세부 포인트',
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold)),
+                                const SizedBox(width: 5),
+                                Icon(Icons.close,
+                                    size: 14, color: Colors.grey[500]),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
@@ -179,9 +306,12 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         for (final site in sites)
                           GestureDetector(
                             onTap: () {
+                              if (site.subPoints.isNotEmpty) {
+                                setState(() => _expandedSiteId = site.id);
+                              }
                               _mapController?.animateCamera(
                                 CameraUpdate.newLatLngZoom(
-                                    LatLng(site.lat, site.lng), 14),
+                                    LatLng(site.lat, site.lng), 14.2),
                               );
                               _showSiteSheet(site, isAdmin, provider);
                             },
@@ -378,6 +508,80 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               const SizedBox(height: 6),
             ],
           ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 세부 포인트 미니 시트 (마커 탭)
+  void _showSubPointSheet(DiveSite site, Map<String, String> sp) {
+    final level = (sp['level'] ?? '').trim();
+    final depth = (sp['depth'] ?? '').trim();
+    final desc = (sp['desc'] ?? '').trim();
+    final color = _levelColor(level);
+    final autoPlaced = double.tryParse(sp['lat'] ?? '') == null;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Icon(Icons.place, size: 18, color: color),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text('${site.name} · ${sp['name'] ?? ''}',
+                        style: const TextStyle(
+                            fontSize: 15.5, fontWeight: FontWeight.bold)),
+                  ),
+                  if (level.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: color.withAlpha(26),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(level,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: color)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _infoRow('수심', depth),
+              _infoRow('특징', desc),
+              const SizedBox(height: 8),
+              Text(
+                autoPlaced
+                    ? '※ 이 마커 위치는 보기 좋게 배치한 것으로 실제 위치가 아닙니다. 입수 지점은 당일 브리핑 기준!'
+                    : '※ 참고용 정보입니다. 입수 지점은 당일 브리핑 기준!',
+                style: TextStyle(fontSize: 10.5, color: Colors.grey[500]),
+              ),
+            ],
           ),
         ),
       ),
