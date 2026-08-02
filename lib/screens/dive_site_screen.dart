@@ -129,13 +129,6 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     style: TextStyle(fontSize: 11, color: Colors.blue)),
               ),
             ),
-          TextButton.icon(
-            onPressed: _openEarth,
-            icon: const Text('🌍', style: TextStyle(fontSize: 14)),
-            label: const Text('어스',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(width: 4),
         ],
       ),
       body: Column(
@@ -286,6 +279,35 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               ),
               child: Column(
                 children: [
+                  // 💡 구글 어스 버튼 — 눈에 띄게 목록 패널 맨 위에
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: _openEarth,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[800],
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('🌍', style: TextStyle(fontSize: 16)),
+                            SizedBox(width: 8),
+                            Text('구글 어스에서 포인트 보기',
+                                style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   // 💡 참고용 안내 배너 (항상 표시)
                   Container(
                     width: double.infinity,
