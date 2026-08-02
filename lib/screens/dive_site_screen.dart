@@ -107,7 +107,15 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                       Marker(
                         markerId: MarkerId(site.id),
                         position: LatLng(site.lat, site.lng),
-                        infoWindow: InfoWindow(title: site.name),
+                        // 💡 베이스 포인트는 노란 마커로 특별하게
+                        icon: BitmapDescriptor.defaultMarkerWithHue(
+                            site.isBase
+                                ? BitmapDescriptor.hueYellow
+                                : BitmapDescriptor.hueAzure),
+                        infoWindow: InfoWindow(
+                            title: site.isBase
+                                ? '⭐ ${site.name} (베이스)'
+                                : site.name),
                         onTap: () => _showSiteSheet(site, isAdmin, provider),
                       ),
                   },
@@ -129,7 +137,31 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                       offset: const Offset(0, -2)),
                 ],
               ),
-              child: sites.isEmpty
+              child: Column(
+                children: [
+                  // 💡 참고용 안내 배너 (항상 표시)
+                  Container(
+                    width: double.infinity,
+                    color: const Color(0xFFFFF8E1),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 13, color: Colors.orange[800]),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            '포인트 정보는 참고용이에요 — 실제 입수는 당일 브리핑 기준!',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.orange[900]),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: sites.isEmpty
                   ? Center(
                       child: Text(
                         isAdmin
@@ -156,19 +188,51 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 9),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8F9FA),
+                                color: site.isBase
+                                    ? const Color(0xFFFFFDE7)
+                                    : const Color(0xFFF8F9FA),
                                 borderRadius: BorderRadius.circular(10),
+                                border: site.isBase
+                                    ? Border.all(color: Colors.amber[400]!)
+                                    : null,
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.location_on,
-                                      size: 16, color: Colors.blue[800]),
+                                  site.isBase
+                                      ? Icon(Icons.star_rounded,
+                                          size: 18, color: Colors.amber[700])
+                                      : Icon(Icons.location_on,
+                                          size: 16, color: Colors.blue[800]),
                                   const SizedBox(width: 7),
                                   Expanded(
-                                    child: Text(site.name,
-                                        style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600)),
+                                    child: Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(site.name,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
+                                        if (site.isBase) ...[
+                                          const SizedBox(width: 5),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.amber[600],
+                                              borderRadius:
+                                                  BorderRadius.circular(7),
+                                            ),
+                                            child: const Text('베이스',
+                                                style: TextStyle(
+                                                    fontSize: 9.5,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Colors.white)),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ),
                                   if (site.depth.isNotEmpty)
                                     Text(site.depth,
@@ -198,6 +262,9 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                           ),
                       ],
                     ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -234,10 +301,15 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               ),
               Row(
                 children: [
-                  Icon(Icons.location_on, size: 18, color: Colors.blue[800]),
+                  site.isBase
+                      ? Icon(Icons.star_rounded,
+                          size: 20, color: Colors.amber[700])
+                      : Icon(Icons.location_on,
+                          size: 18, color: Colors.blue[800]),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Text(site.name,
+                    child: Text(
+                        site.isBase ? '${site.name} (베이스)' : site.name,
                         style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
@@ -265,6 +337,9 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   child: Text('상세 정보가 아직 없습니다.',
                       style: TextStyle(fontSize: 12.5, color: Colors.grey)),
                 ),
+              const SizedBox(height: 10),
+              Text('※ 참고용 정보입니다. 수심·조류·입수 지점은 당일 브리핑으로 확인하세요.',
+                  style: TextStyle(fontSize: 10.5, color: Colors.grey[500])),
               const SizedBox(height: 6),
             ],
           ),
@@ -308,10 +383,12 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     _noteController.text = site?.note ?? '';
     final lat = site?.lat ?? presetLat ?? _ulleungCenter.latitude;
     final lng = site?.lng ?? presetLng ?? _ulleungCenter.longitude;
+    var isBase = site?.isBase ?? false;
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(site == null ? '포인트 추가' : '포인트 수정',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -361,6 +438,39 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 decoration: const InputDecoration(
                     labelText: '참고 (입수 방법·주의)', isDense: true),
               ),
+              const SizedBox(height: 10),
+              // 베이스 포인트 토글 (노란 마커 + 목록 상단 고정)
+              GestureDetector(
+                onTap: () => setDialogState(() => isBase = !isBase),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isBase ? Colors.amber[50] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                        color: isBase ? Colors.amber[500]! : Colors.grey[300]!),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.star_rounded,
+                          size: 16,
+                          color:
+                              isBase ? Colors.amber[700] : Colors.grey[400]),
+                      const SizedBox(width: 5),
+                      Text('베이스 포인트',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            color: isBase
+                                ? Colors.amber[900]
+                                : Colors.grey[500],
+                          )),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
@@ -397,6 +507,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 level: _levelController.text.trim(),
                 features: _featuresController.text.trim(),
                 note: _noteController.text.trim(),
+                isBase: isBase,
               );
               if (site == null) {
                 provider.addSite(newSite);
@@ -408,6 +519,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
             child: const Text('저장'),
           ),
         ],
+        ),
       ),
     );
   }

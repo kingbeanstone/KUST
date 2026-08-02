@@ -13,6 +13,7 @@ class DiveSite {
   final String level; // 난이도 (예: 초급/중급/상급)
   final String features; // 특징 (지형·생물 등)
   final String note; // 참고 (입수 방법, 주의사항)
+  final bool isBase; // 베이스 포인트 (마커·목록에서 특별 표시)
 
   DiveSite({
     required this.id,
@@ -23,6 +24,7 @@ class DiveSite {
     this.level = '',
     this.features = '',
     this.note = '',
+    this.isBase = false,
   });
 
   Map<String, dynamic> toMap() => {
@@ -33,6 +35,7 @@ class DiveSite {
         'level': level,
         'features': features,
         'note': note,
+        'isBase': isBase,
       };
 
   factory DiveSite.fromMap(String id, Map<String, dynamic> map) => DiveSite(
@@ -44,6 +47,7 @@ class DiveSite {
         level: (map['level'] ?? '').toString(),
         features: (map['features'] ?? '').toString(),
         note: (map['note'] ?? '').toString(),
+        isBase: map['isBase'] == true,
       );
 }
 
@@ -64,7 +68,12 @@ class DiveSiteProvider with ChangeNotifier {
     _sub = _db.collection('dive_sites').orderBy('name').snapshots().listen(
         (snapshot) {
       _sites =
-          snapshot.docs.map((d) => DiveSite.fromMap(d.id, d.data())).toList();
+          snapshot.docs.map((d) => DiveSite.fromMap(d.id, d.data())).toList()
+            // 베이스 포인트가 목록 맨 위로
+            ..sort((a, b) {
+              if (a.isBase != b.isBase) return a.isBase ? -1 : 1;
+              return a.name.compareTo(b.name);
+            });
       notifyListeners();
     }, onError: (e) {
       debugPrint('사이트 스트림 오류: $e — 재연결 예약');
