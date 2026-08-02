@@ -24,6 +24,8 @@ import 'providers/dive_site_provider.dart';
 
 
 // ✅ 모든 Screen Import
+import 'util/web_plugins_fix_stub.dart'
+    if (dart.library.js_interop) 'util/web_plugins_fix_web.dart';
 import 'screens/home_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/dive_site_screen.dart';
@@ -40,6 +42,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 💡 웹 플러그인 등록 복구 (지도 unregistered_view_type 대응)
+  ensureWebPluginsRegistered();
 
   // 💡 진단용 전역 오류 핸들러: 잡히지 않는 오류의 본문을 콘솔에 그대로 찍는다.
   //    (모바일에서 원인 불명 흰 화면을 추적하기 위함)
