@@ -30,36 +30,75 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
     super.dispose();
   }
 
-  void _showEditDialog(RecipeProvider provider, {Recipe? recipe}) {
+  void _showEditDialog(RecipeProvider provider,
+      {Recipe? recipe, String? presetCategory}) {
     _nameController.text = recipe?.name ?? '';
-    _categoryController.text = recipe?.category ?? '';
+    _categoryController.text = recipe?.category ?? presetCategory ?? '';
     _ingredientsController.text = recipe?.ingredients ?? '';
     _stepsController.text = recipe?.steps ?? '';
 
+    final existingCategories = provider.categories;
+
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(recipe == null ? '새 레시피' : '레시피 수정',
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextField(
                 controller: _nameController,
                 decoration: const InputDecoration(
                     labelText: '요리 이름 (예: 김치찌개)', isDense: true),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
+              Text('카테고리',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey[600])),
+              const SizedBox(height: 6),
+              // 💡 기존 카테고리는 딸깍으로 선택
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final cat in existingCategories)
+                    GestureDetector(
+                      onTap: () => setDialogState(
+                          () => _categoryController.text = cat),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 11, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: _categoryController.text == cat
+                              ? Colors.blue[800]
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(cat,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _categoryController.text == cat
+                                  ? Colors.white
+                                  : Colors.black54,
+                            )),
+                      ),
+                    ),
+                ],
+              ),
               TextField(
                 controller: _categoryController,
+                onChanged: (_) => setDialogState(() {}),
                 decoration: const InputDecoration(
-                  labelText: '카테고리',
-                  hintText: '밥 / 국·찌개 / 메인 / 간식…',
+                  hintText: '또는 새 카테고리 입력',
                   hintStyle: TextStyle(fontSize: 12),
                   isDense: true,
                 ),
+                style: const TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 10),
               TextField(
@@ -123,6 +162,7 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
             child: const Text('저장'),
           ),
         ],
+        ),
       ),
     );
   }
@@ -220,6 +260,25 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                                             fontSize: 12.5,
                                             fontWeight: FontWeight.w600),
                                       ),
+                                    ),
+                                  ),
+                                // 💡 열 마지막 [+]: 이 카테고리로 바로 추가
+                                if (isAdmin && cat != '미지정')
+                                  GestureDetector(
+                                    onTap: () => _showEditDialog(provider,
+                                        presetCategory: cat),
+                                    child: Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.only(top: 5),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 8),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                            color: Colors.blue[200]!),
+                                      ),
+                                      child: Icon(Icons.add,
+                                          size: 16, color: Colors.blue[600]),
                                     ),
                                   ),
                               ],

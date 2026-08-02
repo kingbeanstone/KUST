@@ -16,9 +16,15 @@ class DiveLogScreen extends StatefulWidget {
 
 class _DiveLogScreenState extends State<DiveLogScreen> {
   static const _prefsKey = 'my_dive_logs';
+  static const _baseKey = 'my_dive_log_base';
 
   List<DiveLog> _logs = [];
+
+  /// 앱 기록 전까지 쌓아둔 로그 수 (선배들의 기존 로그북 반영용)
+  int _baseCount = 0;
   bool _loaded = false;
+
+  final TextEditingController _baseController = TextEditingController();
 
   /// 로그 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _dateController = TextEditingController();
@@ -36,6 +42,7 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
 
   @override
   void dispose() {
+    _baseController.dispose();
     _dateController.dispose();
     _siteController.dispose();
     _depthController.dispose();
@@ -62,11 +69,61 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
       }
     }
     _sort(logs);
+    final base = prefs.getInt(_baseKey) ?? 0;
     if (!mounted) return;
     setState(() {
       _logs = logs;
+      _baseCount = base;
       _loaded = true;
     });
+  }
+
+  Future<void> _saveBase(int value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_baseKey, value);
+  }
+
+  /// 기존 로그 수 입력 다이얼로그
+  void _showBaseDialog() {
+    _baseController.text = _baseCount > 0 ? '$_baseCount' : '';
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('기존 로그 수',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('앱에 기록하기 전까지 로그북에 쌓아둔 횟수를 넣으면\n총 로그 수와 티어에 합산됩니다.',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600], height: 1.5)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _baseController,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                  labelText: '기존 로그 수 (예: 120)', isDense: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () {
+              final value = int.tryParse(_baseController.text.trim()) ?? 0;
+              setState(() => _baseCount = value < 0 ? 0 : value);
+              _saveBase(_baseCount);
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _sort(List<DiveLog> logs) {
@@ -166,7 +223,8 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     }
 
     final averages = _skillAverages();
-    final (tierName, tierColor, tierNext) = _tierOf(_logs.length);
+    final totalLogs = _baseCount + _logs.length;
+    final (tierName, tierColor, tierNext) = _tierOf(totalLogs);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -206,14 +264,33 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('총 ${_logs.length}회 로그',
+                      Text('총 $totalLogs회 로그',
                           style: const TextStyle(
                               fontSize: 14, fontWeight: FontWeight.bold)),
-                      if (tierNext != null)
-                        Text('다음 티어까지 $tierNext회',
-                            style: TextStyle(
-                                fontSize: 11, color: Colors.grey[500])),
+                      Text(
+                        _baseCount > 0
+                            ? '기존 $_baseCount + 앱 기록 ${_logs.length}'
+                                '${tierNext != null ? ' · 다음 티어까지 $tierNext회' : ''}'
+                            : (tierNext != null ? '다음 티어까지 $tierNext회' : ''),
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.grey[500]),
+                      ),
                     ],
+                  ),
+                ),
+                // 기존 로그 수 입력 (선배들의 누적 로그 반영)
+                GestureDetector(
+                  onTap: _showBaseDialog,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 9, vertical: 5),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Text('기존 로그',
+                        style: TextStyle(
+                            fontSize: 11, color: Colors.grey[600])),
                   ),
                 ),
               ],

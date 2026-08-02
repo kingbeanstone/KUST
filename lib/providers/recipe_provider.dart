@@ -42,20 +42,34 @@ class RecipeProvider with ChangeNotifier {
         .toList();
   }
 
-  /// 카테고리 → 레시피 목록 (미지정은 맨 뒤)
+  /// 카테고리 표시 순서 (여기 없는 카테고리는 가나다순으로 뒤에, 미지정은 맨 뒤)
+  static const List<String> kCategoryOrder = [
+    '밥·면', '메인', '국·사이드', '야식·안주', '과일·디저트',
+  ];
+
+  /// 카테고리 → 레시피 목록
   Map<String, List<Recipe>> get byCategory {
     final map = <String, List<Recipe>>{};
     for (final r in _recipes) {
       map.putIfAbsent(r.category.isEmpty ? '미지정' : r.category, () => []).add(r);
     }
+    int rank(String c) {
+      if (c == '미지정') return 9999;
+      final i = kCategoryOrder.indexOf(c);
+      return i >= 0 ? i : 999;
+    }
+
     final keys = map.keys.toList()
       ..sort((a, b) {
-        if (a == '미지정') return 1;
-        if (b == '미지정') return -1;
-        return a.compareTo(b);
+        final d = rank(a).compareTo(rank(b));
+        return d != 0 ? d : a.compareTo(b);
       });
     return {for (final k in keys) k: map[k]!};
   }
+
+  /// 등록된 카테고리 목록 (선택 칩용, 미지정 제외)
+  List<String> get categories =>
+      byCategory.keys.where((c) => c != '미지정').toList();
 
   Future<void> addRecipe(
       String name, String category, String ingredients, String steps) async {

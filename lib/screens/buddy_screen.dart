@@ -1077,12 +1077,13 @@ class _BuddyScreenState extends State<BuddyScreen> {
       (!round.name.contains('오후') && day.rounds.indexOf(round) == 0);
 
   /// 표 전체 상단의 회차 헤더 1줄: [    ][ 오전 ][ 오후 ]
+  /// (보팅은 조 라벨을 안 쓰므로 왼쪽 여백도 없앤다)
   Widget _buildRoundHeaderRow(BuddyDay day) {
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 6),
       child: Row(
         children: [
-          const SizedBox(width: _blockLabelWidth),
+          if (day.type != 'boating') const SizedBox(width: _blockLabelWidth),
           for (final round in day.rounds)
             Expanded(
               child: Container(
@@ -1137,6 +1138,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
     final teams = [for (final e in entries) e.value];
     final showLeaderRow = _isEditMode ||
         teams.any((t) => t.leader.isNotEmpty || t.leaderBuddy.isNotEmpty);
+
+    // 💡 보팅은 조(블록) 라벨을 표시하지 않는다
+    final showLabel = day.type != 'boating';
 
     int slotsOf(BuddyTeam t) {
       var n = t.members.length + (_isEditMode ? 1 : 0);
@@ -1202,7 +1206,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  blockLabel(),
+                  if (showLabel) blockLabel(),
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1222,7 +1226,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  blockLabel(),
+                  if (showLabel) blockLabel(),
                   for (final col in columns)
                     Expanded(
                       child: col.isEmpty
@@ -1241,7 +1245,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           for (final e in unassigned)
             Row(
               children: [
-                const SizedBox(width: _blockLabelWidth),
+                if (showLabel) const SizedBox(width: _blockLabelWidth),
                 Expanded(
                   child: Column(
                     children: [
