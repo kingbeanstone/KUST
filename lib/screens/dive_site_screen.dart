@@ -3,6 +3,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/dive_site_provider.dart';
+import '../util/maps_ready_stub.dart'
+    if (dart.library.js_interop) '../util/maps_ready_web.dart';
 
 /// 💡 다이브 사이트: 울릉도 포인트를 구글맵 마커로.
 /// 마커/목록 탭 = 상세, 관리자는 지도를 길게 눌러 포인트 추가.
@@ -15,6 +17,9 @@ class DiveSiteScreen extends StatefulWidget {
 
 class _DiveSiteScreenState extends State<DiveSiteScreen> {
   GoogleMapController? _mapController;
+
+  /// 💡 구글맵 JS가 준비된 뒤에만 지도 위젯을 만든다 (타이밍 크래시 방지)
+  late final Future<bool> _mapsReady = waitForGoogleMaps();
 
   // 울릉도 중심
   static const _ulleungCenter = LatLng(37.505, 130.868);
@@ -63,12 +68,29 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
       ),
       body: Column(
         children: [
-          // ── 지도
+          // ── 지도 (JS 라이브러리 준비 후에만 그린다)
           Expanded(
             flex: 11,
-            child: Stack(
-              children: [
-                GoogleMap(
+            child: FutureBuilder<bool>(
+              future: _mapsReady,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (snapshot.data != true) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        '지도를 불러오지 못했습니다.\n앱을 완전히 종료했다가 다시 실행해주세요.',
+                        textAlign: TextAlign.center,
+                        style:
+                            TextStyle(fontSize: 12.5, color: Colors.grey[500]),
+                      ),
+                    ),
+                  );
+                }
+                return GoogleMap(
                   initialCameraPosition: const CameraPosition(
                       target: _ulleungCenter, zoom: 11.3),
                   onMapCreated: (c) => _mapController = c,
@@ -89,8 +111,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         onTap: () => _showSiteSheet(site, isAdmin, provider),
                       ),
                   },
-                ),
-              ],
+                );
+              },
             ),
           ),
 
