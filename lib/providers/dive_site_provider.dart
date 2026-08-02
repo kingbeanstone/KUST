@@ -15,6 +15,9 @@ class DiveSite {
   final String note; // 참고 (입수 방법, 주의사항)
   final bool isBase; // 베이스 포인트 (마커·목록에서 특별 표시)
 
+  /// 세부 포인트 목록: {name, depth, level, desc}
+  final List<Map<String, String>> subPoints;
+
   DiveSite({
     required this.id,
     required this.name,
@@ -25,6 +28,7 @@ class DiveSite {
     this.features = '',
     this.note = '',
     this.isBase = false,
+    this.subPoints = const [],
   });
 
   Map<String, dynamic> toMap() => {
@@ -36,6 +40,7 @@ class DiveSite {
         'features': features,
         'note': note,
         'isBase': isBase,
+        'subPoints': subPoints,
       };
 
   factory DiveSite.fromMap(String id, Map<String, dynamic> map) => DiveSite(
@@ -48,6 +53,14 @@ class DiveSite {
         features: (map['features'] ?? '').toString(),
         note: (map['note'] ?? '').toString(),
         isBase: map['isBase'] == true,
+        subPoints: [
+          for (final sp in (map['subPoints'] as List? ?? const []))
+            if (sp is Map)
+              {
+                for (final e in sp.entries)
+                  e.key.toString(): (e.value ?? '').toString(),
+              },
+        ],
       );
 }
 

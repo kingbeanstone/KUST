@@ -94,6 +94,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   initialCameraPosition: const CameraPosition(
                       target: _ulleungCenter, zoom: 11.3),
                   onMapCreated: (c) => _mapController = c,
+                  // 💡 웹에서 마우스 드래그/휠이 지도에 바로 먹히게 한다
+                  webGestureHandling: WebGestureHandling.greedy,
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
                   myLocationButtonEnabled: false,
@@ -256,6 +258,23 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                                               color: Colors.blue[800])),
                                     ),
                                   ],
+                                  if (site.subPoints.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.teal[50],
+                                        borderRadius:
+                                            BorderRadius.circular(7),
+                                      ),
+                                      child: Text('세부 ${site.subPoints.length}',
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.teal[800])),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -278,12 +297,16 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) => SafeArea(
-        child: Padding(
+        child: Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.78),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,19 +354,100 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               if (site.depth.isEmpty &&
                   site.level.isEmpty &&
                   site.features.isEmpty &&
-                  site.note.isEmpty)
+                  site.note.isEmpty &&
+                  site.subPoints.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 8),
                   child: Text('상세 정보가 아직 없습니다.',
                       style: TextStyle(fontSize: 12.5, color: Colors.grey)),
                 ),
+              // 💡 세부 포인트: 난이도 색 뱃지가 붙은 카드 목록
+              if (site.subPoints.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('세부 포인트 ${site.subPoints.length}곳',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey[400])),
+                const SizedBox(height: 6),
+                for (final sp in site.subPoints) _subPointCard(sp),
+              ],
               const SizedBox(height: 10),
               Text('※ 참고용 정보입니다. 수심·조류·입수 지점은 당일 브리핑으로 확인하세요.',
                   style: TextStyle(fontSize: 10.5, color: Colors.grey[500])),
               const SizedBox(height: 6),
             ],
           ),
+          ),
         ),
+      ),
+    );
+  }
+
+  /// 난이도 문자열 → 색 (초급 초록 ~ 상급 빨강)
+  Color _levelColor(String level) {
+    if (level.contains('중상')) return const Color(0xFFE64A19);
+    if (level.contains('상급')) return const Color(0xFFC62828);
+    if (level.contains('중급')) return const Color(0xFFEF6C00);
+    if (level.contains('초') || level.contains('오픈')) {
+      return const Color(0xFF2E7D32);
+    }
+    return const Color(0xFF546E7A);
+  }
+
+  Widget _subPointCard(Map<String, String> sp) {
+    final level = (sp['level'] ?? '').trim();
+    final depth = (sp['depth'] ?? '').trim();
+    final desc = (sp['desc'] ?? '').trim();
+    final color = _levelColor(level);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA),
+        borderRadius: BorderRadius.circular(10),
+        border: Border(left: BorderSide(color: color, width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(sp['name'] ?? '',
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+              if (depth.isNotEmpty)
+                Text(depth,
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
+              if (level.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(26),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(level,
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: color)),
+                ),
+              ],
+            ],
+          ),
+          if (desc.isNotEmpty) ...[
+            const SizedBox(height: 3),
+            Text(desc,
+                style: TextStyle(
+                    fontSize: 11.5, color: Colors.grey[700], height: 1.4)),
+          ],
+        ],
       ),
     );
   }
