@@ -155,6 +155,7 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                   category: _categoryController.text.trim(),
                   ingredients: _ingredientsController.text,
                   steps: _stepsController.text,
+                  order: recipe.order, // 순서 유지
                 ));
               }
               Navigator.pop(dialogContext);
@@ -179,6 +180,14 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        actions: [
+          if (isAdmin)
+            TextButton.icon(
+              onPressed: () => _showCategoryOrderDialog(provider),
+              icon: const Icon(Icons.swap_vert, size: 16),
+              label: const Text('순서 변경', style: TextStyle(fontSize: 12.5)),
+            ),
+        ],
       ),
       body: provider.recipes.isEmpty
           ? Center(
@@ -302,6 +311,129 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                       color: Colors.white, fontWeight: FontWeight.bold)),
             )
           : null,
+    );
+  }
+
+  /// 💡 카테고리 순서 변경 (길게 눌러 드래그) + 각 카테고리의 메뉴 순서 진입
+  void _showCategoryOrderDialog(RecipeProvider provider) {
+    final cats =
+        provider.byCategory.keys.where((c) => c != '미지정').toList();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('카테고리 순서',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 360,
+            child: Column(
+              children: [
+                const Text('길게 눌러 끌면 순서가 바뀝니다. [메뉴]로 카테고리 안 순서도 변경.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey)),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ReorderableListView(
+                    onReorder: (oldIndex, newIndex) {
+                      setDialogState(() {
+                        if (newIndex > oldIndex) newIndex -= 1;
+                        final item = cats.removeAt(oldIndex);
+                        cats.insert(newIndex, item);
+                      });
+                    },
+                    children: [
+                      for (final cat in cats)
+                        ListTile(
+                          key: ValueKey(cat),
+                          dense: true,
+                          leading: const Icon(Icons.drag_handle, size: 20),
+                          title: Text(cat,
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w600)),
+                          trailing: TextButton(
+                            onPressed: () =>
+                                _showMenuOrderDialog(provider, cat),
+                            child: const Text('메뉴',
+                                style: TextStyle(fontSize: 12.5)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('취소')),
+            ElevatedButton(
+              onPressed: () {
+                provider.saveCategoryOrder(cats);
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 카테고리 안 메뉴 순서 변경 (길게 눌러 드래그)
+  void _showMenuOrderDialog(RecipeProvider provider, String category) {
+    final items = List<Recipe>.of(provider.byCategory[category] ?? []);
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('[$category] 메뉴 순서',
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 360,
+            child: ReorderableListView(
+              onReorder: (oldIndex, newIndex) {
+                setDialogState(() {
+                  if (newIndex > oldIndex) newIndex -= 1;
+                  final item = items.removeAt(oldIndex);
+                  items.insert(newIndex, item);
+                });
+              },
+              children: [
+                for (final recipe in items)
+                  ListTile(
+                    key: ValueKey(recipe.id),
+                    dense: true,
+                    leading: const Icon(Icons.drag_handle, size: 20),
+                    title: Text(recipe.name,
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('취소')),
+            ElevatedButton(
+              onPressed: () {
+                provider.saveRecipeOrder(items);
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

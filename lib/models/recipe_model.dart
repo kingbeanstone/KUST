@@ -5,6 +5,9 @@ class Recipe {
   final String category; // 메뉴 카테고리 (밥, 국/찌개, 메인, 간식…)
   final String ingredients; // 재료 (자유 텍스트, 줄바꿈 구분)
   final String steps; // 조리법 (자유 텍스트)
+  final int order; // 카테고리 안 표시 순서 (없으면 맨 뒤)
+
+  static const int kNoOrder = 1 << 40;
 
   Recipe({
     required this.id,
@@ -12,6 +15,7 @@ class Recipe {
     this.category = '',
     this.ingredients = '',
     this.steps = '',
+    this.order = kNoOrder,
   });
 
   Map<String, dynamic> toMap() => {
@@ -19,6 +23,7 @@ class Recipe {
         'category': category,
         'ingredients': ingredients,
         'steps': steps,
+        'order': order,
       };
 
   factory Recipe.fromMap(String id, Map<String, dynamic> map) => Recipe(
@@ -27,5 +32,6 @@ class Recipe {
         category: (map['category'] ?? '').toString().trim(),
         ingredients: map['ingredients'] ?? '',
         steps: map['steps'] ?? '',
+        order: (map['order'] as num?)?.toInt() ?? kNoOrder,
       );
 }
