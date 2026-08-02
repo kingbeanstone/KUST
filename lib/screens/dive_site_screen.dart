@@ -16,9 +16,6 @@ class DiveSiteScreen extends StatefulWidget {
 class _DiveSiteScreenState extends State<DiveSiteScreen> {
   GoogleMapController? _mapController;
 
-  /// 위성 뷰 토글 (hybrid = 위성 + 지명)
-  bool _satellite = true;
-
   // 울릉도 중심
   static const _ulleungCenter = LatLng(37.505, 130.868);
 
@@ -74,7 +71,6 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 GoogleMap(
                   initialCameraPosition: const CameraPosition(
                       target: _ulleungCenter, zoom: 11.3),
-                  mapType: _satellite ? MapType.hybrid : MapType.normal,
                   onMapCreated: (c) => _mapController = c,
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
@@ -93,42 +89,6 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         onTap: () => _showSiteSheet(site, isAdmin, provider),
                       ),
                   },
-                ),
-                // 일반/위성 토글
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: GestureDetector(
-                    onTap: () => setState(() => _satellite = !_satellite),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 11, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(9),
-                        boxShadow: [
-                          BoxShadow(
-                              color: Colors.black.withAlpha(40),
-                              blurRadius: 6),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                              _satellite
-                                  ? Icons.map_outlined
-                                  : Icons.satellite_alt_outlined,
-                              size: 14,
-                              color: Colors.blue[800]),
-                          const SizedBox(width: 4),
-                          Text(_satellite ? '일반' : '위성',
-                              style: const TextStyle(
-                                  fontSize: 12, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
