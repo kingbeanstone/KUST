@@ -65,6 +65,26 @@ class RecipeProvider with ChangeNotifier {
         .set({'categoryOrder': order}, SetOptions(merge: true));
   }
 
+  /// 카테고리 이름 변경: 소속 레시피 전체 + 순서 목록에 반영
+  Future<void> renameCategory(String from, String to) async {
+    final target = to.trim();
+    if (target.isEmpty || target == from) return;
+
+    final batch = _db.batch();
+    for (final r in _recipes) {
+      final cat = r.category.isEmpty ? '미지정' : r.category;
+      if (cat == from) {
+        batch.update(_db.collection('recipes').doc(r.id), {'category': target});
+      }
+    }
+    await batch.commit();
+
+    final newOrder = [
+      for (final c in _categoryOrder) c == from ? target : c,
+    ];
+    await saveCategoryOrder(newOrder);
+  }
+
   /// 카테고리 안 메뉴 순서 저장 (드래그 정렬 결과)
   Future<void> saveRecipeOrder(List<Recipe> ordered) async {
     final batch = _db.batch();

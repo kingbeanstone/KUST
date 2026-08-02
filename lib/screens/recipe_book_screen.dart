@@ -332,7 +332,7 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
             height: 360,
             child: Column(
               children: [
-                const Text('길게 눌러 끌면 순서가 바뀝니다. [메뉴]로 카테고리 안 순서도 변경.',
+                const Text('길게 눌러 끌기 = 순서 변경 · ✏️ = 이름 수정 · [메뉴] = 안쪽 순서',
                     style: TextStyle(fontSize: 11.5, color: Colors.grey)),
                 const SizedBox(height: 8),
                 Expanded(
@@ -349,15 +349,29 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                         ListTile(
                           key: ValueKey(cat),
                           dense: true,
+                          contentPadding:
+                              const EdgeInsets.only(left: 12, right: 0),
                           leading: const Icon(Icons.drag_handle, size: 20),
                           title: Text(cat,
                               style: const TextStyle(
                                   fontSize: 14, fontWeight: FontWeight.w600)),
-                          trailing: TextButton(
-                            onPressed: () =>
-                                _showMenuOrderDialog(provider, cat),
-                            child: const Text('메뉴',
-                                style: TextStyle(fontSize: 12.5)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined,
+                                    size: 17, color: Colors.blueGrey),
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => _showRenameCategoryDialog(
+                                    provider, cat, cats, setDialogState),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    _showMenuOrderDialog(provider, cat),
+                                child: const Text('메뉴',
+                                    style: TextStyle(fontSize: 12.5)),
+                              ),
+                            ],
                           ),
                         ),
                     ],
@@ -379,6 +393,46 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// 카테고리 이름 수정 — 소속 메뉴 전체에 반영된다
+  void _showRenameCategoryDialog(RecipeProvider provider, String cat,
+      List<String> cats, StateSetter setParentState) {
+    _categoryController.text = cat;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('카테고리 이름 수정',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: _categoryController,
+          autofocus: true,
+          decoration: const InputDecoration(isDense: true),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('취소')),
+          ElevatedButton(
+            onPressed: () {
+              final newName = _categoryController.text.trim();
+              if (newName.isEmpty || newName == cat) {
+                Navigator.pop(dialogContext);
+                return;
+              }
+              provider.renameCategory(cat, newName);
+              setParentState(() {
+                final i = cats.indexOf(cat);
+                if (i >= 0) cats[i] = newName;
+              });
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('저장'),
+          ),
+        ],
       ),
     );
   }
