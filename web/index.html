@@ -33,6 +33,20 @@
       background-color: #ffffff;
     }
   </style>
+
+  <!-- 💡 모바일에서 platform view(구글맵 호스트 요소) 높이가 0으로 잡히는
+       엔진 버그 우회: 호스트와 그 내용물의 크기를 강제한다 -->
+  <style>
+    flt-platform-view,
+    flt-platform-view-slot {
+      width: 100% !important;
+      height: 100% !important;
+    }
+    flt-platform-view > div {
+      width: 100% !important;
+      height: 100% !important;
+    }
+  </style>
 </head>
 <body>
 
