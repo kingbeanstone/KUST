@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -66,10 +67,13 @@ class _BuddyScreenState extends State<BuddyScreen> {
   /// 하단 픽커 확장 여부 (끌거나 탭해서 전환)
   bool _pickerExpanded = false;
 
-  // 사람 배치 선택 상태
-  int? _selBlockIdx;
-  int? _selTeamIdx; // block.teamIds 안에서의 위치
-  int? _selSlotIdx; // -1: 리더, 0~: 멤버 칸
+  // 사람 배치 선택 상태 (팀 ID 기준 — 조가 없어도 동작한다)
+  String? _selTeamId;
+  int? _selSlotIdx; // -1: 리더, -2: 리더 버디, 0~: 멤버 칸
+
+  /// 수정 시작 시점 스냅샷 — 수정 취소와 이탈 감지에 쓴다
+  String _editSnapshotJson = '';
+  String _editDayId = '';
 
   /// 이름 입력 다이얼로그 공용 컨트롤러 (State 소유 — dispose 크래시 방지)
   final TextEditingController _nameController = TextEditingController();
@@ -82,9 +86,32 @@ class _BuddyScreenState extends State<BuddyScreen> {
   }
 
   void _clearSelection() {
-    _selBlockIdx = null;
-    _selTeamIdx = null;
+    _selTeamId = null;
     _selSlotIdx = null;
+  }
+
+  void _takeSnapshot(BuddyDay day) {
+    _editSnapshotJson = jsonEncode(day.toMap());
+    _editDayId = day.id;
+  }
+
+  bool _hasChanges(BuddyDay day) =>
+      _isEditMode &&
+      _editDayId == day.id &&
+      _editSnapshotJson.isNotEmpty &&
+      jsonEncode(day.toMap()) != _editSnapshotJson;
+
+  /// 수정 취소: 수정 시작 시점 상태로 되돌리고 수정 모드를 끝낸다
+  void _cancelEdit(BuddyDay day, BuddyProvider provider) {
+    if (_editDayId == day.id && _editSnapshotJson.isNotEmpty) {
+      final restored = BuddyDay.fromMap(
+          day.id, Map<String, dynamic>.from(jsonDecode(_editSnapshotJson)));
+      provider.saveBuddyDay(restored);
+    }
+    setState(() {
+      _isEditMode = false;
+      _clearSelection();
+    });
   }
 
   @override
@@ -119,19 +146,75 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
     final buddyData = buddyProvider.getDayOrDefault(dayId, dayTitle);
 
-    return Scaffold(
+    // 수정 중에 일차 탭을 바꾸면 새 일차 기준으로 스냅샷을 다시 뜬다
+    if (_isEditMode && _editDayId != buddyData.id) _takeSnapshot(buddyData);
+
+    return PopScope(
+      // 💡 수정 모드에서 뒤로가기: 변경이 있으면 취소/완료 팝업을 띄운다
+      canPop: !_isEditMode,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (!_hasChanges(buddyData)) {
+          setState(() {
+            _isEditMode = false;
+            _clearSelection();
+          });
+          Navigator.of(context).pop();
+          return;
+        }
+        showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('수정 중인 내용이 있습니다'),
+            content: const Text('변경 사항을 저장하고 나갈까요?'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  _cancelEdit(buddyData, buddyProvider);
+                  Navigator.of(context).pop();
+                },
+                child: const Text('수정 취소', style: TextStyle(color: Colors.red)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  setState(() {
+                    _isEditMode = false;
+                    _clearSelection();
+                  });
+                  Navigator.of(context).pop();
+                },
+                child: const Text('수정 완료'),
+              ),
+            ],
+          ),
+        );
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('🤝 버디 시스템', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
+          if (auth.isAdmin && _isEditMode)
+            TextButton(
+              onPressed: () => _cancelEdit(buddyData, buddyProvider),
+              child: const Text('수정 취소',
+                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            ),
           if (auth.isAdmin)
             TextButton(
               onPressed: () {
                 setState(() {
-                  _isEditMode = !_isEditMode;
-                  if (!_isEditMode) _clearSelection();
+                  if (!_isEditMode) {
+                    _takeSnapshot(buddyData);
+                    _isEditMode = true;
+                  } else {
+                    _isEditMode = false;
+                    _clearSelection();
+                  }
                 });
               },
               child: Text(_isEditMode ? '수정 완료' : '수정하기',
@@ -195,7 +278,9 @@ class _BuddyScreenState extends State<BuddyScreen> {
                     _buildRoundsSection(buddyData, buddyProvider),
 
                   // ── 조별 표 (보기: 편성 결과 / 수정: 사람 배치)
-                  if (buddyData.blocks.isEmpty && !_isEditMode)
+                  if (buddyData.blocks.isEmpty &&
+                      buddyData.teams.isEmpty &&
+                      !_isEditMode)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 30),
                       child: Center(
@@ -203,11 +288,24 @@ class _BuddyScreenState extends State<BuddyScreen> {
                             style: TextStyle(color: Colors.grey, fontSize: 13)),
                       ),
                     ),
-                  if (_useColumnLayout(buddyData) && buddyData.blocks.isNotEmpty)
+                  if (_useColumnLayout(buddyData) &&
+                      (buddyData.blocks.isNotEmpty ||
+                          buddyData.teams.isNotEmpty))
                     _buildRoundHeaderRow(buddyData),
+                  // 💡 조는 선택 사항 — 조 없이 팀만 있어도 표가 나온다
+                  if (_useColumnLayout(buddyData) &&
+                      buddyData.blocks.isEmpty &&
+                      buddyData.teams.isNotEmpty)
+                    _buildBlockRow(
+                        BuddyBlock(
+                            name: '',
+                            teamIds: [for (final t in buddyData.teams) t.id]),
+                        buddyData,
+                        buddyProvider),
                   for (var b = 0; b < buddyData.blocks.length; b++)
                     _useColumnLayout(buddyData)
-                        ? _buildBlockRow(b, buddyData, buddyProvider)
+                        ? _buildBlockRow(
+                            buddyData.blocks[b], buddyData, buddyProvider)
                         : _buildBlockTable(b, buddyData, buddyProvider),
 
                   const SizedBox(height: 40),
@@ -217,6 +315,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
           ),
           if (_isEditMode) _buildMemberPicker(memberProvider, buddyData, buddyProvider),
         ],
+      ),
       ),
     );
   }
@@ -451,26 +550,36 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   },
                 ),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  // 💡 터치 영역 확대: 이름(=이름 변경)과 X(=삭제)를 큼직하게 분리
+                  padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
                   decoration: BoxDecoration(
                     color: assigned ? Colors.grey[100] : Colors.amber[50],
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(14),
                     border: Border.all(
                         color: assigned ? Colors.grey[300]! : Colors.amber[300]!),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(team.name,
-                          style: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.bold)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 7),
+                        child: Text(team.name,
+                            style: const TextStyle(
+                                fontSize: 13.5, fontWeight: FontWeight.bold)),
+                      ),
                       if (!assigned)
                         const Text(' 미배정',
-                            style: TextStyle(fontSize: 9.5, color: Colors.orange)),
-                      const SizedBox(width: 5),
+                            style: TextStyle(fontSize: 10, color: Colors.orange)),
+                      const SizedBox(width: 4),
+                      Container(width: 1, height: 20, color: Colors.grey[300]),
                       GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () => _deleteTeamDialog(team, day, provider),
-                        child: const Icon(Icons.close, size: 13, color: Colors.redAccent),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          child:
+                              Icon(Icons.close, size: 17, color: Colors.redAccent),
+                        ),
                       ),
                     ],
                   ),
@@ -527,7 +636,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _stepHeader('2️⃣ 조 구성',
+        _stepHeader('2️⃣ 조 구성 (선택)',
             trailing: TextButton.icon(
               onPressed: () => _showNameDialog(
                 title: '조 추가',
@@ -541,7 +650,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
               label: const Text('조 추가', style: TextStyle(fontSize: 12)),
             )),
         if (day.blocks.isEmpty)
-          const Text('조를 추가하고 팀을 배정하세요.',
+          const Text('팀을 YB/교육팀처럼 묶고 싶을 때만 조를 만드세요. 없어도 됩니다.',
               style: TextStyle(fontSize: 12, color: Colors.grey))
         else
           for (var b = 0; b < day.blocks.length; b++)
@@ -627,10 +736,11 @@ class _BuddyScreenState extends State<BuddyScreen> {
                     ),
                   ),
                   GestureDetector(
+                    behavior: HitTestBehavior.opaque,
                     onTap: () => _deleteBlockDialog(b, day, provider),
                     child: const Padding(
-                      padding: EdgeInsets.only(left: 6, top: 4),
-                      child: Icon(Icons.close, size: 16, color: Colors.redAccent),
+                      padding: EdgeInsets.all(9),
+                      child: Icon(Icons.close, size: 18, color: Colors.redAccent),
                     ),
                   ),
                 ],
@@ -879,13 +989,14 @@ class _BuddyScreenState extends State<BuddyScreen> {
           ),
           if (_isEditMode)
             GestureDetector(
+              behavior: HitTestBehavior.opaque,
               onTap: () {
                 day.rounds.removeAt(roundIdx);
                 provider.saveBuddyDay(day);
               },
               child: const Padding(
-                padding: EdgeInsets.only(left: 6, top: 4),
-                child: Icon(Icons.close, size: 16, color: Colors.redAccent),
+                padding: EdgeInsets.all(9),
+                child: Icon(Icons.close, size: 18, color: Colors.redAccent),
               ),
             ),
         ],
@@ -998,17 +1109,16 @@ class _BuddyScreenState extends State<BuddyScreen> {
   }
 
   /// 리더 행: 리더 버디 모드면 [리더|버디] 두 칸, 아니면 한 칸
-  Widget _leaderRowCell(int blockIdx, int teamIdx, BuddyTeam team) {
+  Widget _leaderRowCell(BuddyTeam team) {
     if (!team.leaderBuddyOn) {
-      return _buildCell(blockIdx, teamIdx, -1, team.leader, isLeader: true);
+      return _buildCell(team.id, -1, team.leader, isLeader: true);
     }
     return Row(
       children: [
-        Expanded(child: _buildCell(blockIdx, teamIdx, -1, team.leader, isLeader: true)),
+        Expanded(child: _buildCell(team.id, -1, team.leader, isLeader: true)),
         Container(width: 1, height: 35, color: Colors.black),
         Expanded(
-            child:
-                _buildCell(blockIdx, teamIdx, -2, team.leaderBuddy, isLeader: true)),
+            child: _buildCell(team.id, -2, team.leaderBuddy, isLeader: true)),
       ],
     );
   }
@@ -1076,14 +1186,17 @@ class _BuddyScreenState extends State<BuddyScreen> {
       round.name.contains('오전') ||
       (!round.name.contains('오후') && day.rounds.indexOf(round) == 0);
 
+  /// 조 라벨 열을 그릴지: 보팅이거나 이름 있는 조가 없으면 생략
+  bool _showBlockLabels(BuddyDay day) =>
+      day.type != 'boating' && day.blocks.any((b) => b.name.isNotEmpty);
+
   /// 표 전체 상단의 회차 헤더 1줄: [    ][ 오전 ][ 오후 ]
-  /// (보팅은 조 라벨을 안 쓰므로 왼쪽 여백도 없앤다)
   Widget _buildRoundHeaderRow(BuddyDay day) {
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 6),
       child: Row(
         children: [
-          if (day.type != 'boating') const SizedBox(width: _blockLabelWidth),
+          if (_showBlockLabels(day)) const SizedBox(width: _blockLabelWidth),
           for (final round in day.rounds)
             Expanded(
               child: Container(
@@ -1109,10 +1222,8 @@ class _BuddyScreenState extends State<BuddyScreen> {
   }
 
   /// 💡 조 한 줄: 왼쪽 조 라벨 + 회차별 열(팀 표). 팀은 자기 회차 열에 들어간다.
-  Widget _buildBlockRow(int blockIdx, BuddyDay day, BuddyProvider provider) {
-    final block = day.blocks[blockIdx];
-
-    // (block.teamIds 안의 실제 위치, 팀) — 선택/배치는 실제 위치 기준
+  /// (조 없이 쓰는 날은 전체 팀을 담은 임시 블록으로 호출된다)
+  Widget _buildBlockRow(BuddyBlock block, BuddyDay day, BuddyProvider provider) {
     final entries = <MapEntry<int, BuddyTeam>>[
       for (var i = 0; i < block.teamIds.length; i++)
         if (day.teamById(block.teamIds[i]) != null)
@@ -1139,8 +1250,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
     final showLeaderRow = _isEditMode ||
         teams.any((t) => t.leader.isNotEmpty || t.leaderBuddy.isNotEmpty);
 
-    // 💡 보팅은 조(블록) 라벨을 표시하지 않는다
-    final showLabel = day.type != 'boating';
+    final showLabel = _showBlockLabels(day);
 
     int slotsOf(BuddyTeam t) {
       var n = t.members.length + (_isEditMode ? 1 : 0);
@@ -1153,7 +1263,6 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
     Widget teamBox(MapEntry<int, BuddyTeam> e) {
       final team = e.value;
-      final teamIdx = e.key;
       return Table(
         border: TableBorder.all(color: Colors.black, width: 1),
         children: [
@@ -1162,19 +1271,19 @@ class _BuddyScreenState extends State<BuddyScreen> {
           ]),
           if (showLeaderRow)
             TableRow(children: [
-              _leaderRowCell(blockIdx, teamIdx, team),
+              _leaderRowCell(team),
             ]),
           for (var r = 0; r < rowCount; r++)
             TableRow(children: [
               Row(
                 children: [
                   Expanded(
-                      child: _buildCell(
-                          blockIdx, teamIdx, r * 2, _memberAt(team, r * 2))),
+                      child:
+                          _buildCell(team.id, r * 2, _memberAt(team, r * 2))),
                   Container(width: 1, height: 35, color: Colors.black),
                   Expanded(
                       child: _buildCell(
-                          blockIdx, teamIdx, r * 2 + 1, _memberAt(team, r * 2 + 1))),
+                          team.id, r * 2 + 1, _memberAt(team, r * 2 + 1))),
                 ],
               ),
             ]),
@@ -1386,7 +1495,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
                   TableRow(
                     children: [
                       for (var t = 0; t < teams.length; t++)
-                        _leaderRowCell(blockIdx, entries[t].key, teams[t]),
+                        _leaderRowCell(teams[t]),
                     ],
                   ),
                 for (var r = 0; r < rowCount; r++)
@@ -1397,12 +1506,12 @@ class _BuddyScreenState extends State<BuddyScreen> {
                           child: Row(
                             children: [
                               Expanded(
-                                  child: _buildCell(blockIdx, entries[t].key, r * 2,
+                                  child: _buildCell(teams[t].id, r * 2,
                                       _memberAt(teams[t], r * 2))),
                               Container(width: 1, height: 35, color: Colors.black),
                               Expanded(
-                                  child: _buildCell(blockIdx, entries[t].key,
-                                      r * 2 + 1, _memberAt(teams[t], r * 2 + 1))),
+                                  child: _buildCell(teams[t].id, r * 2 + 1,
+                                      _memberAt(teams[t], r * 2 + 1))),
                             ],
                           ),
                         ),
@@ -1418,12 +1527,10 @@ class _BuddyScreenState extends State<BuddyScreen> {
   String _memberAt(BuddyTeam team, int index) =>
       index < team.members.length ? team.members[index] : '';
 
-  Widget _buildCell(int blockIdx, int teamIdx, int slotIdx, String value,
+  Widget _buildCell(String teamId, int slotIdx, String value,
       {bool isLeader = false}) {
-    bool isSelected = _isEditMode &&
-        _selBlockIdx == blockIdx &&
-        _selTeamIdx == teamIdx &&
-        _selSlotIdx == slotIdx;
+    bool isSelected =
+        _isEditMode && _selTeamId == teamId && _selSlotIdx == slotIdx;
 
     // 리더 버디(-2)는 일반 대원처럼 — 리더 색·굵은 글씨 없이 표시한다
     final isPlainBuddy = slotIdx == -2;
@@ -1435,8 +1542,7 @@ class _BuddyScreenState extends State<BuddyScreen> {
       onTap: _isEditMode
           ? () {
               setState(() {
-                _selBlockIdx = blockIdx;
-                _selTeamIdx = teamIdx;
+                _selTeamId = teamId;
                 _selSlotIdx = slotIdx;
               });
             }
@@ -1652,15 +1758,12 @@ class _BuddyScreenState extends State<BuddyScreen> {
   // ---------------------------------------------------------------- 배치
 
   void _assignMember(String name, BuddyDay day, BuddyProvider provider) {
-    if (_selBlockIdx == null || _selTeamIdx == null || _selSlotIdx == null) {
+    if (_selTeamId == null || _selSlotIdx == null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('수정할 칸을 먼저 선택해주세요.')));
       return;
     }
-    if (_selBlockIdx! >= day.blocks.length) return;
-    final block = day.blocks[_selBlockIdx!];
-    if (_selTeamIdx! >= block.teamIds.length) return;
-    final team = day.teamById(block.teamIds[_selTeamIdx!]);
+    final team = day.teamById(_selTeamId!);
     if (team == null) return;
 
     if (_selSlotIdx == -1) {
@@ -1712,19 +1815,14 @@ class _BuddyScreenState extends State<BuddyScreen> {
     var selectedTeamNames = <String>{};
     var conflictScope = <String>{};
 
-    if (_selBlockIdx != null && _selBlockIdx! < dayData.blocks.length) {
-      final block = dayData.blocks[_selBlockIdx!];
-      if (_selTeamIdx != null && _selTeamIdx! < block.teamIds.length) {
-        final selTeam = dayData.teamById(block.teamIds[_selTeamIdx!]);
-        if (selTeam != null) {
-          selectedTeamNames = _namesOf(selTeam);
-          conflictScope = {...selectedTeamNames};
-          for (final round in dayData.rounds) {
-            if (!round.teamIds.contains(selTeam.id)) continue;
-            for (final t in dayData.teams) {
-              if (round.teamIds.contains(t.id)) conflictScope.addAll(_namesOf(t));
-            }
-          }
+    final selTeam = _selTeamId == null ? null : dayData.teamById(_selTeamId!);
+    if (selTeam != null) {
+      selectedTeamNames = _namesOf(selTeam);
+      conflictScope = {...selectedTeamNames};
+      for (final round in dayData.rounds) {
+        if (!round.teamIds.contains(selTeam.id)) continue;
+        for (final t in dayData.teams) {
+          if (round.teamIds.contains(t.id)) conflictScope.addAll(_namesOf(t));
         }
       }
     }
@@ -1904,12 +2002,13 @@ class _BuddyScreenState extends State<BuddyScreen> {
 
     // 선택 중인 팀 이름 안내
     String? selectionLabel;
-    if (_selBlockIdx != null && _selBlockIdx! < dayData.blocks.length) {
-      final block = dayData.blocks[_selBlockIdx!];
-      if (_selTeamIdx != null && _selTeamIdx! < block.teamIds.length) {
-        final team = dayData.teamById(block.teamIds[_selTeamIdx!]);
-        selectionLabel = '${block.name} ${team?.name ?? ''} 수정 중';
+    if (selTeam != null) {
+      var blockName = '';
+      for (final b in dayData.blocks) {
+        if (b.teamIds.contains(selTeam.id)) blockName = b.name;
       }
+      selectionLabel =
+          '${blockName.isEmpty ? '' : '$blockName '}${selTeam.name} 수정 중';
     }
 
     // 💡 살짝 끌면 화면 절반 이상으로 확장, 다시 내리면 원래 높이로
