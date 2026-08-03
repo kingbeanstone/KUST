@@ -37,7 +37,71 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
       'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEZFNDkwQkUwRTQwRjgwQkRGMzQgAUICCABKCAiN_bqqBxAB?hl=ko&fdl=1';
 
   void _openEarth() {
-    launchUrlString(_earthUrl, mode: LaunchMode.externalApplication);
+    // PC(넓은 화면)는 바로 열림 — 안내가 필요 없다
+    if (MediaQuery.of(context).size.width > 700) {
+      launchUrlString(_earthUrl, mode: LaunchMode.externalApplication);
+      return;
+    }
+
+    // 📱 폰: 어스가 모바일 브라우저를 앱 설치 페이지로 보내므로
+    //    "그 화면에서 데스크톱 모드 켜기" 1회 설정을 안내한다.
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('🌍 구글 어스 — 처음 한 번만 설정!',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  '1. 아래 버튼을 누르면 "앱 다운로드" 화면이 떠요\n'
+                  '    → 정상입니다! 당황 금지 🙅\n'
+                  '2. 그 화면에서 브라우저 메뉴(⋮) 열기\n'
+                  '3. "데스크톱 사이트" 체크 ✓\n'
+                  '4. 자동 새로고침되며 어스가 열립니다\n\n'
+                  '한 번 해두면 다음부터는 버튼만 눌러도 바로 열려요.',
+                  style: TextStyle(fontSize: 13, height: 1.65),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(sheetContext);
+                    launchUrlString(_earthUrl,
+                        mode: LaunchMode.externalApplication);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[800],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  icon: const Icon(Icons.public, size: 18),
+                  label: const Text('구글 어스 열기',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
