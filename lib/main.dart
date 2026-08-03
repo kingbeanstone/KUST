@@ -80,6 +80,8 @@ void main() async {
     }
     isFirebaseInitialized = true;
     debugPrint("파이어베이스 초기화 성공");
+    // 💡 이용 통계 '이 기기 집계 제외' 설정 로드 (실패해도 무시)
+    await UsageStats.init();
 
     _setupNotifications();
   } catch (e) {

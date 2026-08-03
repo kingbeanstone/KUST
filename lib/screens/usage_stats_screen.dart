@@ -1,13 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import '../util/usage_stats.dart';
 
 /// 💡 기능별 이용 통계: 누적 접속 횟수를 막대 차트로 보여준다.
-class UsageStatsScreen extends StatelessWidget {
+class UsageStatsScreen extends StatefulWidget {
   const UsageStatsScreen({super.key});
 
   @override
+  State<UsageStatsScreen> createState() => _UsageStatsScreenState();
+}
+
+class _UsageStatsScreenState extends State<UsageStatsScreen> {
+  @override
   Widget build(BuildContext context) {
+    final isAdmin = context.watch<AuthProvider>().isAdmin;
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -125,6 +133,31 @@ class UsageStatsScreen extends StatelessWidget {
                 child: Text('모든 대원의 접속이 실시간으로 누적됩니다.',
                     style: TextStyle(fontSize: 11, color: Colors.grey[500])),
               ),
+              // 💡 관리자 전용: 개발/운영 기기의 접속으로 통계가 오염되지 않도록
+              //    이 기기에서의 접속을 집계에서 제외하는 스위치 (기기별 저장)
+              if (isAdmin) ...[
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SwitchListTile(
+                    value: UsageStats.optOut,
+                    onChanged: (v) async {
+                      await UsageStats.setOptOut(v);
+                      if (mounted) setState(() {});
+                    },
+                    title: const Text('이 기기 접속은 집계에서 제외',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text('관리자/개발 기기의 접속이 통계에 섞이지 않게 합니다.',
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.grey[500])),
+                    activeThumbColor: Colors.blue[600],
+                  ),
+                ),
+              ],
             ],
           );
         },

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 💡 기능별 이용(접속) 횟수 누적 집계.
 /// club_config/usage_stats 문서 하나에 {기능키: 횟수}로 쌓는다.
@@ -25,7 +26,26 @@ class UsageStats {
     'earth': '구글 어스 보기',
   };
 
+  /// 💡 이 기기 접속 제외 여부 (개발자/관리자 기기의 통계 오염 방지)
+  static bool _optOut = false;
+  static bool get optOut => _optOut;
+
+  /// 앱 시작 시 한 번 호출 — 제외 설정을 불러온다
+  static Future<void> init() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _optOut = prefs.getBool('usage_stats_opt_out') ?? false;
+    } catch (_) {}
+  }
+
+  static Future<void> setOptOut(bool value) async {
+    _optOut = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('usage_stats_opt_out', value);
+  }
+
   static void log(String key) {
+    if (_optOut) return; // 이 기기는 집계 제외
     doc
         .set({key: FieldValue.increment(1)}, SetOptions(merge: true))
         .catchError((_) {});
