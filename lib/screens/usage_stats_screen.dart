@@ -24,19 +24,11 @@ class UsageStatsScreen extends StatelessWidget {
           }
 
           final raw = snapshot.data!.data() ?? {};
-          // 💡 labels에 정의된 집계 대상만 표시 (과거에 쌓인 잡키는 무시)
+          // 💡 집계 대상 8개는 카운트가 0이어도 항상 전부 표시한다
           final entries = <MapEntry<String, int>>[
-            for (final e in raw.entries)
-              if (e.value is num && UsageStats.labels.containsKey(e.key))
-                MapEntry(UsageStats.labels[e.key]!, (e.value as num).toInt()),
+            for (final e in UsageStats.labels.entries)
+              MapEntry(e.value, (raw[e.key] as num?)?.toInt() ?? 0),
           ]..sort((a, b) => b.value.compareTo(a.value));
-
-          if (entries.isEmpty) {
-            return const Center(
-              child: Text('아직 집계된 데이터가 없습니다.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey)),
-            );
-          }
 
           final maxCount =
               entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
