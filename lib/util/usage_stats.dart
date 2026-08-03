@@ -8,22 +8,17 @@ class UsageStats {
   static final DocumentReference<Map<String, dynamic>> doc =
       FirebaseFirestore.instance.collection('club_config').doc('usage_stats');
 
-  /// 기능 키 → 표시 이름 (통계 화면용)
+  /// 기능 키 → 표시 이름 (통계 화면용).
+  /// 💡 여기 있는 키만 집계·표시한다 — 항목 조정 시 이 맵만 고치면 된다.
   static const Map<String, String> labels = {
-    'tab_home': '홈 탭',
-    'tab_schedule': '일정 탭',
-    'tab_site': '사이트 탭',
-    'tab_meal': '식단 탭',
-    'tab_more': '더보기 탭',
     'equipment_check': '장비 체크',
-    'buddy': '버디',
+    'buddy': '버디표',
     'personal_checklist': '개인 체크리스트',
-    'guide': '신입생 가이드',
+    'guide': '신입 가이드',
     'growth': '성장 그래프',
-    'member_list': '동아리원 명단',
-    'participants': '참가자 관리',
-    'inventory': '장비 인벤토리',
-    'earth': '구글 어스 보기',
+    'tab_site': '사이트 탭',
+    'tab_meal': '식단',
+    'tab_more': '더보기',
   };
 
   /// 💡 이 기기 접속 제외 여부 (개발자/관리자 기기의 통계 오염 방지)
@@ -46,6 +41,7 @@ class UsageStats {
 
   static void log(String key) {
     if (_optOut) return; // 이 기기는 집계 제외
+    if (!labels.containsKey(key)) return; // 집계 대상 아님
     doc
         .set({key: FieldValue.increment(1)}, SetOptions(merge: true))
         .catchError((_) {});

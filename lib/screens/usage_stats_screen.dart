@@ -24,11 +24,11 @@ class UsageStatsScreen extends StatelessWidget {
           }
 
           final raw = snapshot.data!.data() ?? {};
+          // 💡 labels에 정의된 집계 대상만 표시 (과거에 쌓인 잡키는 무시)
           final entries = <MapEntry<String, int>>[
             for (final e in raw.entries)
-              if (e.value is num)
-                MapEntry(UsageStats.labels[e.key] ?? e.key,
-                    (e.value as num).toInt()),
+              if (e.value is num && UsageStats.labels.containsKey(e.key))
+                MapEntry(UsageStats.labels[e.key]!, (e.value as num).toInt()),
           ]..sort((a, b) => b.value.compareTo(a.value));
 
           if (entries.isEmpty) {

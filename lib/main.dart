@@ -315,12 +315,11 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
-          // 💡 기능별 이용 집계 (탭 접속)
-          const tabKeys = [
-            'tab_home', 'tab_schedule', 'tab_site', 'tab_meal', 'tab_more'
-          ];
-          if (index != _selectedIndex && index < tabKeys.length) {
-            UsageStats.log(tabKeys[index]);
+          // 💡 기능별 이용 집계 (사이트·식단·더보기 탭만 대상)
+          const tabKeys = {2: 'tab_site', 3: 'tab_meal', 4: 'tab_more'};
+          final key = tabKeys[index];
+          if (index != _selectedIndex && key != null) {
+            UsageStats.log(key);
           }
           setState(() => _selectedIndex = index);
         },

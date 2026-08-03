@@ -481,7 +481,6 @@ class HomeScreen extends StatelessWidget {
             title: '동아리원 명단',
             subtitle: 'OB/YB 명단 및 정보 관리',
             isAdmin: isAdmin,
-            statKey: 'member_list',
             target: const MemberManagementScreen(),
           ),
 
@@ -491,7 +490,6 @@ class HomeScreen extends StatelessWidget {
             title: '원정 참가자 관리',
             subtitle: '이번 원정에 갈 대원 선택',
             isAdmin: isAdmin,
-            statKey: 'participants',
             target: const ParticipantScreen(),
           ),
 
@@ -501,7 +499,6 @@ class HomeScreen extends StatelessWidget {
             title: '장비 인벤토리',
             subtitle: 'BCD·호흡기 번호 및 공용 장비 수량',
             isAdmin: true, // 💡 열람은 누구나 (수정은 화면 안에서 관리자만)
-            statKey: 'inventory',
             target: const SearchScreen(),
           ),
 

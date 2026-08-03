@@ -8,7 +8,6 @@ import '../providers/equipment_provider.dart';
 import '../providers/dive_site_provider.dart';
 import '../util/maps_ready_stub.dart'
     if (dart.library.js_interop) '../util/maps_ready_web.dart';
-import '../util/usage_stats.dart';
 
 /// 💡 다이브 사이트: 울릉도 포인트를 구글맵 마커로.
 /// 마커/목록 탭 = 상세, 관리자는 지도를 길게 눌러 포인트 추가.
@@ -39,7 +38,6 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
       'https://earth.google.com/web/data=MicKJQojCiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8?hl=ko&fdl=1';
 
   void _openEarth() {
-    UsageStats.log('earth');
     // PC(넓은 화면)는 바로 열림 — 안내가 필요 없다
     if (MediaQuery.of(context).size.width > 700) {
       launchUrlString(_earthUrl, mode: LaunchMode.externalApplication);
