@@ -141,8 +141,12 @@ void main() async {
               buddy!..setExpedition(expedition.selectedId),
         ),
 
-        // 7-1. 레시피북 (동아리 공용)
-        ChangeNotifierProvider(create: (_) => RecipeProvider()),
+        // 7-1. 식단·레시피 (원정별)
+        ChangeNotifierProxyProvider<ExpeditionProvider, RecipeProvider>(
+          create: (_) => RecipeProvider(),
+          update: (_, expedition, recipe) =>
+              recipe!..setExpedition(expedition.selectedId),
+        ),
 
         // 7-3. 신입생 가이드 (동아리 공용)
         ChangeNotifierProvider(create: (_) => GuideProvider()),

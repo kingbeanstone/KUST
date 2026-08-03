@@ -1,0 +1,835 @@
+﻿{
+    "documents":  [
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/2tUqwvUNafhj5JHEAtZg",
+                          "fields":  {
+                                         "ingredients":  {
+                                                             "stringValue":  "김치, 부침가루, 물, 식용유"
+                                                         },
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "2일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 김치 잘게 썰어 부침가루·물과 반죽\n2. 기름 넉넉히 두르고 바삭하게 부치기"
+                                                   },
+                                         "name":  {
+                                                      "stringValue":  "김치전"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-01T13:51:54.903849Z",
+                          "updateTime":  "2026-08-03T05:57:11.019975Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/3lmQM50PV44eV2rGKAfy",
+                          "fields":  {
+                                         "category":  {
+                                                          "stringValue":  "3일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "name":  {
+                                                      "stringValue":  "라면"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "라면, 물"
+                                                         },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "lunch"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-03T05:57:11.136978Z",
+                          "updateTime":  "2026-08-03T07:05:08.627644Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/52G6noZajrTVuGDlXJz8",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "김치두루치기"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  "1. 고기 볶다가 김치·양파 넣고 볶기\n2. 양념과 물 약간 넣고 자작하게 끓이기"
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "보관함"
+                                                      },
+                                         "slot":  {
+                                                      "stringValue":  ""
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "102"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "돼지고기, 김치, 양파, 대파, 고춧가루, 간장, 설탕"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:54.233940Z",
+                          "updateTime":  "2026-08-03T05:57:13.722275Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/7duwNC01y6PzRNVyjak9",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "떡볶이"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "3일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 물에 떡 불려놓기\n2. 물에 떡볶이 분말 적당히 넣기\n3. 떡 넣고 저으며 끓이기\n4. 어묵 넣고 저으며 끓이기"
+                                                   },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "떡볶이떡, 어묵, 떡볶이 분말, 파"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:55.029413Z",
+                          "updateTime":  "2026-08-03T07:07:15.067937Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/7hQVRzLseeZipEpifD3W",
+                          "fields":  {
+                                         "order":  {
+                                                       "integerValue":  "999"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  ""
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "제철 과일"
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "과일"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "보관함"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "씻어서 썰기"
+                                                   }
+                                     },
+                          "createTime":  "2026-08-01T13:51:55.826907Z",
+                          "updateTime":  "2026-08-03T06:36:55.537348Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/9QUCVL3L4G1i3I8rEESE",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "튀김"
+                                                  },
+                                         "createdAt":  {
+                                                           "timestampValue":  "2026-08-03T07:02:59.517Z"
+                                                       },
+                                         "category":  {
+                                                          "stringValue":  "2일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 기름 170~180도 예열\n2. 노릇해질 때까지 튀기고 기름 빼기"
+                                                   },
+                                         "order":  {
+                                                       "integerValue":  "1785740578941"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "냉동튀김(새우·고구마 등), 식용유"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-03T07:02:59.551886Z",
+                          "updateTime":  "2026-08-03T07:02:59.551886Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/DNMGG9VE18AMqEtVGr9D",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "요리대회"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "5일차"
+                                                      },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  ""
+                                                         }
+                                     },
+                          "createTime":  "2026-08-03T05:57:12.627302Z",
+                          "updateTime":  "2026-08-03T05:57:12.627302Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/EXBBP4zcQfbhQ5uxAiJj",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "샐러드파스타"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "보관함"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 면 삶아 찬물에 헹궈 식히기\n2. 채소·토마토와 섞기\n3. 드레싱 버무리기"
+                                                   },
+                                         "order":  {
+                                                       "integerValue":  "100"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  ""
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "파스타면, 샐러드 채소, 방울토마토, 드레싱, 올리브유"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.557980Z",
+                          "updateTime":  "2026-08-03T05:57:13.832018Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/EXCHo40ey1554b7TyU94",
+                          "fields":  {
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "두부, 김치, 설탕"
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "두부김치"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  "1. 끓는 물에 두부 넣고 데치기\n2. 기름 두르고 김치 볶기 \n(필요하다면 설탕도 조금 추가)\n3. 두부와 김치 플레이팅"
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "5일차"
+                                                      }
+                                     },
+                          "createTime":  "2026-08-01T13:51:55.491398Z",
+                          "updateTime":  "2026-08-03T07:25:43.822611Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/F8FANabt6YU1QnlwAhvb",
+                          "fields":  {
+                                         "category":  {
+                                                          "stringValue":  "4일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 물 끓으면 콩나물·다진마늘 넣기\n2. 뚜껑 열고 끓이기(비린내 방지)\n3. 국간장·소금으로 간하고 파로 마무리\n국간장은 조금만 넣고 소금으로 간하기"
+                                                   },
+                                         "name":  {
+                                                      "stringValue":  "콩나물국"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "콩나물, 국간장, 다진마늘, 맛소금, 대파"
+                                                         },
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-01T13:51:54.340131Z",
+                          "updateTime":  "2026-08-03T07:14:47.100690Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/GEptZapDmbRRRNaShWjR",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "부대찌개"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "2일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 햄·소시지·김치, 베이크드 빈스 넣고 물 붓기\n2. 부대찌개 양념은 물에 500ml 당 140ml정도 넣기\n3. 끓으면 라면사리 넣고 4분"
+                                                   },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "부대찌개양념, 부대찌개햄, , 베이크드빈스, 김치, 다진마늘, 파"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.676142Z",
+                          "updateTime":  "2026-08-03T07:05:02.304228Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/GRxiHt3Ngw5YSvqAI9CQ",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "튀김"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "4일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 기름 170~180도 예열\n2. 노릇해질 때까지 튀기고 기름 빼기"
+                                                   },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "냉동튀김, 식용유"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-03T05:57:12.179837Z",
+                          "updateTime":  "2026-08-03T07:20:02.390767Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/Hc2ntDgZuWbJZ1oeFBY5",
+                          "fields":  {
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "어묵, 물,  우동사리 "
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "어묵탕"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "5일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 물 넣고 어묵탕 팩에 있는 육수스프 넣기\n2. 끓으면 어묵 넣고 중불에 약 5분 익히기 \n3. 먹다가 필요하다면 우동사리 넣어먹기"
+                                                   }
+                                     },
+                          "createTime":  "2026-08-01T13:51:54.444890Z",
+                          "updateTime":  "2026-08-03T07:33:38.070793Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/JsmTLrcIKPkTwivmxM76",
+                          "fields":  {
+                                         "ingredients":  {
+                                                             "stringValue":  "밥, 참치캔, 마요네즈, 김가루"
+                                                         },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "lunch"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "4일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 참치 기름 빼기\n2. 밥 위에 참치, 마요네즈, 김가루 올려서 비벼먹기"
+                                                   },
+                                         "name":  {
+                                                      "stringValue":  "참치마요밥"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.299316Z",
+                          "updateTime":  "2026-08-03T07:13:15.682880Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/OE57PLEFCFYBxxc4s0EK",
+                          "fields":  {
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  ""
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "남은 거"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "7일차"
+                                                      }
+                                     },
+                          "createTime":  "2026-08-03T05:57:13.601584Z",
+                          "updateTime":  "2026-08-03T05:57:13.601584Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/PFgFYXcUF7IeIEkyQF4m",
+                          "fields":  {
+                                         "order":  {
+                                                       "integerValue":  "999"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  ""
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  ""
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "후르츠칵테일"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "보관함"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   }
+                                     },
+                          "createTime":  "2026-08-02T00:32:24.058361Z",
+                          "updateTime":  "2026-08-03T06:36:55.537348Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/QPJ5b0X2GeP25hxSCxq9",
+                          "fields":  {
+                                         "ingredients":  {
+                                                             "stringValue":  "메추리알 장조림 반찬"
+                                                         },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "1785741573793"
+                                                   },
+                                         "steps":  {
+                                                       "stringValue":  "1. 뜯기\n2. 담아 먹기"
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "7일차"
+                                                      },
+                                         "createdAt":  {
+                                                           "timestampValue":  "2026-08-03T07:19:35.102Z"
+                                                       },
+                                         "name":  {
+                                                      "stringValue":  "메추리알 장조림"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-03T07:19:35.113109Z",
+                          "updateTime":  "2026-08-03T07:26:38.039158Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/QwP01JUN9d79hUun1sMK",
+                          "fields":  {
+                                         "category":  {
+                                                          "stringValue":  "6일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "name":  {
+                                                      "stringValue":  "바베큐"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "삼겹살, 소금, 쌈장, 마늘, 양파, 김치"
+                                                         },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-01T13:51:54.120370Z",
+                          "updateTime":  "2026-08-03T07:15:21.002249Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/ReAyDeZMV3Z0lVA8tbo8",
+                          "fields":  {
+                                         "order":  {
+                                                       "integerValue":  "1785742544955"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "냉동만두, 물"
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "만두"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "3일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 찜기에 물 넣고 만두 찌기"
+                                                   }
+                                     },
+                          "createTime":  "2026-08-01T13:51:55.371540Z",
+                          "updateTime":  "2026-08-03T07:35:45.029632Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/SLpBDbR8ZVf3hMWnIPdM",
+                          "fields":  {
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "후랑크소시지, 식용유"
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "후랑크소시지"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "3일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 칼집 내기\n2. 식용유 둘러 돌려가며 굽기"
+                                                   }
+                                     },
+                          "createTime":  "2026-08-01T13:51:54.691882Z",
+                          "updateTime":  "2026-08-03T07:05:37.679592Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/SYuZtqLkJmgdtwwcArN8",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "튀김"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "6일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 기름 170~180도 예열\n2. 노릇해질 때까지 튀기고 기름 빼기"
+                                                   },
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "냉동튀김(새우·고구마 등), 식용유"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-03T05:57:13.391276Z",
+                          "updateTime":  "2026-08-03T05:57:13.391276Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/XFv1OXBaGvZs0HVAlRLM",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "지코바"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  "1. 팬에 닭고기 앞뒤로 굽기\n2. 적당히 익으면 가위로 썰기\n3. 지코바 양념, 길게 썬 대파 넣고 볶기\n4. 필요하면 라면 사리 삶아 넣기"
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "4일차"
+                                                      },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "닭고기(정육), 대파, 지코바양념, 다진마늘"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.892973Z",
+                          "updateTime":  "2026-08-03T07:19:15.579213Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/ZNe3GOUNMNC5SH2kelz6",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "라면"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "5일차"
+                                                      },
+                                         "slot":  {
+                                                      "stringValue":  "lunch"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "라면, 물"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-03T05:57:12.516788Z",
+                          "updateTime":  "2026-08-03T07:13:35.029434Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/gesUHIXbXU9u8Gh1bDY6",
+                          "fields":  {
+                                         "ingredients":  {
+                                                             "stringValue":  "계란, 당근, 대파, 소금, 식용유"
+                                                         },
+                                         "order":  {
+                                                       "integerValue":  "103"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  ""
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "보관함"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 계란 풀고 잘게 썬 야채·소금 섞기\n2. 약불에 조금씩 부어가며 말기"
+                                                   },
+                                         "name":  {
+                                                      "stringValue":  "계란말이"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-01T13:51:54.578461Z",
+                          "updateTime":  "2026-08-03T05:57:13.949232Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/gpiePCuFIxnT247aF1gV",
+                          "fields":  {
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "옥수수캔, 마요네즈, 설탕, 모짜렐라치즈"
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "콘치즈"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  "1. 옥수수 물기 빼고 후라이팬에 넣기\n2. 마요네즈, 설탕 약간 넣고 볶기\n3. 치즈 올리고 뚜껑덮어서 녹을때까지 기다리기"
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "4일차"
+                                                      }
+                                     },
+                          "createTime":  "2026-08-01T13:51:55.252216Z",
+                          "updateTime":  "2026-08-03T07:34:36.101038Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/joa2g487krN5Nx8WKI6j",
+                          "fields":  {
+                                         "category":  {
+                                                          "stringValue":  "보관함"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 밥에 김가루·참기름·소금 섞기\n2. 속재료 넣고 한입 크기로 뭉치기"
+                                                   },
+                                         "name":  {
+                                                      "stringValue":  "주먹밥"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "밥, 김가루, 참기름, 소금, 속재료(참치마요 등)"
+                                                         },
+                                         "order":  {
+                                                       "integerValue":  "101"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  ""
+                                                  }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.438267Z",
+                          "updateTime":  "2026-08-03T05:57:14.072563Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/kzcswhHy2JVEeVeHaKFY",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "카레"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  "1. 채소 사각 썰기  \n2. 팬에 기름 두르고 양파 익히기\n3. 양파가 갈색이 되면 고기 넣고 겉면익히기 \n4. 나머지 채소 다 넣고 물 적당히 붓고 뚜껑덮고 강불에 끓이기\n5. 카레가루 넣고 풀어주기\n6. 저으면서 끓이기"
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "3일차"
+                                                      },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "카레가루, 감자1봉, 당근 1봉, 양파 4개, 돼지고기, 식용유"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.792053Z",
+                          "updateTime":  "2026-08-03T07:12:36.339777Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/mqtsIM64Vha2m5CwtRVK",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "수박"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "3일차"
+                                                      },
+                                         "slot":  {
+                                                      "stringValue":  "lunch"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "수박"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:55.715612Z",
+                          "updateTime":  "2026-08-03T07:05:14.741415Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/rnEjRQUAwgtFuzhvnz3L",
+                          "fields":  {
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "snack"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "비엔나소시지, 식용유, 케찹"
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "비엔나"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "6일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 비엔나에 칼집 내고 기름 둘러 굽기\n2. 케찹에 찍어먹기"
+                                                   }
+                                     },
+                          "createTime":  "2026-08-01T13:51:55.609666Z",
+                          "updateTime":  "2026-08-03T07:26:59.982723Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/svP85ap903IFxvg4iKdd",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "라면"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "6일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "order":  {
+                                                       "integerValue":  "1"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  ""
+                                                         }
+                                     },
+                          "createTime":  "2026-08-03T05:57:13.170573Z",
+                          "updateTime":  "2026-08-03T07:15:31.037650Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/uRqE78BL8sZyG5OmsTtU",
+                          "fields":  {
+                                         "ingredients":  {
+                                                             "stringValue":  "라면, 물"
+                                                         },
+                                         "slot":  {
+                                                      "stringValue":  "lunch"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "steps":  {
+                                                       "stringValue":  ""
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "2일차"
+                                                      },
+                                         "name":  {
+                                                      "stringValue":  "라면"
+                                                  }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.043888Z",
+                          "updateTime":  "2026-08-03T07:02:46.763208Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/wHcEbTgOGsF7vOd7guVR",
+                          "fields":  {
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "slot":  {
+                                                      "stringValue":  "lunch"
+                                                  },
+                                         "ingredients":  {
+                                                             "stringValue":  "밥, 김치, 스팸, 식용유, 김가루"
+                                                         },
+                                         "name":  {
+                                                      "stringValue":  "김치볶음밥"
+                                                  },
+                                         "category":  {
+                                                          "stringValue":  "6일차"
+                                                      },
+                                         "steps":  {
+                                                       "stringValue":  "1. 김치·햄 잘게 썰어 볶기\n2. 진간장 살짝 넣고 볶기\n3. 밥 위에 볶은 것, 김가루 올리고 비벼먹기"
+                                                   }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.180573Z",
+                          "updateTime":  "2026-08-03T07:14:17.492536Z"
+                      },
+                      {
+                          "name":  "projects/kust-88683/databases/(default)/documents/recipes/xZzP4qYuTKduu2QGe8P9",
+                          "fields":  {
+                                         "name":  {
+                                                      "stringValue":  "콩불"
+                                                  },
+                                         "steps":  {
+                                                       "stringValue":  "1. 팬에 콩나물 깔고 양념한 고기 올리기\n2. 뚜껑 덮고 익힌 뒤 뒤섞어 볶기\n3. 마무리로 사리 추가 가능"
+                                                   },
+                                         "category":  {
+                                                          "stringValue":  "7일차"
+                                                      },
+                                         "slot":  {
+                                                      "stringValue":  "dinner"
+                                                  },
+                                         "order":  {
+                                                       "integerValue":  "0"
+                                                   },
+                                         "ingredients":  {
+                                                             "stringValue":  "콩나물, 돼지불고기(대패), 고추장, 고춧가루, 간장, 설탕, 사리(선택)"
+                                                         }
+                                     },
+                          "createTime":  "2026-08-01T13:51:53.997080Z",
+                          "updateTime":  "2026-08-03T05:57:13.494666Z"
+                      }
+                  ]
+}

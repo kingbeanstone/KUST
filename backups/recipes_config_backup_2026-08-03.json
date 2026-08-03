@@ -1,0 +1,40 @@
+﻿{
+    "name":  "projects/kust-88683/databases/(default)/documents/club_config/recipes",
+    "fields":  {
+                   "categoryOrder":  {
+                                         "arrayValue":  {
+                                                            "values":  [
+                                                                           {
+                                                                               "stringValue":  "1일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "2일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "3일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "4일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "5일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "6일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "7일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "8일차"
+                                                                           },
+                                                                           {
+                                                                               "stringValue":  "보관함"
+                                                                           }
+                                                                       ]
+                                                        }
+                                     }
+               },
+    "createTime":  "2026-08-02T12:34:21.370302Z",
+    "updateTime":  "2026-08-03T05:01:08.539058Z"
+}
