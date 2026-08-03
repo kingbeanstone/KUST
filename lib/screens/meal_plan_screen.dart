@@ -282,7 +282,11 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   /// 💡 하단 고정 메뉴 픽커 (버디표의 참가자 픽커와 같은 사용감).
   /// 칸을 선택하고 카테고리별 메뉴 칩을 탭하면 그 칸에 들어간다.
   Widget _buildMenuPicker(MealPlanProvider mealProvider) {
-    final byCategory = context.watch<RecipeProvider>().byCategory;
+    // 픽커에서는 메뉴가 있는 카테고리만 (빈 열은 레시피북에서만 — 드롭 대상용)
+    final byCategory = {
+      for (final e in context.watch<RecipeProvider>().byCategory.entries)
+        if (e.value.isNotEmpty) e.key: e.value,
+    };
 
     String? selectionLabel;
     if (_selDayId != null && _selField != null) {

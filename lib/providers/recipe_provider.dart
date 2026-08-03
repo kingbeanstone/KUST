@@ -65,6 +65,14 @@ class RecipeProvider with ChangeNotifier {
         .set({'categoryOrder': order}, SetOptions(merge: true));
   }
 
+  /// 💡 드래그 드롭: 레시피를 다른 카테고리로 이동 (대상 카테고리 맨 뒤로)
+  Future<void> moveRecipeToCategory(Recipe recipe, String category) async {
+    await _db.collection('recipes').doc(recipe.id).set({
+      'category': category == '미지정' ? '' : category,
+      'order': DateTime.now().millisecondsSinceEpoch,
+    }, SetOptions(merge: true));
+  }
+
   /// 카테고리 이름 변경: 소속 레시피 전체 + 순서 목록에 반영
   Future<void> renameCategory(String from, String to) async {
     final target = to.trim();
@@ -109,8 +117,12 @@ class RecipeProvider with ChangeNotifier {
 
   /// 카테고리 → 레시피 목록.
   /// 순서: 사용자 지정(club_config) → 기본 목록 → 가나다순, 미지정은 맨 뒤.
+  /// 💡 순서 목록에 있는 카테고리는 비어 있어도 포함된다 (드래그 드롭 대상용).
   Map<String, List<Recipe>> get byCategory {
     final map = <String, List<Recipe>>{};
+    for (final c in _categoryOrder) {
+      if (c.trim().isNotEmpty) map.putIfAbsent(c, () => []);
+    }
     for (final r in _recipes) {
       map.putIfAbsent(r.category.isEmpty ? '미지정' : r.category, () => []).add(r);
     }

@@ -358,13 +358,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (lastDay == null || d.isAfter(lastDay)) lastDay = d;
     }
 
-    // 원정 진행률: 첫날 00:00 ~ 마지막 날 24:00
+    // 원정 진행률: 첫날 14:30(승선) ~ 마지막 날 11:00(하선)
     double? progress;
     if (firstDay != null && lastDay != null) {
-      final total =
-          lastDay.add(const Duration(days: 1)).difference(firstDay).inMinutes;
-      final elapsed = now.difference(firstDay).inMinutes;
-      progress = (elapsed / total).clamp(0.0, 1.0);
+      final start = firstDay.add(const Duration(hours: 14, minutes: 30));
+      final end = lastDay.add(const Duration(hours: 11));
+      final total = end.difference(start).inMinutes;
+      if (total > 0) {
+        progress =
+            (now.difference(start).inMinutes / total).clamp(0.0, 1.0);
+      }
     }
 
     return Scaffold(

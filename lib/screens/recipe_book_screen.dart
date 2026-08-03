@@ -228,7 +228,29 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                           width: colWidth,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 3),
-                            child: Column(
+                            // 💡 드롭 대상: 메뉴를 끌어다 놓으면 이 카테고리로 이동
+                            child: DragTarget<Recipe>(
+                              onWillAcceptWithDetails: (d) =>
+                                  isAdmin &&
+                                  (d.data.category.isEmpty
+                                          ? '미지정'
+                                          : d.data.category) !=
+                                      cat,
+                              onAcceptWithDetails: (d) =>
+                                  provider.moveRecipeToCategory(d.data, cat),
+                              builder: (context, candidates, rejected) =>
+                                  Container(
+                                decoration: candidates.isNotEmpty
+                                    ? BoxDecoration(
+                                        color: Colors.blue[50],
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        border: Border.all(
+                                            color: Colors.blue[400]!,
+                                            width: 1.5),
+                                      )
+                                    : null,
+                                child: Column(
                               children: [
                                 Container(
                                   width: double.infinity,
@@ -248,27 +270,23 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                                   ),
                                 ),
                                 for (final recipe in byCategory[cat]!)
-                                  GestureDetector(
-                                    onTap: () => _showRecipeDetail(
-                                        recipe, isAdmin, provider),
-                                    child: Container(
-                                      width: double.infinity,
-                                      margin: const EdgeInsets.only(top: 5),
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 10),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: Colors.grey[300]!),
-                                      ),
-                                      child: Text(
-                                        recipe.name,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w600),
-                                      ),
+                                  _recipeCard(recipe, isAdmin, provider,
+                                      colWidth - 6),
+                                if (byCategory[cat]!.isEmpty)
+                                  Container(
+                                    width: double.infinity,
+                                    height: 44,
+                                    margin: const EdgeInsets.only(top: 5),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border:
+                                          Border.all(color: Colors.grey[200]!),
+                                    ),
+                                    child: Center(
+                                      child: Text('비어 있음',
+                                          style: TextStyle(
+                                              fontSize: 10.5,
+                                              color: Colors.grey[400])),
                                     ),
                                   ),
                                 // 💡 열 마지막 [+]: 이 카테고리로 바로 추가
@@ -291,6 +309,8 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                                     ),
                                   ),
                               ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -311,6 +331,57 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                       color: Colors.white, fontWeight: FontWeight.bold)),
             )
           : null,
+    );
+  }
+
+  /// 메뉴 카드 — 관리자는 길게 눌러 다른 카테고리로 드래그 이동 가능
+  Widget _recipeCard(
+      Recipe recipe, bool isAdmin, RecipeProvider provider, double width) {
+    final card = GestureDetector(
+      onTap: () => _showRecipeDetail(recipe, isAdmin, provider),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(top: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Text(
+          recipe.name,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+
+    if (!isAdmin) return card;
+
+    return LongPressDraggable<Recipe>(
+      data: recipe,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: width,
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue[400]!, width: 1.5),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withAlpha(50), blurRadius: 8),
+            ],
+          ),
+          child: Text(
+            recipe.name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: card),
+      child: card,
     );
   }
 
