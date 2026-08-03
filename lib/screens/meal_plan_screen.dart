@@ -213,7 +213,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               i: const FlexColumnWidth(),
           },
           border: TableBorder.all(color: Colors.grey[200]!, width: 1),
-          defaultVerticalAlignment: TableCellVerticalAlignment.fill,
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
           children: [
             // 헤더: 구분 + 일차들
             TableRow(
