@@ -28,6 +28,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   /// 편집 모드 (관리자 전용) — 평상시엔 관리자도 보기 모드
   bool _isEditing = false;
 
+  /// 편집 시작 시점 스냅샷 — [수정 취소] 시 이 상태로 복원
+  List<Recipe>? _editSnapshot;
+
   /// 다이얼로그 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _ingredientsController = TextEditingController();
@@ -96,9 +99,28 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         elevation: 0.5,
         centerTitle: true,
         actions: [
+          if (isAdmin && _isEditing)
+            TextButton(
+              onPressed: () {
+                final snapshot = _editSnapshot;
+                if (snapshot != null) {
+                  recipeProvider.restoreRecipesSnapshot(snapshot);
+                }
+                setState(() => _isEditing = false);
+              },
+              child: const Text('수정 취소',
+                  style: TextStyle(
+                      color: Colors.red, fontWeight: FontWeight.bold)),
+            ),
           if (isAdmin)
             TextButton(
-              onPressed: () => setState(() => _isEditing = !_isEditing),
+              onPressed: () => setState(() {
+                if (!_isEditing) {
+                  // 편집 시작 — 취소 대비 스냅샷
+                  _editSnapshot = List.of(recipeProvider.recipes);
+                }
+                _isEditing = !_isEditing;
+              }),
               child: Text(
                 _isEditing ? '완료' : '편집',
                 style: TextStyle(

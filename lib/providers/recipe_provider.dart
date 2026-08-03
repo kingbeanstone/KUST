@@ -161,6 +161,23 @@ class RecipeProvider with ChangeNotifier {
     });
   }
 
+  /// 💡 편집 취소: 스냅샷 시점으로 전체 복원.
+  /// 변경된 메뉴는 되돌리고, 편집 중 생긴 메뉴는 지우고, 지운 메뉴는 되살린다.
+  Future<void> restoreRecipesSnapshot(List<Recipe> snapshot) async {
+    final batch = _db.batch();
+    final snapIds = <String>{};
+    for (final r in snapshot) {
+      snapIds.add(r.id);
+      batch.set(_db.collection('recipes').doc(r.id), r.toMap());
+    }
+    for (final r in _recipes) {
+      if (!snapIds.contains(r.id)) {
+        batch.delete(_db.collection('recipes').doc(r.id));
+      }
+    }
+    await batch.commit();
+  }
+
   /// 💡 식단표 드래그 드롭: 메뉴를 (일차, 끼니) 칸으로 이동
   Future<void> moveRecipe(Recipe recipe, String category, String slot) async {
     await _db.collection('recipes').doc(recipe.id).set({
