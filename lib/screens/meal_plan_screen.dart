@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/equipment_provider.dart';
+import '../providers/expedition_provider.dart';
 import '../providers/meal_plan_provider.dart';
 import '../providers/recipe_provider.dart';
 import '../models/recipe_model.dart';
@@ -46,6 +47,18 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
 
   /// 일차 탭 index → 카테고리 이름 ('1일차'…)
   String _dayCat(int index) => '${index + 1}일차';
+
+  /// 해당 일차가 이미 지나갔는지 (id '8.3' + 원정 연도 기준, 오늘은 진행 중)
+  bool _dayEnded(String dayId) {
+    final match = RegExp(r'^(\d{1,2})\.(\d{1,2})$').firstMatch(dayId.trim());
+    if (match == null) return false;
+    final year = context.read<ExpeditionProvider>().selected?.year ??
+        DateTime.now().year;
+    final day = DateTime(
+        year, int.parse(match.group(1)!), int.parse(match.group(2)!));
+    final now = DateTime.now();
+    return day.isBefore(DateTime(now.year, now.month, now.day));
+  }
 
   List<Recipe> _recipesAt(RecipeProvider provider, String cat, String slot) {
     final list = provider.recipes
@@ -246,24 +259,33 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
               children: [
                 _labelCell('구분', isHeader: true),
                 for (final i in dayIndexes)
-                  Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    color: Colors.blue[50],
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(mealProvider.dates[i]['title']!,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue)),
-                        const SizedBox(height: 2),
-                        Text(mealProvider.dates[i]['date']!,
-                            style: const TextStyle(
-                                fontSize: 9, color: Colors.black54)),
-                      ],
-                    ),
-                  ),
+                  Builder(builder: (context) {
+                    // 💡 지난 일차는 회색으로 — 종료됐음을 표시
+                    final ended = _dayEnded(mealProvider.dates[i]['id']!);
+                    return Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      color: ended ? Colors.grey[200] : Colors.blue[50],
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(mealProvider.dates[i]['title']!,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: ended
+                                      ? Colors.grey[500]
+                                      : Colors.blue)),
+                          const SizedBox(height: 2),
+                          Text(mealProvider.dates[i]['date']!,
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: ended
+                                      ? Colors.grey[400]
+                                      : Colors.black54)),
+                        ],
+                      ),
+                    );
+                  }),
               ],
             ),
             // 끼니 행들

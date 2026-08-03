@@ -16,6 +16,8 @@ import 'personal_checklist_screen.dart';
 import 'guide_screen.dart';
 import 'dive_log_screen.dart';
 import 'coming_soon_screen.dart';
+import 'usage_stats_screen.dart';
+import '../util/usage_stats.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -95,23 +97,28 @@ class HomeScreen extends StatelessWidget {
                 _buildMenuCard(context,
                     title: '장비 체크',
                     icon: Icons.checklist_rounded, color: Colors.blue,
+                    statKey: 'equipment_check',
                     target: const EquipmentCheckScreen()),
                 _buildMenuCard(context,
                     title: '버디',
                     icon: Icons.people_outline_rounded, color: Colors.teal,
+                    statKey: 'buddy',
                     target: const BuddyScreen()),
                 _buildMenuCard(context,
                     title: '개인 체크리스트',
                     icon: Icons.luggage_outlined, color: Colors.indigo,
+                    statKey: 'personal_checklist',
                     target: const PersonalChecklistScreen()),
                 _buildMenuCard(context,
                     title: '신입생 가이드',
                     icon: Icons.school_outlined, color: Colors.orange,
+                    statKey: 'guide',
                     target: const GuideScreen()),
                 // 💡 성장 그래프: 배포(릴리즈)에선 준비 중, 개발(핫리로드)에선 실제 화면
                 _buildMenuCard(context,
                     title: '성장 그래프',
                     icon: Icons.show_chart_rounded, color: Colors.purple,
+                    statKey: 'growth',
                     target: kReleaseMode
                         ? const ComingSoonScreen()
                         : const DiveLogScreen()),
@@ -364,6 +371,7 @@ class HomeScreen extends StatelessWidget {
             title: '동아리원 명단',
             subtitle: 'OB/YB 명단 및 정보 관리',
             isAdmin: isAdmin,
+            statKey: 'member_list',
             target: const MemberManagementScreen(),
           ),
 
@@ -373,6 +381,7 @@ class HomeScreen extends StatelessWidget {
             title: '원정 참가자 관리',
             subtitle: '이번 원정에 갈 대원 선택',
             isAdmin: isAdmin,
+            statKey: 'participants',
             target: const ParticipantScreen(),
           ),
 
@@ -382,7 +391,17 @@ class HomeScreen extends StatelessWidget {
             title: '장비 인벤토리',
             subtitle: 'BCD·호흡기 번호 및 공용 장비 수량',
             isAdmin: true, // 💡 열람은 누구나 (수정은 화면 안에서 관리자만)
+            statKey: 'inventory',
             target: const SearchScreen(),
+          ),
+
+          _drawerItem(
+            context,
+            icon: Icons.bar_chart_rounded,
+            title: '이용 통계',
+            subtitle: '기능별 누적 접속 횟수',
+            isAdmin: true, // 열람은 누구나
+            target: const UsageStatsScreen(),
           ),
 
           const Spacer(),
@@ -415,7 +434,8 @@ class HomeScreen extends StatelessWidget {
     required String title,
     required String subtitle,
     required bool isAdmin,
-    required Widget target
+    required Widget target,
+    String? statKey,
   }) {
     return ListTile(
       leading: Icon(icon, color: Colors.black87),
@@ -428,6 +448,7 @@ class HomeScreen extends StatelessWidget {
           );
           return;
         }
+        if (statKey != null) UsageStats.log(statKey);
         Navigator.pop(context);
         Navigator.push(context, MaterialPageRoute(builder: (context) => target));
       },
@@ -442,6 +463,7 @@ class HomeScreen extends StatelessWidget {
     required Widget target,
     bool isAdminRequired = false,
     bool isAdmin = true,
+    String? statKey,
   }) {
     return GestureDetector(
       onTap: () {
@@ -456,6 +478,7 @@ class HomeScreen extends StatelessWidget {
           );
           return;
         }
+        if (statKey != null) UsageStats.log(statKey);
         Navigator.push(context, MaterialPageRoute(builder: (context) => target));
       },
       child: Container(
