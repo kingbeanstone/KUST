@@ -30,7 +30,13 @@
     body {
       margin: 0;
       min-height: 100%;
-      background-color: #ffffff;
+      /* 💡 앱 부팅 동안 보이는 커스텀 스플래시 (물빛 이미지).
+         Flutter가 첫 화면을 그리면 자연스럽게 덮인다. */
+      background-color: #BAD0DA;
+      background-image: url('splash.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
     }
   </style>
 

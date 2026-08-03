@@ -249,11 +249,6 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
     const MoreScreen(),
   ];
 
-  /// 💡 한 번이라도 방문한 탭 — IndexedStack으로 상태를 유지하되,
-  /// 화면 생성은 첫 방문(=보이는 순간)에 한다.
-  /// (숨겨진 채 생성된 지도가 모바일에서 깨지는 문제 회피)
-  late final List<bool> _visited =
-      List.generate(_screens.length, (i) => i == 0);
 
   @override
   void initState() {
@@ -301,21 +296,15 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 💡 방문한 탭은 IndexedStack으로 살아있게 유지 (편집 상태·스크롤 보존),
-      //    아직 안 가본 탭은 빈 자리 — 첫 방문 때 보이는 상태로 생성된다.
+      // 💡 앱 시작 때 5개 탭을 전부 만들어둔다 — 탭 전환 즉시,
+      //    편집 상태·스크롤·지도 로딩 상태 모두 유지.
       body: IndexedStack(
         index: _selectedIndex,
-        children: [
-          for (var i = 0; i < _screens.length; i++)
-            _visited[i] ? _screens[i] : const SizedBox.shrink(),
-        ],
+        children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() {
-          _selectedIndex = index;
-          _visited[index] = true;
-        }),
+        onTap: (index) => setState(() => _selectedIndex = index),
         selectedItemColor: Colors.blue[800],
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
