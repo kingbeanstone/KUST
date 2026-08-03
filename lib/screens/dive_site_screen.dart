@@ -31,10 +31,11 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   static const _ulleungCenter = LatLng(37.505, 130.868);
 
   /// 대장의 구글 어스 프로젝트 (울릉도 포인트 지도).
+  /// 공유 링크(earth.google.com/earth/d/1-n3WQ…)가 서버에서 이 주소로 연결된다.
   /// 어스는 iframe 임베드를 차단해서 외부 브라우저로 연다.
   /// 💡 fdl=1: 모바일 접속 시 플레이스토어로 보내는 리다이렉트를 건너뛴다.
   static const _earthUrl =
-      'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEZFNDkwQkUwRTQwRjgwQkRGMzQgAUICCABKCAiN_bqqBxAB?hl=ko&fdl=1';
+      'https://earth.google.com/web/data=MicKJQojCiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8?hl=ko&fdl=1';
 
   void _openEarth() {
     // PC(넓은 화면)는 바로 열림 — 안내가 필요 없다
