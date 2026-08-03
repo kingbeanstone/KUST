@@ -4,8 +4,6 @@ import '../providers/equipment_provider.dart';
 import '../providers/meal_plan_provider.dart';
 import '../providers/recipe_provider.dart';
 import '../models/recipe_model.dart';
-import 'recipe_book_screen.dart';
-import 'ingredient_screen.dart';
 
 /// 💡 v3 식단표: 표 자체가 편집 화면이다.
 ///  - 각 칸의 메뉴 = 버튼(칩). 탭 = 레시피 보기/수정
@@ -26,6 +24,9 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     ['snack', '야식'],
   ];
   static const String _storage = '보관함';
+
+  /// 편집 모드 (관리자 전용) — 평상시엔 관리자도 보기 모드
+  bool _isEditing = false;
 
   /// 다이얼로그 입력 컨트롤러 — State 소유 (dispose 크래시 방지)
   final TextEditingController _nameController = TextEditingController();
@@ -57,6 +58,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   @override
   Widget build(BuildContext context) {
     final isAdmin = context.watch<EquipmentProvider>().isAdmin;
+    final edit = isAdmin && _isEditing;
     final mealProvider = Provider.of<MealPlanProvider>(context);
     final recipeProvider = context.watch<RecipeProvider>();
 
@@ -94,37 +96,39 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         elevation: 0.5,
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.menu_book_outlined, color: Colors.blueGrey),
-            tooltip: '레시피북',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const RecipeBookScreen())),
-          ),
-          IconButton(
-            icon: const Icon(Icons.shopping_basket_outlined,
-                color: Colors.blueGrey),
-            tooltip: '남은 재료',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const IngredientScreen())),
-          ),
+          if (isAdmin)
+            TextButton(
+              onPressed: () => setState(() => _isEditing = !_isEditing),
+              child: Text(
+                _isEditing ? '완료' : '편집',
+                style: TextStyle(
+                  color: _isEditing ? Colors.blue[700] : Colors.grey[700],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
         ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          if (isAdmin)
+          if (edit)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8, left: 4),
-              child: Text('메뉴 탭 = 수정 · 길게 눌러 끌기 = 이동 · [+] = 추가',
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey[500])),
+              padding: const EdgeInsets.only(bottom: 10, left: 4),
+              child: Text('메뉴 드래그 드롭 가능',
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue[700])),
             ),
           for (final chunk in chunks)
-            _buildTableBlock(chunk, mealProvider, recipeProvider, isAdmin),
+            _buildTableBlock(chunk, mealProvider, recipeProvider, edit),
 
-          // ── 보관함 (임시 보관 · 드롭 가능)
+          // ── 보관함 (임시 보관 · 드롭 가능) — 편집 모드에서만
+          if (edit)
           DragTarget<Recipe>(
             onWillAcceptWithDetails: (d) =>
-                isAdmin && d.data.category != _storage,
+                edit && d.data.category != _storage,
             onAcceptWithDetails: (d) =>
                 recipeProvider.moveRecipe(d.data, _storage, ''),
             builder: (context, candidates, rejected) => Container(
@@ -153,13 +157,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                           style: TextStyle(
                               fontSize: 11, color: Colors.grey[500])),
                       const Spacer(),
-                      if (isAdmin)
-                        GestureDetector(
-                          onTap: () => _showAddDialog(
-                              recipeProvider, _storage, '', '보관함'),
-                          child: Icon(Icons.add_circle_outline,
-                              size: 19, color: Colors.blue[600]),
-                        ),
+                      GestureDetector(
+                        onTap: () => _showAddDialog(
+                            recipeProvider, _storage, '', '보관함'),
+                        child: Icon(Icons.add_circle_outline,
+                            size: 19, color: Colors.blue[600]),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -174,8 +177,8 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                             for (final r in storageItems)
                               SizedBox(
                                 width: 100,
-                                child: _menuChip(
-                                    r, isAdmin, recipeProvider, 100),
+                                child:
+                                    _menuChip(r, edit, recipeProvider, 100),
                               ),
                           ],
                         ),
@@ -191,7 +194,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
   // ------------------------------------------------------------- 표 블록
 
   Widget _buildTableBlock(List<int> dayIndexes, MealPlanProvider mealProvider,
-      RecipeProvider recipeProvider, bool isAdmin) {
+      RecipeProvider recipeProvider, bool edit) {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
@@ -248,7 +251,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
                   _labelCell(slot[1]),
                   for (final i in dayIndexes)
                     _mealCell(recipeProvider, _dayCat(i), slot[0],
-                        '${mealProvider.dates[i]['title']} ${slot[1]}', isAdmin),
+                        '${mealProvider.dates[i]['title']} ${slot[1]}', edit),
                 ],
               ),
           ],
@@ -272,24 +275,26 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
-  /// 식단 칸: 메뉴 칩 세로 나열 + (관리자) [+] · 드롭 대상
+  /// 식단 칸: 메뉴 칩 세로 나열 + (편집) [+] · 드롭 대상
   Widget _mealCell(RecipeProvider provider, String cat, String slot,
-      String cellLabel, bool isAdmin) {
+      String cellLabel, bool edit) {
     final items = _recipesAt(provider, cat, slot);
 
     return DragTarget<Recipe>(
       onWillAcceptWithDetails: (d) =>
-          isAdmin && (d.data.category != cat || d.data.slot != slot),
+          edit && (d.data.category != cat || d.data.slot != slot),
       onAcceptWithDetails: (d) => provider.moveRecipe(d.data, cat, slot),
       builder: (context, candidates, rejected) => Container(
-        constraints: const BoxConstraints(minHeight: 52),
+        constraints: const BoxConstraints(minHeight: 56),
         padding: const EdgeInsets.all(5),
         color: candidates.isNotEmpty ? Colors.blue[50] : null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (final r in items) _menuChip(r, isAdmin, provider, null),
-            if (isAdmin)
+            for (final r in items)
+              _menuChip(r, edit, provider, null,
+                  onView: () => _showCellRecipes(cellLabel, items)),
+            if (edit)
               GestureDetector(
                 onTap: () => _showAddDialog(provider, cat, slot, cellLabel),
                 child: Container(
@@ -309,17 +314,20 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
     );
   }
 
-  /// 메뉴 버튼 (레시피북 스타일) — 탭: 보기/수정, 길게 끌기: 이동(관리자)
+  /// 메뉴 버튼 (레시피북 스타일)
+  ///  - 편집: 탭 = 수정, 길게 끌기 = 이동
+  ///  - 보기: 탭 = 그 칸의 레시피 한번에 보기
   Widget _menuChip(
-      Recipe r, bool isAdmin, RecipeProvider provider, double? dragWidth) {
+      Recipe r, bool edit, RecipeProvider provider, double? dragWidth,
+      {VoidCallback? onView}) {
     final chip = GestureDetector(
-      onTap: () => isAdmin
+      onTap: () => edit
           ? _showEditDialog(provider, r)
-          : _showViewDialog(r),
+          : (onView ?? () => _showViewDialog(r))(),
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.only(top: 3),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
@@ -328,12 +336,12 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         child: Text(
           r.name,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
         ),
       ),
     );
 
-    if (!isAdmin) return chip;
+    if (!edit) return chip;
 
     return LongPressDraggable<Recipe>(
       data: r,
@@ -341,7 +349,7 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
         color: Colors.transparent,
         child: Container(
           width: dragWidth ?? 100,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
@@ -353,11 +361,110 @@ class _MealPlanScreenState extends State<MealPlanScreen> {
           child: Text(r.name,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  fontSize: 11.5, fontWeight: FontWeight.w600)),
+                  fontSize: 12.5, fontWeight: FontWeight.w600)),
         ),
       ),
       childWhenDragging: Opacity(opacity: 0.3, child: chip),
       child: chip,
+    );
+  }
+
+  /// 💡 보기 모드: 그 칸(그날 그 끼니)의 전체 메뉴 레시피를 한번에
+  void _showCellRecipes(String cellLabel, List<Recipe> items) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.75),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(cellLabel,
+                  style: const TextStyle(
+                      fontSize: 15.5, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final r in items)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(13),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FA),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(r.name,
+                                style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold)),
+                            if (r.ingredients.trim().isNotEmpty) ...[
+                              const SizedBox(height: 7),
+                              Text('재료',
+                                  style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blueGrey[400])),
+                              const SizedBox(height: 2),
+                              Text(r.ingredients.trim(),
+                                  style: const TextStyle(
+                                      fontSize: 12.5, height: 1.5)),
+                            ],
+                            if (r.steps.trim().isNotEmpty) ...[
+                              const SizedBox(height: 7),
+                              Text('조리법',
+                                  style: TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blueGrey[400])),
+                              const SizedBox(height: 2),
+                              Text(r.steps.trim(),
+                                  style: const TextStyle(
+                                      fontSize: 12.5, height: 1.5)),
+                            ],
+                            if (r.ingredients.trim().isEmpty &&
+                                r.steps.trim().isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 5),
+                                child: Text('레시피 내용이 아직 없습니다.',
+                                    style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: Colors.grey[400])),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

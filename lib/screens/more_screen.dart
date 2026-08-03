@@ -21,7 +21,6 @@ class MoreScreen extends StatefulWidget {
 class _MoreScreenState extends State<MoreScreen> {
   bool _rememberMe = false;
   bool _isSettingUp = false;
-  bool _showDebugConsole = false;
 
   /// 한 줄 메시지 편집용 (State 소유 — dispose 크래시 방지)
   final TextEditingController _introController = TextEditingController();
@@ -111,10 +110,7 @@ class _MoreScreenState extends State<MoreScreen> {
                   // 1. 관리자 카드 (인증 및 해제 핵심부)
                   _buildAdminCard(auth, equipProv, noticeProv, execProv, qnaProv),
 
-                  // 2. 실시간 알림 설정
-                  _buildSettingTile(noticeProv),
-
-                  // 3. 👥 이번 원정 임원단 — 참가자 관리의 역할 지정과 자동 연동
+                  // 2. 👥 이번 원정 임원단 — 참가자 관리의 역할 지정과 자동 연동
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 24, 16, 2),
                     child: Text('👥 이번 원정 임원단',
@@ -127,8 +123,12 @@ class _MoreScreenState extends State<MoreScreen> {
                   ),
                   _buildExpeditionStaffList(context),
 
-                  // 4. 📱 앱 정보 섹션 (정보 삭제 기능 포함)
+                  // 3. 📱 앱 정보 섹션 (정보 삭제 기능 포함)
                   _buildAppInfoSection(context, auth, equipProv, noticeProv, execProv, qnaProv),
+
+                  // 4. 실시간 알림 설정 (맨 아래)
+                  const SizedBox(height: 24),
+                  _buildSettingTile(noticeProv),
 
                   const SizedBox(height: 40),
                   const Center(child: Text('버전 정보 $kAppVersion', style: TextStyle(color: Colors.grey, fontSize: 11))),
@@ -137,8 +137,6 @@ class _MoreScreenState extends State<MoreScreen> {
               ),
             ),
           ),
-          // 5. 💡 시스템 로그 콘솔
-          if (_showDebugConsole) _buildDebugConsole(auth),
         ],
       ),
     );
@@ -500,6 +498,9 @@ class _MoreScreenState extends State<MoreScreen> {
   }
 
   Widget _buildAppInfoSection(BuildContext context, AuthProvider auth, EquipmentProvider equip, NoticeProvider notice, ExecutiveProvider exec, QnaProvider qna) {
+    // 앱 소개·디버그 로그 제거 — 남은 항목이 없으면 섹션 자체를 숨긴다
+    if (!auth.isPasswordSaved) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -510,78 +511,20 @@ class _MoreScreenState extends State<MoreScreen> {
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[200]!)),
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.info_outline, color: Colors.blue),
-                title: const Text('KUST 앱 소개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                trailing: const Icon(Icons.chevron_right, size: 20),
-                onTap: () => _showAppIntro(context),
-              ),
-              const Divider(height: 1, indent: 16, endIndent: 16),
-              ListTile(
-                leading: const Icon(Icons.bug_report_outlined, color: Colors.blueGrey),
-                title: const Text('디버그 로그 보기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                trailing: Switch(
-                  value: _showDebugConsole,
-                  onChanged: (val) => setState(() => _showDebugConsole = val),
-                ),
-              ),
-              // 💡 저장된 비밀번호 정보를 삭제할 수 있는 관리자용 옵션
-              if (auth.isPasswordSaved) ...[
-                const Divider(height: 1, indent: 16, endIndent: 16),
-                ListTile(
-                  leading: const Icon(Icons.no_accounts_outlined, color: Colors.redAccent),
-                  title: const Text('관리자 인증 정보 삭제', style: TextStyle(fontSize: 14, color: Colors.redAccent)),
-                  onTap: () async {
-                    await auth.forgetAdminSetting();
-                    equip.setAdminStatus(false);
-                    notice.setAdminStatus(false);
-                    exec.setAdminStatus(false);
-                    qna.setAdminStatus(false);
-                    _showToast("저장된 인증 정보가 삭제되었습니다.");
-                  },
-                ),
-              ]
-            ],
+          child: ListTile(
+            leading: const Icon(Icons.no_accounts_outlined, color: Colors.redAccent),
+            title: const Text('관리자 인증 정보 삭제', style: TextStyle(fontSize: 14, color: Colors.redAccent)),
+            onTap: () async {
+              await auth.forgetAdminSetting();
+              equip.setAdminStatus(false);
+              notice.setAdminStatus(false);
+              exec.setAdminStatus(false);
+              qna.setAdminStatus(false);
+              _showToast("저장된 인증 정보가 삭제되었습니다.");
+            },
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDebugConsole(AuthProvider auth) {
-    return Container(
-      height: 180, width: double.infinity, color: const Color(0xFF1E1E1E),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            color: Colors.black,
-            child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('SYSTEM LOGS', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold, fontFamily: 'monospace')),
-                  GestureDetector(
-                      onTap: () => setState(() => _showDebugConsole = false),
-                      child: const Icon(Icons.close, color: Colors.white, size: 14)
-                  )
-                ]
-            ),
-          ),
-          Expanded(
-              child: ListView.builder(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: auth.debugLogs.length,
-                  itemBuilder: (context, index) => Text(
-                      auth.debugLogs[index],
-                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace')
-                  )
-              )
-          ),
-        ],
-      ),
     );
   }
 
@@ -644,53 +587,4 @@ class _MoreScreenState extends State<MoreScreen> {
     );
   }
 
-  void _showAppIntro(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
-        decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-        child: Column(
-          children: [
-            Container(margin: const EdgeInsets.symmetric(vertical: 12), width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('KUST 앱 소개', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(
-                        'assets/images/best.png', width: double.infinity, fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(height: 200, width: double.infinity, color: Colors.grey[100], child: const Icon(Icons.image_not_supported_outlined, color: Colors.grey, size: 40)),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text('안녕하세요! KUST 원정 앱입니다.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue)),
-                    const SizedBox(height: 12),
-                    const Text(
-                      '본 애플리케이션은 경북대학교 스킨스쿠버 동아리 KUST의 원정 운영을 위해 제작되었습니다. '
-                          '춘계·하계·추계·동계 모든 원정의 데이터를 시즌별로 관리합니다.\n\n'
-                          '주요 기능:\n'
-                          '• 장비 체크 — 가방 단위 준비 현황과 장비 버디 공유 관리\n'
-                          '• 버디 시스템 — 팀 편성, 입수 순서, 충돌 자동 검사\n'
-                          '• 원정별 일정·식단 공유\n'
-                          '• 동아리원 명단과 원정 참가자 관리\n\n'
-                          'KUST 대원 여러분의 안전하고 즐거운 다이빙을 응원합니다!',
-                      style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.6),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
