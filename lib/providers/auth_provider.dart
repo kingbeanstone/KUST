@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../util/usage_stats.dart';
 
 class AuthProvider with ChangeNotifier {
   bool _isAdmin = false;
@@ -38,9 +39,14 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> authenticate(String password, {bool remember = false}) async {
-    // 💡 저장된 정보가 있거나 입력한 비밀번호가 맞을 때
-    if (password == "779") {
+    // 💡 779=일반 관리자, 800=개발자 전용 (이 기기 접속은 이용 통계 집계 제외)
+    if (password == "779" || password == "800") {
       _isAdmin = true;
+
+      if (password == "800") {
+        await UsageStats.setOptOut(true);
+        addLog("🧑‍💻 개발자 인증 — 이 기기는 이용 통계 집계 제외");
+      }
 
       // 💡 한 번이라도 기억하기를 선택했거나, 이번에 선택했다면 영구 유지
       if (remember || _isPasswordSaved) {

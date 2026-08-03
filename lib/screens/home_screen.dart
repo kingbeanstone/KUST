@@ -2,9 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app_version.dart';
+import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
+import '../providers/executive_provider.dart';
 import '../providers/expedition_provider.dart';
 import '../providers/notice_provider.dart';
+import '../providers/qna_provider.dart';
 import '../models/expedition_model.dart';
 import '../models/notice_model.dart';
 import 'equipment_check_screen.dart';
@@ -58,7 +61,8 @@ class HomeScreen extends StatelessWidget {
               isAdmin ? Icons.admin_panel_settings : Icons.person_outline,
               color: isAdmin ? Colors.blue : Colors.black87,
             ),
-            onPressed: () {},
+            tooltip: isAdmin ? '관리자 모드 해제' : '관리자 인증',
+            onPressed: () => _toggleAdmin(context),
           ),
           Builder(
             builder: (context) => IconButton(
@@ -345,6 +349,112 @@ class HomeScreen extends StatelessWidget {
             fontWeight: selected ? FontWeight.bold : FontWeight.w500,
             color: selected ? Colors.white : Colors.black87,
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 💡 앱바 사람 아이콘 = 관리자 전환 버튼 (더보기 탭의 인증 버튼과 동일 동작).
+  /// 인증 중이면 해제, 아니면 기억된 정보로 즉시 인증하거나 비밀번호를 묻는다.
+  Future<void> _toggleAdmin(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    final equip = context.read<EquipmentProvider>();
+    final notice = context.read<NoticeProvider>();
+    final exec = context.read<ExecutiveProvider>();
+    final qna = context.read<QnaProvider>();
+
+    void syncAdmin(bool value) {
+      equip.setAdminStatus(value);
+      notice.setAdminStatus(value);
+      exec.setAdminStatus(value);
+      qna.setAdminStatus(value);
+    }
+
+    void toast(String msg, {bool isError = false}) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(msg),
+          backgroundColor: isError ? Colors.redAccent : Colors.black87,
+          duration: const Duration(seconds: 2),
+        ));
+    }
+
+    // 1) 인증 상태 → 해제 (비밀번호 기억 설정은 유지)
+    if (auth.isAdmin) {
+      auth.logout();
+      syncAdmin(false);
+      toast('🔓 관리자 모드가 해제되었습니다.');
+      return;
+    }
+
+    // 2) 기억된 정보가 있으면 다이얼로그 없이 즉시 인증
+    if (auth.isPasswordSaved) {
+      final success = await auth.authenticate('779', remember: true);
+      if (success) {
+        syncAdmin(true);
+        if (context.mounted) toast('✅ 관리자 권한이 활성화되었습니다.');
+      }
+      return;
+    }
+
+    // 3) 처음이면 비밀번호 입력 다이얼로그
+    if (!context.mounted) return;
+    final pwdController = TextEditingController();
+    bool rememberMe = false;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('관리자 인증',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('비밀번호 3자리를 입력하세요.', style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: pwdController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 3,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 24, letterSpacing: 10),
+                decoration: const InputDecoration(
+                    border: OutlineInputBorder(), counterText: ''),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Checkbox(
+                      value: rememberMe,
+                      onChanged: (val) =>
+                          setDialogState(() => rememberMe = val ?? false)),
+                  const Text('비밀번호 기억하기', style: TextStyle(fontSize: 13)),
+                ],
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('취소')),
+            TextButton(
+              onPressed: () async {
+                final success = await auth.authenticate(pwdController.text,
+                    remember: rememberMe);
+                if (success) {
+                  syncAdmin(true);
+                  if (!dialogContext.mounted) return;
+                  Navigator.pop(dialogContext);
+                  toast('✅ 관리자 권한이 활성화되었습니다.');
+                } else {
+                  toast('❌ 비밀번호가 틀렸습니다.', isError: true);
+                }
+              },
+              child: const Text('확인'),
+            ),
+          ],
         ),
       ),
     );

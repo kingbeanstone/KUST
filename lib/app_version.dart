@@ -1,3 +1,3 @@
 /// 💡 배포 버전 표시용. 배포할 때마다 갱신해서
 /// 설치형 PWA가 어느 빌드를 돌리는지 화면에서 바로 확인한다.
-const String kAppVersion = 'v2.14.1 (8/3)';
+const String kAppVersion = 'v2.14.2 (8/3)';
