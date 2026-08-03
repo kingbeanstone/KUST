@@ -156,6 +156,7 @@ class _RecipeBookScreenState extends State<RecipeBookScreen> {
                   ingredients: _ingredientsController.text,
                   steps: _stepsController.text,
                   order: recipe.order, // 순서 유지
+                  slot: recipe.slot, // 식단표 자리 유지
                 ));
               }
               Navigator.pop(dialogContext);

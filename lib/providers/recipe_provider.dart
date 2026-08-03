@@ -147,16 +147,27 @@ class RecipeProvider with ChangeNotifier {
       byCategory.keys.where((c) => c != '미지정').toList();
 
   Future<void> addRecipe(
-      String name, String category, String ingredients, String steps) async {
+      String name, String category, String ingredients, String steps,
+      {String slot = ''}) async {
     await _db.collection('recipes').add({
       'name': name.trim(),
       'category': category.trim(),
       'ingredients': ingredients,
       'steps': steps,
+      'slot': slot,
       // 새 메뉴는 카테고리 맨 뒤에 (시간값이라 기존 정렬 인덱스보다 항상 큼)
       'order': DateTime.now().millisecondsSinceEpoch,
       'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// 💡 식단표 드래그 드롭: 메뉴를 (일차, 끼니) 칸으로 이동
+  Future<void> moveRecipe(Recipe recipe, String category, String slot) async {
+    await _db.collection('recipes').doc(recipe.id).set({
+      'category': category,
+      'slot': slot,
+      'order': DateTime.now().millisecondsSinceEpoch,
+    }, SetOptions(merge: true));
   }
 
   Future<void> updateRecipe(Recipe recipe) async {

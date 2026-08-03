@@ -7,6 +7,9 @@ class Recipe {
   final String steps; // 조리법 (자유 텍스트)
   final int order; // 카테고리 안 표시 순서 (없으면 맨 뒤)
 
+  /// 식단표 끼니 자리: breakfast | lunch | dinner | snack | ''(보관함/미배치)
+  final String slot;
+
   static const int kNoOrder = 1 << 40;
 
   Recipe({
@@ -16,6 +19,7 @@ class Recipe {
     this.ingredients = '',
     this.steps = '',
     this.order = kNoOrder,
+    this.slot = '',
   });
 
   Map<String, dynamic> toMap() => {
@@ -24,6 +28,7 @@ class Recipe {
         'ingredients': ingredients,
         'steps': steps,
         'order': order,
+        'slot': slot,
       };
 
   factory Recipe.fromMap(String id, Map<String, dynamic> map) => Recipe(
@@ -33,5 +38,6 @@ class Recipe {
         ingredients: map['ingredients'] ?? '',
         steps: map['steps'] ?? '',
         order: (map['order'] as num?)?.toInt() ?? kNoOrder,
+        slot: (map['slot'] ?? '').toString(),
       );
 }
