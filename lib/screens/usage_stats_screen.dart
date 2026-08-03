@@ -24,11 +24,11 @@ class UsageStatsScreen extends StatelessWidget {
           }
 
           final raw = snapshot.data!.data() ?? {};
-          // 💡 집계 대상 8개는 카운트가 0이어도 항상 전부 표시한다
+          // 💡 집계 대상 8개는 0회여도 항상 표시. 순서는 labels 맵 정의 순 고정.
           final entries = <MapEntry<String, int>>[
             for (final e in UsageStats.labels.entries)
               MapEntry(e.value, (raw[e.key] as num?)?.toInt() ?? 0),
-          ]..sort((a, b) => b.value.compareTo(a.value));
+          ];
 
           final maxCount =
               entries.map((e) => e.value).reduce((a, b) => a > b ? a : b);
