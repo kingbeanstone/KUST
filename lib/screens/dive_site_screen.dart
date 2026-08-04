@@ -856,7 +856,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     ),
                   ),
                 ),
-                const Text('🗺 이 지도를 만든 이유',
+                const Text('🗺 사이트 기능 의도',
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
@@ -868,12 +868,10 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
-                    '처음 다이빙을 하면, 포인트 브리핑을 들어도 머릿속에 잘 그려지지 않고, '
-                    '다녀와도 내가 어딜 다녀온 것인지 잘 모를 때가 많습니다.\n\n'
-                    '따라서 포인트 위치와 간단한 설명을 다이빙 전후로 체크할 수 있는 '
-                    '서비스를 구현하고자 했습니다.\n\n'
-                    '여러분의 원정 다이빙이 더욱 재밌어지고, 소중한 추억으로 '
-                    '오랫도록 잘 간직할 수 있길 바랍니다.',
+                    '다녀와도 자신이 어디를 다녀온 것인지 잘 모를 수 있습니다.\n\n'
+                    '따라서 포인트 위치와 간단한 설명을 쉽게 확인할 수 있도록 하여, '
+                    '포인트에 대한 이해를 돕고 다이빙을 더욱 재밌게 하는 서비스를 '
+                    '구현하고자 했습니다.',
                     style: TextStyle(fontSize: 13, height: 1.7),
                   ),
                 ),
