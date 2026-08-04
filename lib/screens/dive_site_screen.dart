@@ -25,8 +25,20 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   /// 💡 세부 포인트가 펼쳐진 핵심 포인트 (클러스터 확장 상태)
   String? _expandedSiteId;
 
-  /// 💡 하단 포인트 목록 — 마커 라벨에 정보가 다 있어 잠시 숨김 (코드는 보존)
-  static bool get _showPointList => false;
+  /// 하단 포인트 목록 표시 여부
+  static bool get _showPointList => true;
+
+  /// 💡 하단 목록 고정 순서 (사용자 지정)
+  static const List<String> _listOrder = [
+    '죽도', '관음도', '공암', '쌍정초', '내수전 몽돌해변', '행남등대', '북저바위',
+  ];
+
+  int _listRank(DiveSite s) {
+    final i = _listOrder.indexWhere(
+        (o) => s.name == o || s.name.contains(o) || o.contains(s.name));
+    if (i >= 0) return i;
+    return s.isBase ? -1 : 999; // 베이스는 맨 위, 그 외 미지정은 맨 뒤
+  }
 
   /// 💡 관리자 위치 조정 모드: 켜면 마커를 끌어서 위치를 저장할 수 있다
   bool _moveMode = false;
@@ -44,17 +56,22 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   // 울릉도 중심
   static const _ulleungCenter = LatLng(37.505, 130.868);
 
-  /// 대장의 구글 어스 프로젝트 (울릉도 포인트 지도).
-  /// 공유 링크(earth.google.com/earth/d/1-n3WQ…)가 서버에서 이 주소로 연결된다.
+  /// 대장의 구글 어스 프로젝트 — 포인트별 바로가기 링크.
   /// 어스는 iframe 임베드를 차단해서 외부 브라우저로 연다.
   /// 💡 fdl=1: 모바일 접속 시 플레이스토어로 보내는 리다이렉트를 건너뛴다.
-  static const _earthUrl =
-      'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEY5NkM1RkM4RjQwRjg2MERGN0UgAUICCABKCAixjf3tBhAB?hl=ko&fdl=1';
+  /// 빈 문자열 = 아직 링크 미연결 (버튼 누르면 준비 중 안내).
+  static const Map<String, String> _earthLinks = {
+    '죽도':
+        'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEY5NkM1RkM4RjQwRjg2MERGN0UgAUICCABKCAixjf3tBhAB?hl=ko&fdl=1',
+    '관음도': '',
+    '공암': '',
+    '쌍정초': '',
+  };
 
-  void _openEarth() {
+  void _openEarth(String url) {
     // PC(넓은 화면)는 바로 열림 — 안내가 필요 없다
     if (MediaQuery.of(context).size.width > 700) {
-      launchUrlString(_earthUrl, mode: LaunchMode.externalApplication);
+      launchUrlString(url, mode: LaunchMode.externalApplication);
       return;
     }
 
@@ -87,7 +104,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   '1. 아래 버튼을 누르면 "앱 다운로드" 화면이 떠요\n'
                   '    → 정상입니다! 당황 금지 🙅\n'
                   '2. 그 화면에서 브라우저 메뉴(⋮) 열기\n'
-                  '3. "데스크톱 사이트" 체크 ✓\n'
+                  '3. "데스크톱 사이트" 체크 ✓ (+앱으로 설치)\n'
                   '4. 자동 새로고침되며 어스가 열립니다\n\n'
                   '한 번 해두면 다음부터는 버튼만 눌러도 바로 열려요.',
                   style: TextStyle(fontSize: 13, height: 1.65),
@@ -99,7 +116,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 child: ElevatedButton.icon(
                   onPressed: () {
                     Navigator.pop(sheetContext);
-                    launchUrlString(_earthUrl,
+                    launchUrlString(url,
                         mode: LaunchMode.externalApplication);
                   },
                   style: ElevatedButton.styleFrom(
@@ -173,7 +190,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
         style: TextStyle(
             fontSize: 12.5 * s,
             fontWeight: FontWeight.w700,
-            color: Colors.black87),
+            color: Colors.white),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
@@ -186,7 +203,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
           style: TextStyle(
               fontSize: 10 * s,
               fontWeight: FontWeight.w600,
-              color: Colors.black54),
+              color: Colors.white70),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -211,19 +228,20 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
         Rect.fromLTWH(cx - boxW / 2, 1 * s, boxW, boxH),
         Radius.circular(7 * s));
 
-    // 그림자 → 흰 본체 → 색 테두리
+    // 💡 색으로 꽉 채운 말풍선 (흰 배경보다 눈에 확 띄게)
+    final darker = Color.lerp(accent, Colors.black, 0.35)!;
     canvas.drawRRect(
         rrect.shift(Offset(0, 1.5 * s)),
         Paint()
           ..color = Colors.black.withAlpha(55)
           ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 2.5 * s));
-    canvas.drawRRect(rrect, Paint()..color = Colors.white);
+    canvas.drawRRect(rrect, Paint()..color = accent);
     canvas.drawRRect(
         rrect,
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.8 * s
-          ..color = accent);
+          ..strokeWidth = 1.5 * s
+          ..color = darker);
 
     // 꼬리 삼각형 + 실좌표 점
     final tailTop = 1 * s + boxH;
@@ -296,6 +314,10 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     for (final s in sites) {
       if (s.id == _expandedSiteId) expanded = s;
     }
+
+    // 하단 목록: 사용자 지정 순서
+    final orderedSites = [...sites]
+      ..sort((a, b) => _listRank(a).compareTo(_listRank(b)));
 
     // 라벨 아이콘: 캐시에 있으면 쓰고, 없으면 생성 예약 후 기본 마커로 대기
     BitmapDescriptor labelIcon(
@@ -391,15 +413,11 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         markerId: MarkerId(site.id),
                         position: LatLng(site.lat, site.lng),
                         anchor: const Offset(0.5, 1.0),
+                        // 💡 라벨은 포인트명만 — 정보는 하단 목록·시트에서
                         icon: labelIcon(
                           'site_${site.id}',
                           site.isBase ? '⭐ ${site.name}' : site.name,
-                          [
-                            if (site.depth.isNotEmpty) site.depth,
-                            if (site.level.isNotEmpty) site.level,
-                            if (site.subPoints.isNotEmpty)
-                              '세부 ${site.subPoints.length}',
-                          ].join(' · '),
+                          null,
                           site.isBase
                               ? const Color(0xFFF9A825)
                               : Colors.blue[700]!,
@@ -420,14 +438,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                           icon: labelIcon(
                             'sub_${expanded.id}_$i',
                             expanded.subPoints[i]['name'] ?? '',
-                            [
-                              if ((expanded.subPoints[i]['depth'] ?? '')
-                                  .isNotEmpty)
-                                expanded.subPoints[i]['depth']!,
-                              if ((expanded.subPoints[i]['level'] ?? '')
-                                  .isNotEmpty)
-                                expanded.subPoints[i]['level']!,
-                            ].join(' · '),
+                            null,
                             _levelColor(
                                 expanded.subPoints[i]['level'] ?? ''),
                           ),
@@ -560,33 +571,59 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               ),
               child: Column(
                 children: [
-                  // 💡 구글 어스 버튼 — 눈에 띄게 목록 패널 맨 위에
+                  // 💡 구글 어스 버튼 — 포인트별 바로가기 4개
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton(
-                        onPressed: _openEarth,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue[800],
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text('🌍', style: TextStyle(fontSize: 16)),
-                            SizedBox(width: 8),
-                            Text('구글 어스에서 포인트 보기',
-                                style: TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
+                    child: Row(
+                      children: [
+                        for (final e in _earthLinks.entries) ...[
+                          if (e.key != _earthLinks.keys.first)
+                            const SizedBox(width: 6),
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  if (e.value.isEmpty) {
+                                    ScaffoldMessenger.of(context)
+                                      ..hideCurrentSnackBar()
+                                      ..showSnackBar(const SnackBar(
+                                        content:
+                                            Text('이 포인트의 어스 링크는 준비 중이에요!'),
+                                        duration: Duration(seconds: 2),
+                                      ));
+                                    return;
+                                  }
+                                  _openEarth(e.value);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: e.value.isEmpty
+                                      ? Colors.blueGrey[200]
+                                      : Colors.blue[800],
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: EdgeInsets.zero,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(11)),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  children: [
+                                    const Text('🌍',
+                                        style: TextStyle(fontSize: 13)),
+                                    Text(e.key,
+                                        style: const TextStyle(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                   // 💡 참고용 안내 배너 (항상 표시)
@@ -626,7 +663,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
                       children: [
-                        for (final site in sites)
+                        for (final site in orderedSites)
                           GestureDetector(
                             onTap: () {
                               if (site.subPoints.isNotEmpty) {
@@ -748,17 +785,28 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   void _showSiteSheet(DiveSite site, bool isAdmin, DiveSiteProvider provider) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
+      // 💡 지도를 계속 볼 수 있게: 배경을 어둡게 덮지 않고,
+      //    낮게 열리는 드래그 시트로 (위로 끌면 전체 내용)
+      barrierColor: Colors.transparent,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Container(
-          constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(sheetContext).size.height * 0.78),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.45,
+        minChildSize: 0.28,
+        maxChildSize: 0.85,
+        builder: (sheetContext, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius:
+                const BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withAlpha(70), blurRadius: 14),
+            ],
+          ),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
           child: SingleChildScrollView(
+          controller: scrollController,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
