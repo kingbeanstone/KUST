@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app_version.dart';
@@ -18,7 +17,6 @@ import 'buddy_screen.dart';
 import 'personal_checklist_screen.dart';
 import 'guide_screen.dart';
 import 'dive_log_screen.dart';
-import 'coming_soon_screen.dart';
 import 'usage_stats_screen.dart';
 import '../util/usage_stats.dart';
 
@@ -118,14 +116,11 @@ class HomeScreen extends StatelessWidget {
                     icon: Icons.school_outlined, color: Colors.orange,
                     statKey: 'guide',
                     target: const GuideScreen()),
-                // 💡 성장 그래프: 배포(릴리즈)에선 준비 중, 개발(핫리로드)에선 실제 화면
                 _buildMenuCard(context,
                     title: '성장 그래프',
                     icon: Icons.show_chart_rounded, color: Colors.purple,
                     statKey: 'growth',
-                    target: kReleaseMode
-                        ? const ComingSoonScreen()
-                        : const DiveLogScreen()),
+                    target: const DiveLogScreen()),
               ],
             ),
 
