@@ -115,8 +115,8 @@ class UsageStatsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              // 💡 일별 이용 추이: 하루 증가량을 점으로 찍어 선으로 잇는다
-              const _DailyTrend(),
+              // 💡 이용 추이: 시간이 위→아래, 가로축이 접속 수, 기능별 색깔 선
+              const _UsageTrend(),
               const SizedBox(height: 10),
               Center(
                 child: Text('모든 대원의 접속이 실시간으로 누적됩니다.',
@@ -139,17 +139,98 @@ class UsageStatsScreen extends StatelessWidget {
   }
 }
 
-/// 💡 일별 이용 추이: 하루 동안 늘어난 접속 수를 점으로 찍어 선으로 잇는다.
-/// 상단 칩으로 전체 합계 또는 기능 하나를 골라 본다 (딸깍).
-class _DailyTrend extends StatefulWidget {
-  const _DailyTrend();
+/// 기능별 선 색 (이용 추이 그래프)
+const Map<String, Color> _kTrendColors = {
+  'equipment_check': Color(0xFF1E88E5), // 파랑
+  'buddy': Color(0xFF00897B), // 청록
+  'personal_checklist': Color(0xFF3949AB), // 남색
+  'guide': Color(0xFFFB8C00), // 주황
+  'growth': Color(0xFF8E24AA), // 보라
+  'tab_site': Color(0xFF43A047), // 초록
+  'tab_meal': Color(0xFFE53935), // 빨강
+  'tab_more': Color(0xFF6D4C41), // 갈색
+};
+
+/// 💡 이용 추이 그래프.
+/// 시간이 위→아래로 흐르고 가로축(왼→오른쪽)이 접속 수.
+/// 기능 8종이 색깔 선으로 함께 그려지며, 범례 칩을 딸깍해 켜고 끌 수 있다.
+/// 저장은 시간 버킷이 기본 — 일 단위 보기는 버킷을 합산해 만든다.
+class _UsageTrend extends StatefulWidget {
+  const _UsageTrend();
 
   @override
-  State<_DailyTrend> createState() => _DailyTrendState();
+  State<_UsageTrend> createState() => _UsageTrendState();
 }
 
-class _DailyTrendState extends State<_DailyTrend> {
-  String _filter = 'all'; // 'all' 또는 기능 키
+class _UsageTrendState extends State<_UsageTrend> {
+  bool _byHour = true; // 기본 = 시간 단위
+  final Set<String> _hidden = {}; // 숨긴 기능 선
+
+  Widget _unitChip(String name, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: selected ? Colors.blue[700] : Colors.grey[100],
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(
+          name,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : Colors.black54,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _legendChip(String key) {
+    final color = _kTrendColors[key]!;
+    final off = _hidden.contains(key);
+    return GestureDetector(
+      onTap: () => setState(() {
+        if (off) {
+          _hidden.remove(key);
+        } else {
+          _hidden.add(key);
+        }
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: off ? Colors.grey[100] : color.withAlpha(26),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: off ? Colors.grey[400] : color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              UsageStats.shortLabels[key] ?? key,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: off
+                    ? Colors.grey[500]
+                    : Color.lerp(color, Colors.black, 0.25),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -162,99 +243,115 @@ class _DailyTrendState extends State<_DailyTrend> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('일별 이용 추이',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[600])),
+          Row(
+            children: [
+              Text('이용 추이',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[600])),
+              const Spacer(),
+              _unitChip('시간 단위', _byHour, () => setState(() => _byHour = true)),
+              const SizedBox(width: 5),
+              _unitChip(
+                  '일 단위', !_byHour, () => setState(() => _byHour = false)),
+            ],
+          ),
           const SizedBox(height: 2),
-          Text('하루 동안 늘어난 접속 수',
+          Text(
+              _byHour
+                  ? '최근 48시간 · 아래로 갈수록 최신 · 오른쪽일수록 많이 사용'
+                  : '최근 14일 · 아래로 갈수록 최신 · 오른쪽일수록 많이 사용',
               style: TextStyle(fontSize: 10.5, color: Colors.grey[400])),
           const SizedBox(height: 10),
-          // 기능 필터 칩
+          // 범례 (딸깍해서 선 켜고 끄기)
           Wrap(
             spacing: 5,
             runSpacing: 5,
             children: [
-              for (final (key, name) in [
-                ('all', '전체'),
-                for (final e in UsageStats.shortLabels.entries)
-                  (e.key, e.value),
-              ])
-                GestureDetector(
-                  onTap: () => setState(() => _filter = key),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color:
-                          _filter == key ? Colors.blue[700] : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color:
-                            _filter == key ? Colors.white : Colors.black54,
-                      ),
-                    ),
-                  ),
-                ),
+              for (final key in UsageStats.labels.keys) _legendChip(key),
             ],
           ),
           const SizedBox(height: 12),
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: UsageStats.daily
+            // 14일치 시간 버킷 = 일 단위 보기에도 충분
+            stream: UsageStats.hourly
                 .orderBy(FieldPath.documentId, descending: true)
-                .limit(30)
+                .limit(336)
                 .snapshots(),
             builder: (context, snapshot) {
               final docs = snapshot.data?.docs ?? [];
-              // 최근 30일분을 날짜 오름차순으로
-              final rows = docs.reversed.toList();
-
-              final values = <double>[];
-              final labels = <String>[];
-              for (final d in rows) {
-                final data = d.data();
-                int count;
-                if (_filter == 'all') {
-                  count = 0;
-                  for (final k in UsageStats.labels.keys) {
-                    count += (data[k] as num?)?.toInt() ?? 0;
-                  }
-                } else {
-                  count = (data[_filter] as num?)?.toInt() ?? 0;
-                }
-                values.add(count.toDouble());
-                // '2026-08-04' → '8/4'
-                final p = d.id.split('-');
-                labels.add(p.length == 3
-                    ? '${int.tryParse(p[1]) ?? p[1]}/${int.tryParse(p[2]) ?? p[2]}'
-                    : d.id);
-              }
-
-              if (values.length < 2) {
+              if (docs.isEmpty) {
                 return SizedBox(
                   height: 80,
                   child: Center(
-                    child: Text('이틀 이상 쌓이면 선이 그려집니다.',
+                    child: Text('아직 추이 데이터가 없습니다.\n지금부터 쌓이기 시작합니다.',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                             fontSize: 11.5, color: Colors.grey[400])),
                   ),
                 );
               }
 
+              // 버킷 ID → 데이터
+              final byId = {for (final d in docs) d.id: d.data()};
+
+              String two(int v) => v.toString().padLeft(2, '0');
+
+              // 💡 활동 없는 시간/일도 0으로 채워 연속된 시간축을 만든다.
+              // 위=과거 → 아래=최신.
+              final now = DateTime.now();
+              final timeLabels = <String>[];
+              final series = {
+                for (final k in UsageStats.labels.keys) k: <double>[],
+              };
+
+              if (_byHour) {
+                for (var i = 47; i >= 0; i--) {
+                  final t = now.subtract(Duration(hours: i));
+                  final id =
+                      '${t.year}-${two(t.month)}-${two(t.day)}-${two(t.hour)}';
+                  final data = byId[id];
+                  timeLabels.add('${t.month}/${t.day} ${t.hour}시');
+                  for (final k in UsageStats.labels.keys) {
+                    series[k]!.add(
+                        ((data?[k] as num?)?.toInt() ?? 0).toDouble());
+                  }
+                }
+              } else {
+                for (var i = 13; i >= 0; i--) {
+                  final t = now.subtract(Duration(days: i));
+                  final prefix = '${t.year}-${two(t.month)}-${two(t.day)}';
+                  timeLabels.add('${t.month}/${t.day}');
+                  final sums = {for (final k in UsageStats.labels.keys) k: 0};
+                  for (final e in byId.entries) {
+                    if (!e.key.startsWith(prefix)) continue;
+                    for (final k in UsageStats.labels.keys) {
+                      sums[k] = sums[k]! + ((e.value[k] as num?)?.toInt() ?? 0);
+                    }
+                  }
+                  for (final k in UsageStats.labels.keys) {
+                    series[k]!.add(sums[k]!.toDouble());
+                  }
+                }
+              }
+
+              final visible = {
+                for (final e in series.entries)
+                  if (!_hidden.contains(e.key)) e.key: e.value,
+              };
+
+              final rowH = _byHour ? 13.0 : 24.0;
+              final chartHeight = 24 + timeLabels.length * rowH;
+
               return SizedBox(
-                height: 170,
+                height: chartHeight,
                 width: double.infinity,
                 child: CustomPaint(
-                  painter: _TrendLinePainter(
-                    values: values,
-                    labels: labels,
-                    color: Colors.blue[700]!,
+                  painter: _VerticalTrendPainter(
+                    timeLabels: timeLabels,
+                    series: visible,
+                    colors: _kTrendColors,
                   ),
                 ),
               );
@@ -266,103 +363,104 @@ class _DailyTrendState extends State<_DailyTrend> {
   }
 }
 
-/// 간단한 꺾은선 그래프 (외부 라이브러리 없이)
-class _TrendLinePainter extends CustomPainter {
-  final List<double> values;
-  final List<String> labels;
-  final Color color;
+/// 세로형 다중 꺾은선 그래프 (외부 라이브러리 없이).
+/// 세로축 = 시간(위→아래), 가로축 = 접속 수(왼→오른쪽).
+class _VerticalTrendPainter extends CustomPainter {
+  final List<String> timeLabels;
+  final Map<String, List<double>> series;
+  final Map<String, Color> colors;
 
-  _TrendLinePainter({
-    required this.values,
-    required this.labels,
-    required this.color,
+  _VerticalTrendPainter({
+    required this.timeLabels,
+    required this.series,
+    required this.colors,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    const leftPad = 30.0;
-    const bottomPad = 18.0;
-    const topPad = 14.0;
-    final chartW = size.width - leftPad - 8;
-    final chartH = size.height - topPad - bottomPad;
+    const leftPad = 48.0;
+    const rightPad = 10.0;
+    const topPad = 16.0;
+    const bottomPad = 4.0;
+    final chartW = size.width - leftPad - rightPad;
+    final n = timeLabels.length;
+    if (n == 0) return;
+    final rowH = (size.height - topPad - bottomPad) / n;
 
-    var minV = 0.0;
-    var maxV = values.reduce(math.max);
-    if (maxV < 1) maxV = 1;
-    maxV *= 1.15;
+    var maxV = 1.0;
+    for (final values in series.values) {
+      for (final v in values) {
+        if (v > maxV) maxV = v;
+      }
+    }
+    maxV *= 1.08;
 
-    double x(int i) => values.length == 1
-        ? leftPad + chartW / 2
-        : leftPad + chartW * i / (values.length - 1);
-    double y(double v) => topPad + chartH * (1 - (v - minV) / (maxV - minV));
+    double x(double v) => leftPad + chartW * v / maxV;
+    double y(int i) => topPad + rowH * i + rowH / 2;
 
-    // 가로 눈금 3줄 + 값
+    // ── 값 눈금 (세로 격자선 + 상단 숫자)
     final gridPaint = Paint()
       ..color = const Color(0xFFECEFF1)
       ..strokeWidth = 1;
     for (var g = 0; g <= 2; g++) {
-      final gv = minV + (maxV - minV) * g / 2;
-      final gy = y(gv);
-      canvas.drawLine(
-          Offset(leftPad, gy), Offset(size.width - 4, gy), gridPaint);
-      _text(canvas, gv.round().toString(), Offset(0, gy - 6), 9.5,
+      final gv = maxV * g / 2;
+      final gx = x(gv);
+      canvas.drawLine(Offset(gx, topPad),
+          Offset(gx, size.height - bottomPad), gridPaint);
+      _text(canvas, gv.round().toString(), Offset(gx - 5, 0), 8.5,
           Colors.grey[500]!);
     }
 
-    // 꺾은선
-    final linePaint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final path = Path();
-    for (var i = 0; i < values.length; i++) {
-      if (i == 0) {
-        path.moveTo(x(i), y(values[i]));
-      } else {
-        path.lineTo(x(i), y(values[i]));
+    // ── 시간 라벨 (왼쪽, 겹치지 않게 건너뛰기) + 옅은 가로 안내선
+    final rowGuide = Paint()
+      ..color = const Color(0xFFF4F6F8)
+      ..strokeWidth = 1;
+    final step = math.max(1, (n / 10).ceil());
+    for (var i = 0; i < n; i += step) {
+      canvas.drawLine(Offset(leftPad, y(i)),
+          Offset(size.width - rightPad, y(i)), rowGuide);
+      _text(canvas, timeLabels[i], Offset(0, y(i) - 5), 8.5,
+          Colors.grey[600]!);
+    }
+
+    // ── 기능별 선 (모두 0인 기능은 생략해 왼쪽 끝 겹침을 줄인다)
+    for (final e in series.entries) {
+      final values = e.value;
+      if (values.every((v) => v == 0)) continue;
+      final color = colors[e.key] ?? Colors.blueGrey;
+
+      final linePaint = Paint()
+        ..color = color.withAlpha(210)
+        ..strokeWidth = 1.8
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+      final path = Path();
+      for (var i = 0; i < values.length; i++) {
+        if (i == 0) {
+          path.moveTo(x(values[i]), y(i));
+        } else {
+          path.lineTo(x(values[i]), y(i));
+        }
       }
-    }
-    canvas.drawPath(path, linePaint);
+      canvas.drawPath(path, linePaint);
 
-    // 점
-    final dotPaint = Paint()..color = color;
-    final dotOutline = Paint()..color = Colors.white;
-    for (var i = 0; i < values.length; i++) {
-      canvas.drawCircle(Offset(x(i), y(values[i])), 4, dotOutline);
-      canvas.drawCircle(Offset(x(i), y(values[i])), 3, dotPaint);
-    }
-
-    // 마지막 값 강조
-    final last = values.length - 1;
-    _text(
-      canvas,
-      values[last].round().toString(),
-      Offset(math.min(x(last) - 8, size.width - 30), y(values[last]) - 18),
-      10.5,
-      color,
-      bold: true,
-    );
-
-    // 날짜 라벨 (겹치지 않게 건너뛰기)
-    final step = math.max(1, (values.length / 7).ceil());
-    for (var i = 0; i < values.length; i += step) {
-      _text(canvas, labels[i], Offset(x(i) - 10, size.height - 13), 9,
-          Colors.grey[500]!);
+      // 값이 있는 지점만 점 표시
+      final dotPaint = Paint()..color = color;
+      for (var i = 0; i < values.length; i++) {
+        if (values[i] > 0) {
+          canvas.drawCircle(Offset(x(values[i]), y(i)), 2.4, dotPaint);
+        }
+      }
     }
   }
 
   void _text(
-      Canvas canvas, String text, Offset offset, double size, Color color,
-      {bool bold = false}) {
+      Canvas canvas, String text, Offset offset, double size, Color color) {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(
-          fontSize: size,
-          color: color,
-          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-        ),
+        style: TextStyle(fontSize: size, color: color),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
@@ -370,6 +468,6 @@ class _TrendLinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _TrendLinePainter old) =>
-      old.values != values || old.color != color;
+  bool shouldRepaint(covariant _VerticalTrendPainter old) =>
+      old.timeLabels != timeLabels || old.series != series;
 }
