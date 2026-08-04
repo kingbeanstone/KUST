@@ -57,21 +57,28 @@
 <body>
 
 
-<!-- 💡 인앱 업데이트: 서비스워커·캐시를 비우고 새로고침해 최신 배포판을 받는다 -->
+<!-- 💡 인앱 업데이트: 서비스워커·캐시를 비우고 새로고침해 최신 배포판을 받는다.
+     무슨 일이 있어도 2.5초 안에는 반드시 새로고침되도록 안전장치를 건다. -->
 <script>
   window.kustForceUpdate = function () {
-    var jobs = [];
-    if ('serviceWorker' in navigator) {
-      jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
-        return Promise.all(rs.map(function (r) { return r.unregister(); }));
-      }));
-    }
-    if (window.caches && caches.keys) {
-      jobs.push(caches.keys().then(function (ks) {
-        return Promise.all(ks.map(function (k) { return caches.delete(k); }));
-      }));
-    }
-    Promise.allSettled(jobs).then(function () { window.location.reload(); });
+    var done = false;
+    function go() { if (!done) { done = true; window.location.reload(); } }
+    setTimeout(go, 2500);
+    try {
+      var jobs = [];
+      if ('serviceWorker' in navigator) {
+        jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+          return Promise.all(rs.map(function (r) { return r.unregister(); }));
+        }));
+      }
+      if (window.caches && caches.keys) {
+        jobs.push(caches.keys().then(function (ks) {
+          return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+        }));
+      }
+      Promise.all(jobs.map(function (p) { return p.catch(function () {}); }))
+        .then(go, go);
+    } catch (e) { go(); }
   };
 </script>
 

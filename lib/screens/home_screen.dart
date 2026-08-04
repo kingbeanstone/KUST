@@ -366,7 +366,13 @@ class HomeScreen extends StatelessWidget {
         final latest = (snap.data?.data()?['latest'] ?? '').toString();
         if (!AppUpdate.isNewer(latest)) return const SizedBox.shrink();
         return GestureDetector(
-          onTap: AppUpdate.apply,
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('⬇️ 새 버전으로 업데이트하는 중...'),
+              duration: Duration(seconds: 3),
+            ));
+            AppUpdate.apply();
+          },
           child: Container(
             width: double.infinity,
             margin: const EdgeInsets.only(top: 14),
