@@ -39,10 +39,37 @@ class UsageStats {
     await prefs.setBool('usage_stats_opt_out', value);
   }
 
+  /// 히트맵 열 머리용 짧은 이름
+  static const Map<String, String> shortLabels = {
+    'equipment_check': '장비',
+    'buddy': '버디',
+    'personal_checklist': '체크',
+    'guide': '가이드',
+    'growth': '성장',
+    'tab_site': '사이트',
+    'tab_meal': '식단',
+    'tab_more': '더보기',
+  };
+
+  /// 시간대별 버킷 — usage_stats 문서 아래 hourly/{yyyy-MM-dd-HH} 서브컬렉션
+  static CollectionReference<Map<String, dynamic>> get hourly =>
+      doc.collection('hourly');
+
   static void log(String key) {
     if (_optOut) return; // 이 기기는 집계 제외
     if (!labels.containsKey(key)) return; // 집계 대상 아님
     doc
+        .set({key: FieldValue.increment(1)}, SetOptions(merge: true))
+        .catchError((_) {});
+
+    // 시간대별 누적 (문서 ID가 시간순 정렬되도록 zero-pad)
+    final now = DateTime.now();
+    final bucket = '${now.year}'
+        '-${now.month.toString().padLeft(2, '0')}'
+        '-${now.day.toString().padLeft(2, '0')}'
+        '-${now.hour.toString().padLeft(2, '0')}';
+    hourly
+        .doc(bucket)
         .set({key: FieldValue.increment(1)}, SetOptions(merge: true))
         .catchError((_) {});
   }
