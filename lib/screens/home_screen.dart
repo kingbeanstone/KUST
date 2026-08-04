@@ -30,6 +30,10 @@ class HomeScreen extends StatelessWidget {
     final expeditionProvider = Provider.of<ExpeditionProvider>(context);
 
     final isAdmin = equipmentProvider.isAdmin;
+    // 💡 800(개발자) 인증이면 관리자 표시가 빨간색
+    final adminColor = context.watch<AuthProvider>().isDeveloper
+        ? Colors.red[600]!
+        : Colors.blue;
     final homeNotice = noticeProvider.homeNotice;
 
     return Scaffold(
@@ -57,7 +61,7 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             icon: Icon(
               isAdmin ? Icons.admin_panel_settings : Icons.person_outline,
-              color: isAdmin ? Colors.blue : Colors.black87,
+              color: isAdmin ? adminColor : Colors.black87,
             ),
             tooltip: isAdmin ? '관리자 모드 해제' : '관리자 인증',
             onPressed: () => _toggleAdmin(context),
@@ -463,10 +467,20 @@ class HomeScreen extends StatelessWidget {
           UserAccountsDrawerHeader(
             decoration: BoxDecoration(color: Colors.blue[800]),
             accountName: const Text('KUST 원정대원', style: TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: Text(isAdmin ? '관리자 권한 활성화됨' : '일반 사용자 모드'),
+            accountEmail: Text(isAdmin
+                ? (Provider.of<AuthProvider>(context).isDeveloper
+                    ? '개발자 모드 활성화됨'
+                    : '관리자 권한 활성화됨')
+                : '일반 사용자 모드'),
             currentAccountPicture: CircleAvatar(
               backgroundColor: Colors.white,
-              child: Icon(isAdmin ? Icons.admin_panel_settings : Icons.person, color: Colors.blue[800], size: 40),
+              child: Icon(
+                isAdmin ? Icons.admin_panel_settings : Icons.person,
+                color: isAdmin && Provider.of<AuthProvider>(context).isDeveloper
+                    ? Colors.red[600]
+                    : Colors.blue[800],
+                size: 40,
+              ),
             ),
           ),
 

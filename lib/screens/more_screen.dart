@@ -153,7 +153,11 @@ class _MoreScreenState extends State<MoreScreen> {
       ),
       child: Row(
         children: [
-          Icon(auth.isAdmin ? Icons.admin_panel_settings : Icons.lock_outline, color: auth.isAdmin ? Colors.blue : Colors.grey, size: 32),
+          Icon(auth.isAdmin ? Icons.admin_panel_settings : Icons.lock_outline,
+              color: auth.isAdmin
+                  ? (auth.isDeveloper ? Colors.red[600] : Colors.blue)
+                  : Colors.grey,
+              size: 32),
           const SizedBox(width: 16),
           Expanded(
             child: Column(

@@ -6,6 +6,10 @@ class AuthProvider with ChangeNotifier {
   bool _isAdmin = false;
   bool get isAdmin => _isAdmin;
 
+  /// 💡 800(개발자 번호)으로 인증한 기기 — 관리자 표시가 빨간색이 된다
+  bool _isDeveloper = false;
+  bool get isDeveloper => _isDeveloper;
+
   bool _isPasswordSaved = false;
   bool get isPasswordSaved => _isPasswordSaved;
 
@@ -26,6 +30,7 @@ class AuthProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isPasswordSaved = prefs.getBool('isPasswordSaved') ?? false;
+      _isDeveloper = prefs.getBool('isDeveloper') ?? false;
 
       // 💡 앱 실행 시 이미 기억된 상태라면 즉시 관리자 권한 부여 (자동 로그인)
       if (_isPasswordSaved) {
@@ -44,6 +49,9 @@ class AuthProvider with ChangeNotifier {
       _isAdmin = true;
 
       if (password == "800") {
+        _isDeveloper = true;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isDeveloper', true);
         await UsageStats.setOptOut(true);
         addLog("🧑‍💻 개발자 인증 — 이 기기는 이용 통계 집계 제외");
       }
@@ -68,8 +76,10 @@ class AuthProvider with ChangeNotifier {
   Future<void> forgetAdminSetting() async {
     _isPasswordSaved = false;
     _isAdmin = false;
+    _isDeveloper = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('isPasswordSaved');
+    await prefs.remove('isDeveloper');
     addLog("🗑️ 저장된 관리자 정보를 삭제했습니다.");
     notifyListeners();
   }
