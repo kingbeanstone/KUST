@@ -871,10 +871,13 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text(
+                    '처음 다이빙을 하면, 포인트 브리핑을 들어도 머릿속에 잘 그려지지 않고, '
                     '다녀와도 자신이 어디를 다녀온 것인지 잘 모를 수 있습니다.\n\n'
                     '따라서 포인트 위치와 간단한 설명을 쉽게 확인할 수 있도록 하여, '
                     '포인트에 대한 이해를 돕고 다이빙을 더욱 재밌게 하는 서비스를 '
-                    '구현하고자 했습니다.',
+                    '구현하고자 했습니다.\n\n'
+                    '여러분의 원정 다이빙이 더욱 재밌어지고, 소중한 추억으로 '
+                    '오랫도록 잘 간직할 수 있길 바랍니다.',
                     style: TextStyle(fontSize: 13, height: 1.7),
                   ),
                 ),
@@ -896,7 +899,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     '2. 두 손가락으로 회전하면서 울릉도와 다이빙 포인트의 위치·모양을 '
                     '다각도로 살펴보세요.\n\n'
                     '3. 화면 오른쪽 하단을 두 손가락으로 위아래로 밀면 기울기를 '
-                    '조정할 수 있어요.',
+                    '조정할 수 있어요.\n\n'
+                    '💻 PC로 보면 더 편해요!',
                     style: TextStyle(fontSize: 13, height: 1.7),
                   ),
                 ),
