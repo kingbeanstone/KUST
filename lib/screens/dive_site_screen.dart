@@ -63,9 +63,12 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   static const Map<String, String> _earthLinks = {
     '죽도':
         'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEY5NkM1RkM4RjQwRjg2MERGN0UgAUICCABKCAixjf3tBhAB?hl=ko&fdl=1',
-    '관음도': '',
-    '공암': '',
-    '쌍정초': '',
+    '관음도':
+        'https://earth.google.com/web/data=MicKJQojCiExOW9tT2x4NGJ6UEhDajc4dmUxTnI4elhKMXRCT0FFTHo?hl=ko&fdl=1',
+    '공암':
+        'https://earth.google.com/web/data=MicKJQojCiExUVBkZ1g5WGtCMmZtRUxUTkhzNXZ4czYteWdWTWMxNm8?hl=ko&fdl=1',
+    '쌍정초':
+        'https://earth.google.com/web/data=MicKJQojCiExWElFckRhMFFQMHZrbHp0RFBuMGZtWUJzLUhqVHV6OG0?hl=ko&fdl=1',
   };
 
   void _openEarth(String url) {
@@ -856,7 +859,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     ),
                   ),
                 ),
-                const Text('🗺 사이트 기능 의도',
+                const Text('🗺 사이트 기능 설명',
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 10),
