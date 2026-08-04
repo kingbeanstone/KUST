@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dive_log_model.dart';
+import '../providers/dive_site_provider.dart';
 
 /// 💡 성장 그래프: 로그 기록 → 티어 · 능력치 레이더 · 잔여 바/분당 소모 그래프.
 /// 이 기기(브라우저)에만 저장된다 — 열면 바로 내 기록.
@@ -233,6 +235,17 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
+        actions: [
+          // 💡 예시 미리보기: 데이터를 넣으면 어떤 그림이 되는지 보여준다
+          IconButton(
+            icon: Icon(Icons.help_outline, color: Colors.grey[600]),
+            tooltip: '예시 보기',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const _GrowthDemoScreen()),
+            ),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 90),
@@ -464,6 +477,8 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
         ? null
         : log.scores.values.reduce((a, b) => a + b) / log.scores.length;
     final infoParts = <String>[
+      if (log.startTime.isNotEmpty && log.endTime.isNotEmpty)
+        '${log.startTime}~${log.endTime}',
       if (log.depth > 0) '${_fmt(log.depth)}m',
       if (log.duration > 0) '${_fmt(log.duration)}분',
       if (log.startBar > 0) '${_fmt(log.startBar)}→${_fmt(log.endBar)}bar',
@@ -536,8 +551,15 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     _endBarController.text =
         log != null && log.endBar > 0 ? _fmt(log.endBar) : '';
 
-    // 셀프 평가 점수 (다이얼로그 안 로컬 상태)
+    // 셀프 평가 점수·시간 (다이얼로그 안 로컬 상태)
     final scores = Map<String, int>.from(log?.scores ?? {});
+    var startTime = log?.startTime ?? '';
+    var endTime = log?.endTime ?? '';
+
+    // 사이트 탭에 등록된 포인트 이름들 (칩 선택용)
+    final siteNames = [
+      for (final s in context.read<DiveSiteProvider>().sites) s.name,
+    ];
 
     Widget numField(TextEditingController c, String label) => Expanded(
           child: TextField(
@@ -546,6 +568,20 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
             decoration: InputDecoration(labelText: label, isDense: true),
           ),
         );
+
+    String fmtTime(TimeOfDay t) =>
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+    // 시작·종료가 모두 있으면 다이빙 시간(분)을 자동 계산해 채운다
+    void recalcDuration() {
+      if (startTime.isEmpty || endTime.isEmpty) return;
+      final s = startTime.split(':');
+      final e = endTime.split(':');
+      var minutes = (int.parse(e[0]) * 60 + int.parse(e[1])) -
+          (int.parse(s[0]) * 60 + int.parse(s[1]));
+      if (minutes <= 0) minutes += 24 * 60; // 자정 넘김 대비
+      _durationController.text = '$minutes';
+    }
 
     showDialog(
       context: context,
@@ -573,9 +609,89 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                       child: TextField(
                         controller: _siteController,
                         decoration: const InputDecoration(
-                            labelText: '장소', isDense: true),
+                            labelText: '장소 (직접 입력 가능)', isDense: true),
                       ),
                     ),
+                  ],
+                ),
+                // 💡 사이트 탭의 포인트를 딸깍으로 선택
+                if (siteNames.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 5,
+                    children: [
+                      for (final name in siteNames)
+                        GestureDetector(
+                          onTap: () => setDialogState(
+                              () => _siteController.text = name),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _siteController.text == name
+                                  ? Colors.blue[700]
+                                  : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: Text(
+                              name,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: _siteController.text == name
+                                    ? Colors.white
+                                    : Colors.black54,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 10),
+                // 💡 입수·출수 시각 (탭 → 시계 선택) — 시간(분) 자동 계산
+                Row(
+                  children: [
+                    for (final isStart in [true, false]) ...[
+                      if (!isStart) const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: ctx,
+                              initialTime: TimeOfDay.now(),
+                            );
+                            if (picked == null) return;
+                            setDialogState(() {
+                              if (isStart) {
+                                startTime = fmtTime(picked);
+                              } else {
+                                endTime = fmtTime(picked);
+                              }
+                              recalcDuration();
+                            });
+                          },
+                          child: InputDecorator(
+                            decoration: InputDecoration(
+                              labelText: isStart ? '입수 시각' : '출수 시각',
+                              isDense: true,
+                            ),
+                            child: Text(
+                              (isStart ? startTime : endTime).isEmpty
+                                  ? '--:--'
+                                  : (isStart ? startTime : endTime),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: (isStart ? startTime : endTime).isEmpty
+                                    ? Colors.grey[400]
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -583,7 +699,7 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                   children: [
                     numField(_depthController, '수심 m'),
                     const SizedBox(width: 8),
-                    numField(_durationController, '시간 분'),
+                    numField(_durationController, '시간 분 (자동 계산)'),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -686,6 +802,8 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                       DateTime.now().microsecondsSinceEpoch.toString(),
                   date: date,
                   site: _siteController.text.trim(),
+                  startTime: startTime,
+                  endTime: endTime,
                   depth: num0(_depthController),
                   duration: num0(_durationController),
                   startBar: num0(_startBarController),
@@ -704,6 +822,231 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 💡 예시 미리보기(? 버튼): 가짜 데이터로 티어·능력치·그래프가
+/// 어떤 그림이 되는지 보여준다. 저장과는 무관한 구경용 화면.
+class _GrowthDemoScreen extends StatelessWidget {
+  const _GrowthDemoScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    // 꺾임이 살아있는 예시 수치 (전체적으로는 성장 추세)
+    const endValues = [45.0, 70.0, 55.0, 85.0, 65.0, 95.0, 110.0];
+    const sacValues = [17.5, 13.8, 15.6, 12.2, 13.9, 10.4, 9.6];
+    const labels = ['8/4', '8/5', '8/5', '8/6', '8/7', '8/8', '8/9'];
+    const radarValues = [0.80, 0.55, 0.65, 0.90, 0.70];
+    const tierColor = Color(0xFFF9A825); // 골드
+
+    Widget card(String title, String subtitle, Widget child) => Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 3),
+              Text(subtitle,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+              const SizedBox(height: 10),
+              child,
+            ],
+          ),
+        );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        title: const Text('이렇게 기록돼요 (예시)',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+        children: [
+          // 안내 배너
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.amber[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber[200]!),
+            ),
+            child: const Text(
+              '아래는 예시 데이터입니다.\n로그를 기록하면 내 기록으로 이렇게 그려져요!',
+              style: TextStyle(fontSize: 12, height: 1.5),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 티어 엠블럼 예시
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              children: [
+                SizedBox(
+                  width: 130,
+                  height: 130,
+                  child: CustomPaint(
+                    painter: _TierBadgePainter(color: tierColor),
+                    child: const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('52',
+                              style: TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  height: 1.0)),
+                          Text('로그',
+                              style: TextStyle(
+                                  fontSize: 11, color: Colors.white70)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text('골드',
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: tierColor,
+                        letterSpacing: 1)),
+                const SizedBox(height: 3),
+                Text('기존 45 + 앱 기록 7 · 다음 티어까지 38회',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey[600])),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 능력치 레이더 예시
+          card(
+            '능력치',
+            '로그마다 셀프 평가한 점수의 평균 — 강점과 약점이 보입니다.',
+            SizedBox(
+              height: 210,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _RadarChartPainter(
+                  labels: kDiveSkills.values.toList(),
+                  values: radarValues,
+                  color: Colors.blue[700]!,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 잔여 바 예시
+          card(
+            '잔여 바',
+            '다이빙 후 남은 공기. 높아질수록 성장!',
+            SizedBox(
+              height: 160,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _LineChartPainter(
+                    values: endValues,
+                    labels: labels,
+                    color: Colors.blue[700]!,
+                    unit: 'bar'),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 분당 소모 예시
+          card(
+            '분당 소모',
+            '1분에 쓰는 공기(bar/min). 낮아질수록 성장!',
+            SizedBox(
+              height: 160,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _LineChartPainter(
+                    values: sacValues,
+                    labels: labels,
+                    color: Colors.teal[600]!,
+                    unit: ''),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 로그 목록 예시 한 줄
+          card(
+            '로그 목록',
+            '기록한 로그는 이렇게 쌓입니다. 탭하면 수정할 수 있어요.',
+            Column(
+              children: [
+                for (final (n, date, site, info) in const [
+                  (7, '2026-08-09', '죽도', '10:12~10:58 · 22m · 46분 · 200→110bar'),
+                  (6, '2026-08-08', '관음도', '14:05~14:47 · 18m · 42분 · 200→95bar'),
+                ])
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 13, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.blue[50],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text('$n',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue[800])),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('$date · $site',
+                                  style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600)),
+                              Text(info,
+                                  style: TextStyle(
+                                      fontSize: 11.5,
+                                      color: Colors.grey[600])),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

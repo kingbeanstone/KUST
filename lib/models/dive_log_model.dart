@@ -20,6 +20,8 @@ class DiveLog {
   final String id;
   final String date; // 'YYYY-MM-DD' (문자열 정렬 = 시간 정렬)
   final String site; // 다이빙 장소
+  final String startTime; // 입수 시각 'HH:mm' (없으면 '')
+  final String endTime; // 출수 시각 'HH:mm' (없으면 '')
   final double depth; // 최대 수심 (m)
   final double duration; // 다이빙 시간 (분)
   final double startBar; // 시작 잔압
@@ -32,6 +34,8 @@ class DiveLog {
     required this.id,
     required this.date,
     this.site = '',
+    this.startTime = '',
+    this.endTime = '',
     this.depth = 0,
     this.duration = 0,
     this.startBar = 0,
@@ -48,6 +52,8 @@ class DiveLog {
   Map<String, dynamic> toMap() => {
         'date': date,
         'site': site,
+        'startTime': startTime,
+        'endTime': endTime,
         'depth': depth,
         'duration': duration,
         'startBar': startBar,
@@ -59,6 +65,8 @@ class DiveLog {
         id: id,
         date: (map['date'] ?? '').toString(),
         site: (map['site'] ?? '').toString(),
+        startTime: (map['startTime'] ?? '').toString(),
+        endTime: (map['endTime'] ?? '').toString(),
         depth: (map['depth'] as num? ?? 0).toDouble(),
         duration: (map['duration'] as num? ?? 0).toDouble(),
         startBar: (map['startBar'] as num? ?? 0).toDouble(),
