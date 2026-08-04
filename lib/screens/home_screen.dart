@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../app_version.dart';
+import '../util/app_update.dart';
 import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/executive_provider.dart';
@@ -132,6 +134,9 @@ class HomeScreen extends StatelessWidget {
 
             // 💡 알림 배너 (버튼들 아래 위치)
             _buildQuickNoticeCard(context, noticeProvider, isAdmin, homeNotice),
+
+            // 💡 새 버전이 나오면 공지 아래에 업데이트 버튼이 짠 하고 뜬다
+            _buildUpdateBanner(),
 
             const SizedBox(height: 40),
           ],
@@ -350,6 +355,59 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  /// 💡 인앱 업데이트 배너: 새 버전이 있을 때만 나타난다 (탭 = 즉시 업데이트)
+  Widget _buildUpdateBanner() {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: AppUpdate.doc.snapshots(),
+      builder: (context, snap) {
+        final latest = (snap.data?.data()?['latest'] ?? '').toString();
+        if (!AppUpdate.isNewer(latest)) return const SizedBox.shrink();
+        return GestureDetector(
+          onTap: AppUpdate.apply,
+          child: Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              gradient:
+                  LinearGradient(colors: [Colors.blue[700]!, Colors.blue[500]!]),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.blue.withAlpha(70),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3)),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Text('🚀', style: TextStyle(fontSize: 20)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('새 버전이 나왔어요!',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13.5)),
+                      Text('$latest — 탭 한 번이면 업데이트 완료',
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 11.5)),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.refresh_rounded,
+                    color: Colors.white, size: 20),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

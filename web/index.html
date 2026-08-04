@@ -57,6 +57,24 @@
 <body>
 
 
+<!-- 💡 인앱 업데이트: 서비스워커·캐시를 비우고 새로고침해 최신 배포판을 받는다 -->
+<script>
+  window.kustForceUpdate = function () {
+    var jobs = [];
+    if ('serviceWorker' in navigator) {
+      jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+        return Promise.all(rs.map(function (r) { return r.unregister(); }));
+      }));
+    }
+    if (window.caches && caches.keys) {
+      jobs.push(caches.keys().then(function (ks) {
+        return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+      }));
+    }
+    Promise.allSettled(jobs).then(function () { window.location.reload(); });
+  };
+</script>
+
 <!-- Flutter 부트스트랩 스크립트 -->
 <script src="flutter_bootstrap.js" async=""></script>
 

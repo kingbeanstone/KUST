@@ -1,7 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../app_version.dart';
+import '../util/app_update.dart';
 import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/executive_provider.dart';
@@ -519,6 +521,58 @@ class _MoreScreenState extends State<MoreScreen> {
                 title: const Text('KUST 앱 소개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 trailing: const Icon(Icons.chevron_right, size: 20),
                 onTap: () => _showAppIntro(context),
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              // 💡 인앱 업데이트: 최신 버전 여부 표시 + 탭 한 번으로 갱신
+              StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: AppUpdate.doc.snapshots(),
+                builder: (context, snap) {
+                  final latest =
+                      (snap.data?.data()?['latest'] ?? '').toString();
+                  final hasUpdate = AppUpdate.isNewer(latest);
+                  return ListTile(
+                    leading: Icon(
+                      hasUpdate
+                          ? Icons.system_update_alt
+                          : Icons.verified_outlined,
+                      color:
+                          hasUpdate ? Colors.orange[700] : Colors.green[600],
+                    ),
+                    title: Text(
+                        hasUpdate ? '새 버전 업데이트' : '앱 업데이트',
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500)),
+                    subtitle: Text(
+                      hasUpdate
+                          ? '$latest 나왔어요! (현재 ${AppUpdate.current}) — 탭하면 바로 업데이트'
+                          : '최신 버전을 사용 중입니다 (${AppUpdate.current})',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    ),
+                    trailing: hasUpdate
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[600],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text('업데이트',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white)),
+                          )
+                        : null,
+                    onTap: () {
+                      if (hasUpdate) {
+                        _showToast('⬇️ 최신 버전으로 업데이트합니다...');
+                        AppUpdate.apply();
+                      } else {
+                        _showToast('✅ 이미 최신 버전이에요!');
+                      }
+                    },
+                  );
+                },
               ),
               // 💡 저장된 비밀번호 정보를 삭제할 수 있는 관리자용 옵션
               if (auth.isPasswordSaved) ...[
