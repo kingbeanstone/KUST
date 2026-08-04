@@ -175,11 +175,20 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
 
   /// 💡 이름·정보가 적힌 말풍선 라벨 마커를 캔버스로 직접 그린다.
   /// 하단 점이 실제 좌표에 오도록 anchor(0.5, 1.0)와 함께 쓴다.
+  /// 라벨 정렬: 마커 점은 그대로 두고 말풍선만 좌/우로 비켜 겹침을 줄인다.
+  /// 반환값 = 이미지 안에서 점(실좌표)이 놓일 가로 비율 (anchor.x와 동일하게 사용)
+  double _labelAlignX(String name) {
+    if (name.contains('행남등대')) return 0.88; // 라벨이 점 왼쪽으로
+    if (name.contains('북저바위')) return 0.12; // 라벨이 점 오른쪽으로
+    return 0.5;
+  }
+
   Future<BitmapDescriptor> _makeLabelIcon({
     required String title,
     String? subtitle,
     required Color accent,
     double scale = 1.0,
+    double alignX = 0.5,
   }) async {
     const dpr = 2.0; // 선명하게 2배로 그려서 절반 크기로 표시
     final s = scale * dpr;
@@ -243,18 +252,21 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
           ..strokeWidth = 1.5 * s
           ..color = darker);
 
-    // 꼬리 삼각형 + 실좌표 점
+    // 꼬리 삼각형 + 실좌표 점 (alignX에 따라 좌/우로 비켜난 위치)
+    final dotX = (width * alignX)
+        .clamp(dotR + 2 * s, width - dotR - 2 * s)
+        .toDouble();
     final tailTop = 1 * s + boxH;
     final tail = Path()
-      ..moveTo(cx - 4.5 * s, tailTop)
-      ..lineTo(cx + 4.5 * s, tailTop)
-      ..lineTo(cx, tailTop + tailH)
+      ..moveTo(dotX - 4.5 * s, tailTop)
+      ..lineTo(dotX + 4.5 * s, tailTop)
+      ..lineTo(dotX, tailTop + tailH)
       ..close();
     canvas.drawPath(tail, Paint()..color = accent);
     final dotY = tailTop + tailH + dotR;
-    canvas.drawCircle(Offset(cx, dotY), dotR, Paint()..color = accent);
+    canvas.drawCircle(Offset(dotX, dotY), dotR, Paint()..color = accent);
     canvas.drawCircle(
-        Offset(cx, dotY), dotR * 0.45, Paint()..color = Colors.white);
+        Offset(dotX, dotY), dotR * 0.45, Paint()..color = Colors.white);
 
     // 텍스트
     titleTp.paint(canvas, Offset(cx - titleTp.width / 2, 1 * s + padV));
@@ -275,11 +287,16 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
       {required String title,
       String? subtitle,
       required Color accent,
-      required double scale}) {
+      required double scale,
+      double alignX = 0.5}) {
     if (_labelIcons.containsKey(key) || _labelPending.contains(key)) return;
     _labelPending.add(key);
     _makeLabelIcon(
-            title: title, subtitle: subtitle, accent: accent, scale: scale)
+            title: title,
+            subtitle: subtitle,
+            accent: accent,
+            scale: scale,
+            alignX: alignX)
         .then((icon) {
       if (!mounted) return;
       setState(() => _labelIcons[key] = icon);
@@ -321,13 +338,16 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
 
     // 라벨 아이콘: 캐시에 있으면 쓰고, 없으면 생성 예약 후 기본 마커로 대기
     BitmapDescriptor labelIcon(
-        String key, String title, String? subtitle, Color accent) {
-      final cacheKey = '$key|$title|$subtitle|${accent.toARGB32()}|$_markerScale';
+        String key, String title, String? subtitle, Color accent,
+        {double alignX = 0.5}) {
+      final cacheKey =
+          '$key|$title|$subtitle|${accent.toARGB32()}|$_markerScale|$alignX';
       _ensureLabelIcon(cacheKey,
           title: title,
           subtitle: subtitle,
           accent: accent,
-          scale: _markerScale);
+          scale: _markerScale,
+          alignX: alignX);
       return _labelIcons[cacheKey] ??
           BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
     }
@@ -412,7 +432,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                       Marker(
                         markerId: MarkerId(site.id),
                         position: LatLng(site.lat, site.lng),
-                        anchor: const Offset(0.5, 1.0),
+                        // 💡 겹치는 포인트는 라벨만 좌/우로 비킨다 (점 위치는 그대로)
+                        anchor: Offset(_labelAlignX(site.name), 1.0),
                         // 💡 라벨은 포인트명만 — 정보는 하단 목록·시트에서
                         icon: labelIcon(
                           'site_${site.id}',
@@ -421,6 +442,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                           site.isBase
                               ? const Color(0xFFF9A825)
                               : Colors.blue[700]!,
+                          alignX: _labelAlignX(site.name),
                         ),
                         draggable: isAdmin && _moveMode,
                         onDragEnd: (p) => provider.moveSite(
@@ -449,6 +471,30 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                               expanded!, expanded.subPoints[i]),
                         ),
                   },
+                    ),
+                    // 💡 서비스 소개 (왜 만들었는지 + 어스 사용법)
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: GestureDetector(
+                        onTap: _showServiceInfo,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                  color: Colors.black.withAlpha(40),
+                                  blurRadius: 6),
+                            ],
+                          ),
+                          child: Icon(Icons.question_mark_rounded,
+                              size: 17, color: Colors.grey[700]),
+                        ),
+                      ),
                     ),
                     // 💡 관리자: 위치 조정 모드 토글
                     if (isAdmin)
@@ -517,10 +563,10 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                           ),
                         ),
                       ),
-                    // 펼침 상태 안내 칩
+                    // 펼침 상태 안내 칩 (? 버튼 아래)
                     if (expanded != null)
                       Positioned(
-                        top: 10,
+                        top: 52,
                         left: 10,
                         child: GestureDetector(
                           onTap: () =>
@@ -776,6 +822,87 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 💡 ? 버튼: 이 서비스를 만든 이유 + 구글 어스 사용법
+  void _showServiceInfo() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.8),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Text('🗺 이 지도를 만든 이유',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    '처음 다이빙을 하면, 포인트 브리핑을 들어도 머릿속에 잘 그려지지 않고, '
+                    '다녀와도 내가 어딜 다녀온 것인지 잘 모를 때가 많습니다.\n\n'
+                    '따라서 포인트 위치와 간단한 설명을 다이빙 전후로 체크할 수 있는 '
+                    '서비스를 구현하고자 했습니다.\n\n'
+                    '여러분의 원정 다이빙이 더욱 재밌어지고, 소중한 추억으로 '
+                    '오랫도록 잘 간직할 수 있길 바랍니다.',
+                    style: TextStyle(fontSize: 13, height: 1.7),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text('📖 구글 어스 사용법',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    '1. 구글 어스 왼쪽 하단의 [계속] 버튼을 누르면 슬라이드쇼로 '
+                    '포인트를 차례대로 볼 수 있어요.\n\n'
+                    '2. 두 손가락으로 회전하면서 울릉도와 다이빙 포인트의 위치·모양을 '
+                    '다각도로 살펴보세요.\n\n'
+                    '3. 화면 오른쪽 하단을 두 손가락으로 위아래로 밀면 기울기를 '
+                    '조정할 수 있어요.',
+                    style: TextStyle(fontSize: 13, height: 1.7),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
