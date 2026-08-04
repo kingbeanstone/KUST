@@ -51,9 +51,10 @@ class UsageStats {
     'tab_more': '더보기',
   };
 
-  /// 시간대별 버킷 — usage_stats 문서 아래 hourly/{yyyy-MM-dd-HH} 서브컬렉션
-  static CollectionReference<Map<String, dynamic>> get hourly =>
-      doc.collection('hourly');
+  /// 일별 버킷 — usage_stats 문서 아래 daily/{yyyy-MM-dd} 서브컬렉션.
+  /// 하루치 문서가 곧 그날의 증가량이다.
+  static CollectionReference<Map<String, dynamic>> get daily =>
+      doc.collection('daily');
 
   static void log(String key) {
     if (_optOut) return; // 이 기기는 집계 제외
@@ -62,13 +63,12 @@ class UsageStats {
         .set({key: FieldValue.increment(1)}, SetOptions(merge: true))
         .catchError((_) {});
 
-    // 시간대별 누적 (문서 ID가 시간순 정렬되도록 zero-pad)
+    // 일별 누적 (문서 ID가 날짜순 정렬되도록 zero-pad)
     final now = DateTime.now();
     final bucket = '${now.year}'
         '-${now.month.toString().padLeft(2, '0')}'
-        '-${now.day.toString().padLeft(2, '0')}'
-        '-${now.hour.toString().padLeft(2, '0')}';
-    hourly
+        '-${now.day.toString().padLeft(2, '0')}';
+    daily
         .doc(bucket)
         .set({key: FieldValue.increment(1)}, SetOptions(merge: true))
         .catchError((_) {});
