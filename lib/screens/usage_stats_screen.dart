@@ -146,6 +146,7 @@ const Map<String, Color> _kTrendColors = {
   'personal_checklist': Color(0xFF3949AB), // 남색
   'guide': Color(0xFFFB8C00), // 주황
   'growth': Color(0xFF8E24AA), // 보라
+  'tab_schedule': Color(0xFFD81B60), // 분홍
   'tab_site': Color(0xFF43A047), // 초록
   'tab_meal': Color(0xFFE53935), // 빨강
   'tab_more': Color(0xFF6D4C41), // 갈색
