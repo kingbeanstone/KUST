@@ -148,40 +148,6 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
   String _fmt(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toStringAsFixed(1);
 
-  // ------------------------------------------------------------- 티어
-
-  /// 로그 수 → 티어 (이름, 색, 다음 티어까지 남은 횟수)
-  (String, Color, int?) _tierOf(int n) {
-    const steps = [
-      (200, '챌린저'),
-      (170, '마스터'),
-      (130, '다이아'),
-      (90, '플래티넘'),
-      (50, '골드'),
-      (25, '실버'),
-      (10, '브론즈'),
-      (1, '아이언'),
-    ];
-    const colors = {
-      '챌린저': Color(0xFFF57F17),
-      '마스터': Color(0xFF7B1FA2),
-      '다이아': Color(0xFF29B6F6),
-      '플래티넘': Color(0xFF00897B),
-      '골드': Color(0xFFF9A825),
-      '실버': Color(0xFF78909C),
-      '브론즈': Color(0xFF8D6E63),
-      '아이언': Color(0xFF616161),
-    };
-
-    for (var i = 0; i < steps.length; i++) {
-      if (n >= steps[i].$1) {
-        final next = i == 0 ? null : steps[i - 1].$1 - n;
-        return (steps[i].$2, colors[steps[i].$2]!, next);
-      }
-    }
-    return ('언랭', const Color(0xFFBDBDBD), 1 - n);
-  }
-
   /// 요소별 평가 평균 (평가된 로그만)
   Map<String, double> _skillAverages() {
     final sums = <String, int>{};
@@ -259,46 +225,62 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
             ),
             child: Column(
               children: [
-                // 💡 롤 티어처럼 큼직한 육각 엠블럼 (안에 총 로그 수)
-                SizedBox(
-                  width: 130,
-                  height: 130,
-                  child: CustomPaint(
-                    painter: _TierBadgePainter(color: tierColor),
-                    child: Center(
+                // 💡 왼쪽 화려한 엠블럼 + 오른쪽 티어 기준 사다리
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('$totalLogs',
-                              style: const TextStyle(
-                                  fontSize: 34,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  height: 1.0)),
-                          const Text('로그',
+                          _TierEmblem(
+                            color: tierColor,
+                            size: 134,
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text('$totalLogs',
+                                      style: const TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                          height: 1.0)),
+                                  const Text('로그',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.white70)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(tierName,
                               style: TextStyle(
-                                  fontSize: 11, color: Colors.white70)),
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: tierColor,
+                                  letterSpacing: 1)),
+                          const SizedBox(height: 3),
+                          Text(
+                            [
+                              if (_baseCount > 0)
+                                '기존 $_baseCount + 앱 ${_logs.length}',
+                              if (tierNext != null) '다음 티어까지 $tierNext회',
+                            ].join('\n'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.grey[600],
+                                height: 1.4),
+                          ),
                         ],
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    _TierLadder(total: totalLogs),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                Text(tierName,
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: tierColor,
-                        letterSpacing: 1)),
-                const SizedBox(height: 3),
-                Text(
-                  [
-                    if (_baseCount > 0) '기존 $_baseCount + 앱 기록 ${_logs.length}',
-                    if (tierNext != null) '다음 티어까지 $tierNext회',
-                  ].join(' · '),
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 // 기존 로그 수 입력 (선배들의 누적 로그 반영)
                 GestureDetector(
                   onTap: _showBaseDialog,
@@ -827,6 +809,54 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
   }
 }
 
+// ------------------------------------------------------------- 티어 체계
+
+/// 티어 기준 (내림차순): 이 로그 수 이상이면 해당 티어
+const List<(int, String)> _kTierSteps = [
+  (200, '챌린저'),
+  (170, '마스터'),
+  (130, '다이아'),
+  (90, '플래티넘'),
+  (50, '골드'),
+  (25, '실버'),
+  (10, '브론즈'),
+  (1, '아이언'),
+];
+
+const Map<String, Color> _kTierColors = {
+  '챌린저': Color(0xFFF57F17),
+  '마스터': Color(0xFF7B1FA2),
+  '다이아': Color(0xFF29B6F6),
+  '플래티넘': Color(0xFF00897B),
+  '골드': Color(0xFFF9A825),
+  '실버': Color(0xFF78909C),
+  '브론즈': Color(0xFF8D6E63),
+  '아이언': Color(0xFF616161),
+};
+
+/// 로그 수 → (표시명, 색, 다음 티어까지 남은 횟수).
+/// 💡 롤처럼 마스터 미만 티어는 구간을 4등분한 세부 티어(4→1)가 붙는다.
+(String, Color, int?) _tierOf(int n) {
+  for (var i = 0; i < _kTierSteps.length; i++) {
+    final (start, name) = _kTierSteps[i];
+    if (n < start) continue;
+
+    final color = _kTierColors[name]!;
+    if (i == 0) return (name, color, null); // 챌린저: 최고 티어
+    final nextStart = _kTierSteps[i - 1].$1;
+
+    var label = name;
+    if (i >= 2) {
+      // 마스터 미만: 구간 4등분, 숫자가 작을수록 높은 세부 티어
+      final span = (nextStart - start) / 4;
+      final div = (4 - ((n - start) / span).floor()).clamp(1, 4);
+      label = '$name $div';
+    }
+    return (label, color, nextStart - n);
+  }
+  return ('언랭', const Color(0xFFBDBDBD), 1 - n);
+}
+
 /// 💡 예시 미리보기(? 버튼): 가짜 데이터로 티어·능력치·그래프가
 /// 어떤 그림이 되는지 보여준다. 저장과는 무관한 구경용 화면.
 class _GrowthDemoScreen extends StatelessWidget {
@@ -888,48 +918,58 @@ class _GrowthDemoScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // 티어 엠블럼 예시
+          // 티어 엠블럼 예시 (82로그 = 골드 1)
           Container(
             padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 130,
-                  height: 130,
-                  child: CustomPaint(
-                    painter: _TierBadgePainter(color: tierColor),
-                    child: const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text('52',
-                              style: TextStyle(
-                                  fontSize: 34,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                  height: 1.0)),
-                          Text('로그',
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.white70)),
-                        ],
+                Expanded(
+                  child: Column(
+                    children: [
+                      const _TierEmblem(
+                        color: tierColor,
+                        size: 134,
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('82',
+                                  style: TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      height: 1.0)),
+                              Text('로그',
+                                  style: TextStyle(
+                                      fontSize: 11, color: Colors.white70)),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      const Text('골드 1',
+                          style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: tierColor,
+                              letterSpacing: 1)),
+                      const SizedBox(height: 3),
+                      Text('기존 75 + 앱 7\n다음 티어까지 8회',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                              fontSize: 11.5,
+                              color: Colors.grey[600],
+                              height: 1.4)),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 10),
-                const Text('골드',
-                    style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: tierColor,
-                        letterSpacing: 1)),
-                const SizedBox(height: 3),
-                Text('기존 45 + 앱 기록 7 · 다음 티어까지 38회',
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey[600])),
+                const SizedBox(width: 8),
+                const _TierLadder(total: 82),
               ],
             ),
           ),
@@ -1052,18 +1092,66 @@ class _GrowthDemoScreen extends StatelessWidget {
   }
 }
 
-/// 💡 롤 티어 느낌의 육각 엠블럼 (그라데이션 + 이중 테두리 + 상단 보석)
+/// 💡 살아있는 티어 엠블럼: 광택이 흐르고 별이 반짝이는 애니메이션 래퍼
+class _TierEmblem extends StatefulWidget {
+  final Color color;
+  final double size;
+  final Widget child;
+
+  const _TierEmblem(
+      {required this.color, required this.size, required this.child});
+
+  @override
+  State<_TierEmblem> createState() => _TierEmblemState();
+}
+
+class _TierEmblemState extends State<_TierEmblem>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller =
+      AnimationController(vsync: this, duration: const Duration(seconds: 4))
+        ..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size,
+      height: widget.size,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (_, child) => CustomPaint(
+          painter:
+              _TierBadgePainter(color: widget.color, t: _controller.value),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+/// 💡 롤 티어 느낌의 화려한 육각 엠블럼:
+/// 양옆 날개 + 보석 단면(파세트) + 꼭짓점 보석 + 흐르는 광택 + 반짝이 별
 class _TierBadgePainter extends CustomPainter {
   final Color color;
+  final double t; // 애니메이션 진행도 0~1
 
-  _TierBadgePainter({required this.color});
+  _TierBadgePainter({required this.color, this.t = 0});
+
+  Offset _vertex(Offset center, double r, int i) {
+    final angle = -math.pi / 2 + math.pi / 3 * i;
+    return Offset(
+        center.dx + r * math.cos(angle), center.dy + r * math.sin(angle));
+  }
 
   Path _hexagon(Offset center, double r) {
     final path = Path();
     for (var i = 0; i < 6; i++) {
-      final angle = -math.pi / 2 + math.pi / 3 * i;
-      final p = Offset(
-          center.dx + r * math.cos(angle), center.dy + r * math.sin(angle));
+      final p = _vertex(center, r, i);
       if (i == 0) {
         path.moveTo(p.dx, p.dy);
       } else {
@@ -1077,67 +1165,263 @@ class _TierBadgePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final r = math.min(size.width, size.height) / 2 - 4;
+    // 날개가 밖으로 뻗을 공간을 남기고 본체 반지름을 잡는다
+    final r = math.min(size.width, size.height) / 2 - 16;
 
-    final dark = Color.lerp(color, Colors.black, 0.45)!;
-    final light = Color.lerp(color, Colors.white, 0.25)!;
+    final darker = Color.lerp(color, Colors.black, 0.62)!;
+    final dark = Color.lerp(color, Colors.black, 0.42)!;
+    final light = Color.lerp(color, Colors.white, 0.3)!;
+    final lighter = Color.lerp(color, Colors.white, 0.55)!;
 
-    // 은은한 후광
+    // ── 숨쉬는 후광
+    final glowPulse = 0.7 + 0.3 * math.sin(t * 2 * math.pi);
     canvas.drawPath(
-      _hexagon(center, r),
+      _hexagon(center, r + 4),
       Paint()
-        ..color = color.withAlpha(70)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+        ..color = color.withAlpha((85 * glowPulse).toInt())
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
     );
 
-    // 본체 (위→아래 그라데이션)
-    final body = _hexagon(center, r - 2);
+    // ── 양옆 날개 (깃털 3장씩, 아래→위로 갈수록 길게)
+    for (final sign in [-1.0, 1.0]) {
+      for (var k = 0; k < 3; k++) {
+        final baseX = center.dx + sign * r * 0.7;
+        final baseY = center.dy + r * (0.45 - 0.35 * k);
+        final tipX = center.dx + sign * r * (1.26 + 0.07 * k);
+        final tipY = baseY - r * (0.36 + 0.06 * k);
+        final feather = Path()
+          ..moveTo(baseX, baseY)
+          ..quadraticBezierTo(center.dx + sign * r * 1.32,
+              baseY + r * 0.05, tipX, tipY)
+          ..quadraticBezierTo(center.dx + sign * r * 0.95,
+              baseY - r * 0.28, baseX, baseY - r * 0.2)
+          ..close();
+        canvas.drawPath(
+          feather,
+          Paint()
+            ..shader = LinearGradient(
+              begin: sign < 0 ? Alignment.centerRight : Alignment.centerLeft,
+              end: sign < 0 ? Alignment.centerLeft : Alignment.centerRight,
+              colors: [light, dark],
+            ).createShader(
+                Rect.fromCircle(center: center, radius: r * 1.4)),
+        );
+        canvas.drawPath(
+          feather,
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1
+            ..color = darker.withAlpha(150),
+        );
+      }
+    }
+
+    // ── 본체 (위→아래 그라데이션)
+    final body = _hexagon(center, r);
     canvas.drawPath(
       body,
       Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [light, color, dark],
+          colors: [lighter, color, darker],
         ).createShader(Rect.fromCircle(center: center, radius: r)),
     );
 
-    // 바깥 테두리 (진한 색) + 안쪽 라인 (밝은 색)
+    // ── 파세트: 중심→꼭짓점 삼각형을 밝음/어두움 교차로 겹쳐 보석 단면 느낌
+    for (var i = 0; i < 6; i++) {
+      final tri = Path()
+        ..moveTo(center.dx, center.dy)
+        ..lineTo(_vertex(center, r, i).dx, _vertex(center, r, i).dy)
+        ..lineTo(_vertex(center, r, (i + 1) % 6).dx,
+            _vertex(center, r, (i + 1) % 6).dy)
+        ..close();
+      canvas.drawPath(
+        tri,
+        Paint()
+          ..color = (i.isEven ? Colors.white : Colors.black)
+              .withAlpha(i.isEven ? 22 : 26),
+      );
+    }
+
+    // ── 흐르는 광택: 사선 빛줄기가 주기적으로 쓸고 지나감
+    canvas.save();
+    canvas.clipPath(body);
+    final sweepX = size.width * (t * 2.4 - 0.7);
+    final band =
+        Rect.fromLTWH(sweepX, -12, size.width * 0.26, size.height + 24);
+    canvas.translate(band.center.dx, band.center.dy);
+    canvas.rotate(-0.45);
+    canvas.translate(-band.center.dx, -band.center.dy);
+    canvas.drawRect(
+      band,
+      Paint()
+        ..shader = LinearGradient(
+          colors: [
+            Colors.white.withAlpha(0),
+            Colors.white.withAlpha(80),
+            Colors.white.withAlpha(0),
+          ],
+        ).createShader(band),
+    );
+    canvas.restore();
+
+    // ── 삼중 테두리 (진한 외곽 + 밝은 중간 + 은은한 안쪽)
     canvas.drawPath(
       body,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = dark,
+        ..strokeWidth = 3.5
+        ..color = darker,
     );
     canvas.drawPath(
-      _hexagon(center, r - 10),
+      _hexagon(center, r - 3),
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4
-        ..color = Colors.white.withAlpha(90),
+        ..strokeWidth = 1.6
+        ..color = lighter.withAlpha(210),
+    );
+    canvas.drawPath(
+      _hexagon(center, r - 9),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.1
+        ..color = Colors.white.withAlpha(60),
     );
 
-    // 상단 꼭짓점의 보석 장식
-    final gem = Offset(center.dx, center.dy - (r - 2));
-    final gemPath = Path()
-      ..moveTo(gem.dx, gem.dy - 7)
-      ..lineTo(gem.dx + 6, gem.dy)
-      ..lineTo(gem.dx, gem.dy + 7)
-      ..lineTo(gem.dx - 6, gem.dy)
-      ..close();
-    canvas.drawPath(gemPath, Paint()..color = light);
-    canvas.drawPath(
-      gemPath,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..color = dark,
-    );
+    // ── 꼭짓점 보석: 상단 큰 것 + 하단 좌우 작은 것
+    void gemAt(Offset p, double s) {
+      final gem = Path()
+        ..moveTo(p.dx, p.dy - s)
+        ..lineTo(p.dx + s * 0.8, p.dy)
+        ..lineTo(p.dx, p.dy + s)
+        ..lineTo(p.dx - s * 0.8, p.dy)
+        ..close();
+      canvas.drawPath(gem, Paint()..color = lighter);
+      canvas.drawPath(
+        gem,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = darker,
+      );
+      // 보석 하이라이트 점
+      canvas.drawCircle(Offset(p.dx - s * 0.2, p.dy - s * 0.3), s * 0.2,
+          Paint()..color = Colors.white.withAlpha(210));
+    }
+
+    gemAt(_vertex(center, r, 0), 8);
+    gemAt(_vertex(center, r, 2), 5);
+    gemAt(_vertex(center, r, 4), 5);
+
+    // ── 반짝이 별 (위상차를 두고 깜빡임)
+    const sparkles = [
+      (0.16, 0.30, 0.0),
+      (0.84, 0.24, 2.1),
+      (0.74, 0.78, 4.2),
+      (0.24, 0.74, 1.2),
+    ];
+    for (final (fx, fy, phase) in sparkles) {
+      final a = (math.sin(t * 4 * math.pi + phase) + 1) / 2;
+      if (a < 0.2) continue;
+      final p = Offset(size.width * fx, size.height * fy);
+      final s = 2.5 + 2.5 * a;
+      final star = Path()
+        ..moveTo(p.dx, p.dy - s)
+        ..quadraticBezierTo(p.dx, p.dy, p.dx + s, p.dy)
+        ..quadraticBezierTo(p.dx, p.dy, p.dx, p.dy + s)
+        ..quadraticBezierTo(p.dx, p.dy, p.dx - s, p.dy)
+        ..quadraticBezierTo(p.dx, p.dy, p.dx, p.dy - s)
+        ..close();
+      canvas.drawPath(
+          star, Paint()..color = Colors.white.withAlpha((220 * a).toInt()));
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _TierBadgePainter old) => old.color != color;
+  bool shouldRepaint(covariant _TierBadgePainter old) =>
+      old.color != color || old.t != t;
+}
+
+/// 💡 티어 기준 사다리: 챌린저(위)→아이언(아래) 기준 로그 수를 한눈에.
+/// 현재 티어는 색 배경으로 강조된다.
+class _TierLadder extends StatelessWidget {
+  final int total;
+
+  const _TierLadder({required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    String? current;
+    for (final (start, name) in _kTierSteps) {
+      if (total >= start) {
+        current = name;
+        break;
+      }
+    }
+
+    return SizedBox(
+      width: 106,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (start, name) in _kTierSteps)
+            Builder(builder: (_) {
+              final color = _kTierColors[name]!;
+              final isCur = name == current;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 3.5),
+                decoration: isCur
+                    ? BoxDecoration(
+                        color: color.withAlpha(30),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: color.withAlpha(150)),
+                      )
+                    : null,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight:
+                            isCur ? FontWeight.w800 : FontWeight.w500,
+                        color: isCur
+                            ? Color.lerp(color, Colors.black, 0.25)
+                            : Colors.black54,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '$start+',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight:
+                            isCur ? FontWeight.w700 : FontWeight.normal,
+                        color: isCur
+                            ? Color.lerp(color, Colors.black, 0.25)
+                            : Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
 }
 
 /// 간단한 꺾은선 그래프 (외부 라이브러리 없이)
