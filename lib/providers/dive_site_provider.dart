@@ -114,4 +114,27 @@ class DiveSiteProvider with ChangeNotifier {
   Future<void> deleteSite(String id) async {
     await _db.collection('dive_sites').doc(id).delete();
   }
+
+  /// 💡 위치 조정 모드: 마커 드래그 결과 저장
+  Future<void> moveSite(String id, double lat, double lng) async {
+    await _db
+        .collection('dive_sites')
+        .doc(id)
+        .set({'lat': lat, 'lng': lng}, SetOptions(merge: true));
+  }
+
+  /// 💡 세부 포인트 마커 드래그 결과 저장 (해당 항목에 실좌표 기록)
+  Future<void> moveSubPoint(
+      DiveSite site, int index, double lat, double lng) async {
+    if (index < 0 || index >= site.subPoints.length) return;
+    final list = [
+      for (final sp in site.subPoints) Map<String, String>.from(sp),
+    ];
+    list[index]['lat'] = lat.toString();
+    list[index]['lng'] = lng.toString();
+    await _db
+        .collection('dive_sites')
+        .doc(site.id)
+        .set({'subPoints': list}, SetOptions(merge: true));
+  }
 }

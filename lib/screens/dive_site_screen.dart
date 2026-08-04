@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -23,6 +24,19 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
 
   /// 💡 세부 포인트가 펼쳐진 핵심 포인트 (클러스터 확장 상태)
   String? _expandedSiteId;
+
+  /// 💡 하단 포인트 목록 — 마커 라벨에 정보가 다 있어 잠시 숨김 (코드는 보존)
+  static bool get _showPointList => false;
+
+  /// 💡 관리자 위치 조정 모드: 켜면 마커를 끌어서 위치를 저장할 수 있다
+  bool _moveMode = false;
+
+  /// 💡 줌에 따른 마커 크기 배율 (줌 아웃하면 라벨도 작아져 덜 뭉친다)
+  double _markerScale = 1.0;
+
+  /// 캔버스로 그린 라벨 마커 캐시 (내용+배율 → 아이콘)
+  final Map<String, BitmapDescriptor> _labelIcons = {};
+  final Set<String> _labelPending = {};
 
   /// 💡 구글맵 JS가 준비된 뒤에만 지도 위젯을 만든다 (타이밍 크래시 방지)
   late final Future<bool> _mapsReady = waitForGoogleMaps();
@@ -140,15 +154,120 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     );
   }
 
-  /// 난이도 → 마커 색조 (지도에서 난이도 분포가 바로 보이게)
-  double _levelHue(String level) {
-    if (level.contains('중상')) return 15; // 주홍
-    if (level.contains('상급')) return BitmapDescriptor.hueRed;
-    if (level.contains('중급')) return BitmapDescriptor.hueOrange;
-    if (level.contains('초') || level.contains('오픈')) {
-      return BitmapDescriptor.hueGreen;
+  // ------------------------------------------------------- 라벨 마커 생성
+
+  /// 💡 이름·정보가 적힌 말풍선 라벨 마커를 캔버스로 직접 그린다.
+  /// 하단 점이 실제 좌표에 오도록 anchor(0.5, 1.0)와 함께 쓴다.
+  Future<BitmapDescriptor> _makeLabelIcon({
+    required String title,
+    String? subtitle,
+    required Color accent,
+    double scale = 1.0,
+  }) async {
+    const dpr = 2.0; // 선명하게 2배로 그려서 절반 크기로 표시
+    final s = scale * dpr;
+
+    final titleTp = TextPainter(
+      text: TextSpan(
+        text: title,
+        style: TextStyle(
+            fontSize: 12.5 * s,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    TextPainter? subTp;
+    if (subtitle != null && subtitle.isNotEmpty) {
+      subTp = TextPainter(
+        text: TextSpan(
+          text: subtitle,
+          style: TextStyle(
+              fontSize: 10 * s,
+              fontWeight: FontWeight.w600,
+              color: Colors.black54),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
     }
-    return BitmapDescriptor.hueViolet;
+
+    final padH = 7.0 * s;
+    final padV = 4.5 * s;
+    final gap = 1.5 * s;
+    final boxW = math.max(titleTp.width, subTp?.width ?? 0) + padH * 2;
+    final boxH =
+        titleTp.height + (subTp == null ? 0 : subTp.height + gap) + padV * 2;
+    final tailH = 6.0 * s;
+    final dotR = 3.5 * s;
+    final width = boxW + 6 * s; // 테두리·그림자 여유
+    final height = boxH + tailH + dotR * 2 + 4 * s;
+    final cx = width / 2;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    final rrect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(cx - boxW / 2, 1 * s, boxW, boxH),
+        Radius.circular(7 * s));
+
+    // 그림자 → 흰 본체 → 색 테두리
+    canvas.drawRRect(
+        rrect.shift(Offset(0, 1.5 * s)),
+        Paint()
+          ..color = Colors.black.withAlpha(55)
+          ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 2.5 * s));
+    canvas.drawRRect(rrect, Paint()..color = Colors.white);
+    canvas.drawRRect(
+        rrect,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.8 * s
+          ..color = accent);
+
+    // 꼬리 삼각형 + 실좌표 점
+    final tailTop = 1 * s + boxH;
+    final tail = Path()
+      ..moveTo(cx - 4.5 * s, tailTop)
+      ..lineTo(cx + 4.5 * s, tailTop)
+      ..lineTo(cx, tailTop + tailH)
+      ..close();
+    canvas.drawPath(tail, Paint()..color = accent);
+    final dotY = tailTop + tailH + dotR;
+    canvas.drawCircle(Offset(cx, dotY), dotR, Paint()..color = accent);
+    canvas.drawCircle(
+        Offset(cx, dotY), dotR * 0.45, Paint()..color = Colors.white);
+
+    // 텍스트
+    titleTp.paint(canvas, Offset(cx - titleTp.width / 2, 1 * s + padV));
+    subTp?.paint(canvas,
+        Offset(cx - subTp.width / 2, 1 * s + padV + titleTp.height + gap));
+
+    final img =
+        await recorder.endRecording().toImage(width.ceil(), height.ceil());
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(
+      bytes!.buffer.asUint8List(),
+      imagePixelRatio: dpr,
+    );
+  }
+
+  /// 캐시에 없으면 백그라운드로 생성하고, 완성되면 다시 그린다
+  void _ensureLabelIcon(String key,
+      {required String title,
+      String? subtitle,
+      required Color accent,
+      required double scale}) {
+    if (_labelIcons.containsKey(key) || _labelPending.contains(key)) return;
+    _labelPending.add(key);
+    _makeLabelIcon(
+            title: title, subtitle: subtitle, accent: accent, scale: scale)
+        .then((icon) {
+      if (!mounted) return;
+      setState(() => _labelIcons[key] = icon);
+    }).catchError((_) {
+      _labelPending.remove(key);
+    });
   }
 
   void _onMainMarkerTap(DiveSite site, bool isAdmin, DiveSiteProvider provider) {
@@ -178,6 +297,19 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
       if (s.id == _expandedSiteId) expanded = s;
     }
 
+    // 라벨 아이콘: 캐시에 있으면 쓰고, 없으면 생성 예약 후 기본 마커로 대기
+    BitmapDescriptor labelIcon(
+        String key, String title, String? subtitle, Color accent) {
+      final cacheKey = '$key|$title|$subtitle|${accent.toARGB32()}|$_markerScale';
+      _ensureLabelIcon(cacheKey,
+          title: title,
+          subtitle: subtitle,
+          accent: accent,
+          scale: _markerScale);
+      return _labelIcons[cacheKey] ??
+          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -200,7 +332,6 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
         children: [
           // ── 지도 (JS 라이브러리 준비 후에만 그린다)
           Expanded(
-            flex: 11,
             child: FutureBuilder<bool>(
               future: _mapsReady,
               builder: (context, snapshot) {
@@ -242,52 +373,139 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                           presetLat: latLng.latitude,
                           presetLng: latLng.longitude)
                       : null,
+                  // 💡 줌 아웃하면 마커 라벨도 함께 작아진다 (3단계)
+                  onCameraMove: (pos) {
+                    final s = pos.zoom >= 13
+                        ? 1.0
+                        : pos.zoom >= 11.8
+                            ? 0.85
+                            : 0.7;
+                    if (s != _markerScale) {
+                      setState(() => _markerScale = s);
+                    }
+                  },
                   markers: {
-                    // ── 핵심 포인트 마커
+                    // ── 핵심 포인트: 이름·수심·난이도·세부수가 적힌 라벨 마커
                     for (final site in sites)
                       Marker(
                         markerId: MarkerId(site.id),
                         position: LatLng(site.lat, site.lng),
-                        icon: BitmapDescriptor.defaultMarkerWithHue(
-                            site.isBase
-                                ? BitmapDescriptor.hueYellow
-                                : BitmapDescriptor.hueAzure),
-                        infoWindow: InfoWindow(
-                          title: site.isBase
-                              ? '⭐ ${site.name} (베이스)'
-                              : site.name,
-                          snippet: site.subPoints.isNotEmpty
-                              ? '한 번 더 탭 = 상세 · 세부 ${site.subPoints.length}곳 펼침'
-                              : null,
+                        anchor: const Offset(0.5, 1.0),
+                        icon: labelIcon(
+                          'site_${site.id}',
+                          site.isBase ? '⭐ ${site.name}' : site.name,
+                          [
+                            if (site.depth.isNotEmpty) site.depth,
+                            if (site.level.isNotEmpty) site.level,
+                            if (site.subPoints.isNotEmpty)
+                              '세부 ${site.subPoints.length}',
+                          ].join(' · '),
+                          site.isBase
+                              ? const Color(0xFFF9A825)
+                              : Colors.blue[700]!,
                         ),
+                        draggable: isAdmin && _moveMode,
+                        onDragEnd: (p) => provider.moveSite(
+                            site.id, p.latitude, p.longitude),
                         onTap: () =>
                             _onMainMarkerTap(site, isAdmin, provider),
                       ),
-                    // ── 펼쳐진 핵심 포인트의 세부 마커 (색 = 난이도)
+                    // ── 펼쳐진 핵심 포인트의 세부 마커 (테두리 색 = 난이도)
                     if (expanded != null)
                       for (var i = 0; i < expanded.subPoints.length; i++)
                         Marker(
                           markerId: MarkerId('${expanded.id}_sub_$i'),
                           position: _subPos(expanded, i),
-                          icon: BitmapDescriptor.defaultMarkerWithHue(
-                              _levelHue(
-                                  expanded.subPoints[i]['level'] ?? '')),
-                          infoWindow: InfoWindow(
-                            title: expanded.subPoints[i]['name'] ?? '',
-                            snippet: [
+                          anchor: const Offset(0.5, 1.0),
+                          icon: labelIcon(
+                            'sub_${expanded.id}_$i',
+                            expanded.subPoints[i]['name'] ?? '',
+                            [
                               if ((expanded.subPoints[i]['depth'] ?? '')
                                   .isNotEmpty)
-                                expanded.subPoints[i]['depth'],
+                                expanded.subPoints[i]['depth']!,
                               if ((expanded.subPoints[i]['level'] ?? '')
                                   .isNotEmpty)
-                                expanded.subPoints[i]['level'],
+                                expanded.subPoints[i]['level']!,
                             ].join(' · '),
+                            _levelColor(
+                                expanded.subPoints[i]['level'] ?? ''),
                           ),
+                          draggable: isAdmin && _moveMode,
+                          onDragEnd: (p) => provider.moveSubPoint(
+                              expanded!, i, p.latitude, p.longitude),
                           onTap: () => _showSubPointSheet(
                               expanded!, expanded.subPoints[i]),
                         ),
                   },
                     ),
+                    // 💡 관리자: 위치 조정 모드 토글
+                    if (isAdmin)
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: GestureDetector(
+                          onTap: () =>
+                              setState(() => _moveMode = !_moveMode),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 11, vertical: 7),
+                            decoration: BoxDecoration(
+                              color:
+                                  _moveMode ? Colors.red[600] : Colors.white,
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black.withAlpha(40),
+                                    blurRadius: 6),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.open_with,
+                                    size: 14,
+                                    color: _moveMode
+                                        ? Colors.white
+                                        : Colors.grey[700]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  _moveMode ? '조정 끝내기' : '위치 조정',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: _moveMode
+                                        ? Colors.white
+                                        : Colors.grey[800],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    // 위치 조정 모드 안내
+                    if (isAdmin && _moveMode)
+                      Positioned(
+                        bottom: 12,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withAlpha(150),
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: const Text(
+                              '마커를 끌어서 놓으면 위치가 저장됩니다',
+                              style: TextStyle(
+                                  fontSize: 11.5, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
                     // 펼침 상태 안내 칩
                     if (expanded != null)
                       Positioned(
@@ -329,10 +547,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
             ),
           ),
 
-          // ── 포인트 목록 (탭 = 지도 이동 + 상세)
-          Expanded(
-            flex: 6,
-            child: Container(
+          // ── 하단 패널: 어스 버튼 + 안내 배너 (포인트 목록은 잠시 숨김)
+          Container(
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
@@ -394,7 +610,9 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                       ],
                     ),
                   ),
-                  Expanded(
+                  if (_showPointList)
+                    SizedBox(
+                    height: 210,
                     child: sites.isEmpty
                   ? Center(
                       child: Text(
@@ -519,7 +737,6 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   ),
                 ],
               ),
-            ),
           ),
         ],
       ),
