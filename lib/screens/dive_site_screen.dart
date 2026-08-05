@@ -9,6 +9,7 @@ import '../providers/equipment_provider.dart';
 import '../providers/dive_site_provider.dart';
 import '../util/maps_ready_stub.dart'
     if (dart.library.js_interop) '../util/maps_ready_web.dart';
+import '../util/site_photos.dart';
 
 /// 💡 다이브 사이트: 울릉도 포인트를 구글맵 마커로.
 /// 마커/목록 탭 = 상세, 관리자는 지도를 길게 눌러 포인트 추가.
@@ -145,6 +146,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   final TextEditingController _levelController = TextEditingController();
   final TextEditingController _featuresController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
+  final TextEditingController _youtubeController = TextEditingController();
 
   @override
   void dispose() {
@@ -154,7 +156,67 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     _levelController.dispose();
     _featuresController.dispose();
     _noteController.dispose();
+    _youtubeController.dispose();
     super.dispose();
+  }
+
+  // ------------------------------------------------------------- 포인트 사진
+
+  /// 이 포인트(또는 세부 포인트)의 사진 목록
+  List<String> _photosFor(String siteName, [String? subName]) =>
+      kSitePhotos[subName == null ? siteName : '$siteName|$subName'] ??
+      const [];
+
+  /// 가로 썸네일 갤러리 — 탭하면 전체화면 뷰어
+  Widget _photoGallery(List<String> photos) {
+    if (photos.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 110,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: photos.length,
+        separatorBuilder: (_, i) => const SizedBox(width: 6),
+        itemBuilder: (context, i) => GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) =>
+                  _PhotoViewerScreen(photos: photos, initial: i),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.network(
+              photos[i],
+              width: 150,
+              height: 110,
+              fit: BoxFit.cover,
+              loadingBuilder: (c, child, progress) => progress == null
+                  ? child
+                  : Container(
+                      width: 150,
+                      height: 110,
+                      color: const Color(0xFFF1F3F5),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+              errorBuilder: (c, e, s) => Container(
+                width: 150,
+                height: 110,
+                color: const Color(0xFFF1F3F5),
+                child:
+                    Icon(Icons.broken_image_outlined, color: Colors.grey[400]),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// 세부 포인트 마커 위치: 저장된 좌표가 있으면 그대로, 없으면
@@ -983,6 +1045,40 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               _infoRow('난이도', site.level),
               _infoRow('특징', site.features),
               _infoRow('참고', site.note),
+              // 💡 유튜브 링크 (핵심 포인트 전용)
+              if (site.youtube.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: ElevatedButton.icon(
+                    onPressed: () => launchUrlString(site.youtube.trim(),
+                        mode: LaunchMode.externalApplication),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE53935),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.play_circle_fill, size: 18),
+                    label: const Text('유튜브 영상 보기',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+              // 💡 포인트 사진 (사이트 직속 — 쌍정초·공암 등)
+              if (_photosFor(site.name).isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('📷 사진 (탭하면 크게)',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey[400])),
+                const SizedBox(height: 6),
+                _photoGallery(_photosFor(site.name)),
+              ],
               if (site.depth.isEmpty &&
                   site.level.isEmpty &&
                   site.features.isEmpty &&
@@ -1002,7 +1098,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         fontWeight: FontWeight.bold,
                         color: Colors.blueGrey[400])),
                 const SizedBox(height: 6),
-                for (final sp in site.subPoints) _subPointCard(sp),
+                for (final sp in site.subPoints) _subPointCard(site, sp),
               ],
               const SizedBox(height: 10),
               Text('※ 참고용 정보입니다. 수심·조류·입수 지점은 당일 브리핑으로 확인하세요.',
@@ -1031,8 +1127,11 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (sheetContext) => SafeArea(
-        child: Padding(
+        child: Container(
+          constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(sheetContext).size.height * 0.75),
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1076,6 +1175,19 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
               const SizedBox(height: 8),
               _infoRow('수심', depth),
               _infoRow('특징', desc),
+              // 💡 세부 포인트 사진 갤러리
+              if (_photosFor(site.name, (sp['name'] ?? '').trim())
+                  .isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text('📷 사진 (탭하면 크게)',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blueGrey[400])),
+                const SizedBox(height: 6),
+                _photoGallery(
+                    _photosFor(site.name, (sp['name'] ?? '').trim())),
+              ],
               const SizedBox(height: 8),
               Text(
                 autoPlaced
@@ -1084,6 +1196,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 style: TextStyle(fontSize: 10.5, color: Colors.grey[500]),
               ),
             ],
+          ),
           ),
         ),
       ),
@@ -1101,13 +1214,17 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     return const Color(0xFF546E7A);
   }
 
-  Widget _subPointCard(Map<String, String> sp) {
+  Widget _subPointCard(DiveSite site, Map<String, String> sp) {
     final level = (sp['level'] ?? '').trim();
     final depth = (sp['depth'] ?? '').trim();
     final desc = (sp['desc'] ?? '').trim();
     final color = _levelColor(level);
+    final photoCount = _photosFor(site.name, (sp['name'] ?? '').trim()).length;
 
-    return Container(
+    return GestureDetector(
+      // 💡 카드 탭 = 세부 포인트 시트 (사진 갤러리 포함)
+      onTap: () => _showSubPointSheet(site, sp),
+      child: Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
@@ -1126,6 +1243,15 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     style: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.bold)),
               ),
+              if (photoCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Text('📷 $photoCount',
+                      style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[700])),
+                ),
               if (depth.isNotEmpty)
                 Text(depth,
                     style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
@@ -1154,6 +1280,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                     fontSize: 11.5, color: Colors.grey[700], height: 1.4)),
           ],
         ],
+      ),
       ),
     );
   }
@@ -1191,6 +1318,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     _levelController.text = site?.level ?? '';
     _featuresController.text = site?.features ?? '';
     _noteController.text = site?.note ?? '';
+    _youtubeController.text = site?.youtube ?? '';
     final lat = site?.lat ?? presetLat ?? _ulleungCenter.latitude;
     final lng = site?.lng ?? presetLng ?? _ulleungCenter.longitude;
     var isBase = site?.isBase ?? false;
@@ -1247,6 +1375,12 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 maxLines: 3,
                 decoration: const InputDecoration(
                     labelText: '참고 (입수 방법·주의)', isDense: true),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _youtubeController,
+                decoration: const InputDecoration(
+                    labelText: '유튜브 링크 (선택)', isDense: true),
               ),
               const SizedBox(height: 10),
               // 베이스 포인트 토글 (노란 마커 + 목록 상단 고정)
@@ -1317,6 +1451,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 level: _levelController.text.trim(),
                 features: _featuresController.text.trim(),
                 note: _noteController.text.trim(),
+                youtube: _youtubeController.text.trim(),
                 isBase: isBase,
               );
               if (site == null) {
@@ -1329,6 +1464,66 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
             child: const Text('저장'),
           ),
         ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 💡 전체화면 사진 뷰어: 좌우 스와이프 + 핀치 줌
+class _PhotoViewerScreen extends StatefulWidget {
+  final List<String> photos;
+  final int initial;
+
+  const _PhotoViewerScreen({required this.photos, required this.initial});
+
+  @override
+  State<_PhotoViewerScreen> createState() => _PhotoViewerScreenState();
+}
+
+class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
+  late final PageController _pageController =
+      PageController(initialPage: widget.initial);
+  late int _index = widget.initial;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 0,
+        title: Text('${_index + 1} / ${widget.photos.length}',
+            style: const TextStyle(fontSize: 14, color: Colors.white)),
+        centerTitle: true,
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.photos.length,
+        onPageChanged: (i) => setState(() => _index = i),
+        itemBuilder: (context, i) => InteractiveViewer(
+          maxScale: 4,
+          child: Center(
+            child: Image.network(
+              widget.photos[i],
+              fit: BoxFit.contain,
+              loadingBuilder: (c, child, progress) => progress == null
+                  ? child
+                  : const Center(
+                      child: CircularProgressIndicator(
+                          color: Colors.white54, strokeWidth: 2),
+                    ),
+              errorBuilder: (c, e, s) => Icon(Icons.broken_image_outlined,
+                  color: Colors.grey[600], size: 48),
+            ),
+          ),
         ),
       ),
     );

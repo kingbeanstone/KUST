@@ -13,6 +13,7 @@ class DiveSite {
   final String level; // 난이도 (예: 초급/중급/상급)
   final String features; // 특징 (지형·생물 등)
   final String note; // 참고 (입수 방법, 주의사항)
+  final String youtube; // 유튜브 링크 (핵심 포인트 상세 시트에 버튼으로)
   final bool isBase; // 베이스 포인트 (마커·목록에서 특별 표시)
 
   /// 세부 포인트 목록: {name, depth, level, desc}
@@ -27,6 +28,7 @@ class DiveSite {
     this.level = '',
     this.features = '',
     this.note = '',
+    this.youtube = '',
     this.isBase = false,
     this.subPoints = const [],
   });
@@ -39,6 +41,7 @@ class DiveSite {
         'level': level,
         'features': features,
         'note': note,
+        'youtube': youtube,
         'isBase': isBase,
         'subPoints': subPoints,
       };
@@ -52,6 +55,7 @@ class DiveSite {
         level: (map['level'] ?? '').toString(),
         features: (map['features'] ?? '').toString(),
         note: (map['note'] ?? '').toString(),
+        youtube: (map['youtube'] ?? '').toString(),
         isBase: map['isBase'] == true,
         subPoints: [
           for (final sp in (map['subPoints'] as List? ?? const []))
