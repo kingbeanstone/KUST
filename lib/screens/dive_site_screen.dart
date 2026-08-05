@@ -162,60 +162,22 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
 
   // ------------------------------------------------------------- 포인트 사진
 
-  /// 이 포인트(또는 세부 포인트)의 사진 목록
+  /// 이 포인트(또는 세부 포인트)의 사진 목록 (존재·개수 확인용, 기본 순서)
   List<String> _photosFor(String siteName, [String? subName]) =>
       kSitePhotos[subName == null ? siteName : '$siteName|$subName'] ??
       const [];
 
-  /// 가로 썸네일 갤러리 — 탭하면 전체화면 뷰어
-  Widget _photoGallery(List<String> photos) {
+  /// 갤러리 위젯 — 저장된 순서 적용. 관리자는 길게 눌러 드래그로 재정렬.
+  Widget _photoGallery(String photoKey, {bool isAdmin = false}) {
+    final provider = context.read<DiveSiteProvider>();
+    final photos =
+        provider.orderedPhotos(photoKey, kSitePhotos[photoKey] ?? const []);
     if (photos.isEmpty) return const SizedBox.shrink();
-    return SizedBox(
-      height: 110,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: photos.length,
-        separatorBuilder: (_, i) => const SizedBox(width: 6),
-        itemBuilder: (context, i) => GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) =>
-                  _PhotoViewerScreen(photos: photos, initial: i),
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.network(
-              photos[i],
-              width: 150,
-              height: 110,
-              fit: BoxFit.cover,
-              loadingBuilder: (c, child, progress) => progress == null
-                  ? child
-                  : Container(
-                      width: 150,
-                      height: 110,
-                      color: const Color(0xFFF1F3F5),
-                      child: const Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    ),
-              errorBuilder: (c, e, s) => Container(
-                width: 150,
-                height: 110,
-                color: const Color(0xFFF1F3F5),
-                child:
-                    Icon(Icons.broken_image_outlined, color: Colors.grey[400]),
-              ),
-            ),
-          ),
-        ),
-      ),
+    return _PhotoGallery(
+      photoKey: photoKey,
+      photos: photos,
+      isAdmin: isAdmin,
+      provider: provider,
     );
   }
 
@@ -1077,7 +1039,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         fontWeight: FontWeight.bold,
                         color: Colors.blueGrey[400])),
                 const SizedBox(height: 6),
-                _photoGallery(_photosFor(site.name)),
+                _photoGallery(site.name, isAdmin: isAdmin),
               ],
               if (site.depth.isEmpty &&
                   site.level.isEmpty &&
@@ -1119,6 +1081,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     final desc = (sp['desc'] ?? '').trim();
     final color = _levelColor(level);
     final autoPlaced = double.tryParse(sp['lat'] ?? '') == null;
+    final isAdmin = context.read<EquipmentProvider>().isAdmin;
 
     showModalBottomSheet(
       context: context,
@@ -1185,8 +1148,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         fontWeight: FontWeight.bold,
                         color: Colors.blueGrey[400])),
                 const SizedBox(height: 6),
-                _photoGallery(
-                    _photosFor(site.name, (sp['name'] ?? '').trim())),
+                _photoGallery('${site.name}|${(sp['name'] ?? '').trim()}',
+                    isAdmin: isAdmin),
               ],
               const SizedBox(height: 8),
               Text(
@@ -1466,6 +1429,121 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
         ],
         ),
       ),
+    );
+  }
+}
+
+/// 💡 사진 갤러리: 가로 썸네일, 탭 = 전체화면 뷰어.
+/// 관리자는 썸네일을 길게 눌러 끌면 순서가 바뀌고 Firestore에 저장된다 (전 기기 공유).
+class _PhotoGallery extends StatefulWidget {
+  final String photoKey;
+  final List<String> photos;
+  final bool isAdmin;
+  final DiveSiteProvider provider;
+
+  const _PhotoGallery({
+    required this.photoKey,
+    required this.photos,
+    required this.isAdmin,
+    required this.provider,
+  });
+
+  @override
+  State<_PhotoGallery> createState() => _PhotoGalleryState();
+}
+
+class _PhotoGalleryState extends State<_PhotoGallery> {
+  late final List<String> _photos = List.of(widget.photos);
+
+  Widget _thumb(int i) => GestureDetector(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                _PhotoViewerScreen(photos: List.of(_photos), initial: i),
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.network(
+            _photos[i],
+            width: 150,
+            height: 110,
+            fit: BoxFit.cover,
+            loadingBuilder: (c, child, progress) => progress == null
+                ? child
+                : Container(
+                    width: 150,
+                    height: 110,
+                    color: const Color(0xFFF1F3F5),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+            errorBuilder: (c, e, s) => Container(
+              width: 150,
+              height: 110,
+              color: const Color(0xFFF1F3F5),
+              child:
+                  Icon(Icons.broken_image_outlined, color: Colors.grey[400]),
+            ),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isAdmin) {
+      return SizedBox(
+        height: 110,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: _photos.length,
+          separatorBuilder: (_, i) => const SizedBox(width: 6),
+          itemBuilder: (context, i) => _thumb(i),
+        ),
+      );
+    }
+
+    // 관리자: 길게 눌러 드래그 재정렬
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 110,
+          child: ReorderableListView(
+            scrollDirection: Axis.horizontal,
+            buildDefaultDragHandles: false,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex--;
+                final item = _photos.removeAt(oldIndex);
+                _photos.insert(newIndex, item);
+              });
+              widget.provider
+                  .savePhotoOrder(widget.photoKey, List.of(_photos));
+            },
+            children: [
+              for (var i = 0; i < _photos.length; i++)
+                Padding(
+                  key: ValueKey(_photos[i]),
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ReorderableDelayedDragStartListener(
+                    index: i,
+                    child: _thumb(i),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text('길게 눌러 끌면 순서가 바뀝니다 (자동 저장)',
+            style: TextStyle(fontSize: 10.5, color: Colors.grey[400])),
+      ],
     );
   }
 }

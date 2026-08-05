@@ -75,10 +75,15 @@ class DiveSiteProvider with ChangeNotifier {
   List<DiveSite> _sites = [];
   List<DiveSite> get sites => _sites;
 
+  /// 💡 사진 순서 재정렬 결과 (club_config/site_photos 문서, key → URL 목록)
+  Map<String, List<String>> _photoOrder = {};
+
   StreamSubscription? _sub;
+  StreamSubscription? _photoOrderSub;
 
   DiveSiteProvider() {
     _listen();
+    _listenPhotoOrder();
   }
 
   void _listen() {
@@ -98,10 +103,53 @@ class DiveSiteProvider with ChangeNotifier {
     });
   }
 
+  void _listenPhotoOrder() {
+    _photoOrderSub = _db
+        .collection('club_config')
+        .doc('site_photos')
+        .snapshots()
+        .listen((doc) {
+      _photoOrder = {
+        for (final e in (doc.data() ?? {}).entries)
+          if (e.value is List)
+            e.key: [for (final u in e.value as List) u.toString()],
+      };
+      notifyListeners();
+    }, onError: (e) {
+      debugPrint('사진 순서 스트림 오류: $e — 재연결 예약');
+      Future.delayed(const Duration(seconds: 3), _listenPhotoOrder);
+    });
+  }
+
+  /// 저장된 순서를 적용한 사진 목록.
+  /// 저장 목록에 없는 새 사진은 뒤에 붙고, 삭제된 사진은 걸러진다.
+  List<String> orderedPhotos(String key, List<String> defaults) {
+    final saved = _photoOrder[key];
+    if (saved == null) return defaults;
+    final result = [
+      for (final u in saved)
+        if (defaults.contains(u)) u,
+    ];
+    for (final u in defaults) {
+      if (!result.contains(u)) result.add(u);
+    }
+    return result;
+  }
+
+  /// 💡 관리자 드래그 재정렬 결과 저장
+  Future<void> savePhotoOrder(String key, List<String> urls) async {
+    await _db
+        .collection('club_config')
+        .doc('site_photos')
+        .set({key: urls}, SetOptions(merge: true));
+  }
+
   /// 앱 복귀 시 끊겼을 수 있는 실시간 연결 복구
   void resubscribe() {
     _sub?.cancel();
+    _photoOrderSub?.cancel();
     _listen();
+    _listenPhotoOrder();
   }
 
   Future<void> addSite(DiveSite site) async {
