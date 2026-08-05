@@ -64,11 +64,11 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     '죽도':
         'https://earth.google.com/web/data=MkEKPwo9CiExLW4zV1F4eUd0ODZmQ3MweWhpWHdpWXZmOHQtU0M2SU8SFgoUMEY5NkM1RkM4RjQwRjg2MERGN0UgAUICCABKCAixjf3tBhAB?hl=ko&fdl=1',
     '관음도':
-        'https://earth.google.com/web/data=MicKJQojCiExOW9tT2x4NGJ6UEhDajc4dmUxTnI4elhKMXRCT0FFTHo?hl=ko&fdl=1',
+        'https://earth.google.com/web/data=MkEKPwo9CiExOW9tT2x4NGJ6UEhDajc4dmUxTnI4elhKMXRCT0FFTHoSFgoUMDg4RENERThCQTQxMDMyOUJFMjggAUICCABKCAin2IWMAxAB?hl=ko&authuser=0&fdl=1',
     '공암':
-        'https://earth.google.com/web/data=MicKJQojCiExUVBkZ1g5WGtCMmZtRUxUTkhzNXZ4czYteWdWTWMxNm8?hl=ko&fdl=1',
+        'https://earth.google.com/web/data=MkEKPwo9CiExUVBkZ1g5WGtCMmZtRUxUTkhzNXZ4czYteWdWTWMxNm8SFgoUMDc5QjA5OTlDNDQxMDVFMzM3RDAgAUICCABKCAiruKqfAhAB?hl=ko&authuser=0&fdl=1',
     '쌍정초':
-        'https://earth.google.com/web/data=MicKJQojCiExWElFckRhMFFQMHZrbHp0RFBuMGZtWUJzLUhqVHV6OG0?hl=ko&fdl=1',
+        'https://earth.google.com/web/data=MkEKPwo9CiExWElFckRhMFFQMHZrbHp0RFBuMGZtWUJzLUhqVHV6OG0SFgoUMDkwQjdFNDhFNDQxMDVEODk5QTkgAUICCABKCAjv962oAhAB?hl=ko&authuser=0&fdl=1',
   };
 
   void _openEarth(String url) {
