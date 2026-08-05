@@ -73,7 +73,20 @@
       }
       if (window.caches && caches.keys) {
         jobs.push(caches.keys().then(function (ks) {
-          return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+          return Promise.all(ks.map(function (k) {
+            // 💡 SW 매니페스트 캐시는 남긴다 — 지우면 SW가 캐시를 전부 리셋해
+            //    아래에서 보존한 사진까지 함께 날아간다
+            if (k.indexOf('manifest') !== -1) return false;
+            return caches.open(k).then(function (c) {
+              return c.keys().then(function (reqs) {
+                return Promise.all(reqs.map(function (req) {
+                  // 💡 포인트 사진은 보존 (업데이트 때마다 재다운로드 방지)
+                  if (req.url.indexOf('/site_photos/') !== -1) return false;
+                  return c.delete(req);
+                }));
+              });
+            });
+          }));
         }));
       }
       Promise.all(jobs.map(function (p) { return p.catch(function () {}); }))
