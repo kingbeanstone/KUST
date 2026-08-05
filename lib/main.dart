@@ -248,13 +248,11 @@ class MainTabScreen extends StatefulWidget {
 class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
-  // 💡 메인 탭에 들어갈 화면들.
-  //    사이트 탭: 배포(릴리즈)에선 '서비스 준비 중', 개발(핫리로드)에선 실제 화면.
-  //    공개할 준비가 되면 kReleaseMode 분기를 지우면 된다.
+  // 💡 메인 탭에 들어갈 화면들. (사이트 탭 2026-08-05 정식 오픈)
   final List<Widget> _screens = [
     const HomeScreen(),
     const ScheduleScreen(),
-    kReleaseMode ? const ComingSoonScreen() : const DiveSiteScreen(),
+    const DiveSiteScreen(),
     const MealPlanScreen(),
     const MoreScreen(),
   ];
