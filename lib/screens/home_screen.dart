@@ -101,7 +101,8 @@ class HomeScreen extends StatelessWidget {
               crossAxisCount: 2,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              childAspectRatio: 1.4,
+              // 💡 카드가 5→4개로 줄면서 아래 여백이 커져, 카드를 세로로 키워 채운다
+              childAspectRatio: 1.15,
               children: [
                 _buildMenuCard(context,
                     title: '장비 체크',
