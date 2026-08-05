@@ -275,12 +275,22 @@ class _UsageTrendState extends State<_UsageTrend> {
           ),
           const SizedBox(height: 12),
           StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            // 14일치 시간 버킷 = 일 단위 보기에도 충분
-            stream: UsageStats.hourly
-                .orderBy(FieldPath.documentId, descending: true)
-                .limit(336)
-                .snapshots(),
+            // 💡 orderBy 없이 전체 로드 — 문서 ID 내림차순 정렬은 별도 인덱스가
+            //    필요해서 쿼리가 거부됐었다(추이가 안 보이던 원인). 어차피 아래에서
+            //    버킷 ID로 직접 조회하므로 정렬이 필요 없다. (원정 규모 = 수백 개 이하)
+            stream: UsageStats.hourly.limit(1000).snapshots(),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return SizedBox(
+                  height: 80,
+                  child: Center(
+                    child: Text('추이 데이터를 불러오지 못했습니다.\n${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 10.5, color: Colors.red[300])),
+                  ),
+                );
+              }
               final docs = snapshot.data?.docs ?? [];
               if (docs.isEmpty) {
                 return SizedBox(
