@@ -742,10 +742,22 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                    isPinned ? '[필독] ${notice?.title ?? ""}' : (notice?.title ?? '최신 공지사항'),
-                    style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)
-                ),
+                // 💡 태그는 수정 다이얼로그에서 선택 ([필독]/[참고]/없음)
+                //    구버전 공지(태그 없음)는 고정 공지일 때만 [필독] 유지
+                Builder(builder: (_) {
+                  final tag = notice == null
+                      ? ''
+                      : (notice.tag.isNotEmpty
+                          ? notice.tag
+                          : (isPinned ? '필독' : ''));
+                  final title = notice?.title ?? '최신 공지사항';
+                  return Text(
+                      tag.isEmpty ? title : '[$tag] $title',
+                      style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600));
+                }),
                 const SizedBox(height: 2),
                 Text(
                   notice?.content ?? '등록된 공지가 없습니다.',
@@ -766,19 +778,60 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // 공지사항 빠른 수정 다이얼로그
+  // 공지사항 빠른 수정 다이얼로그 (머리말 태그 선택 포함)
   void _showQuickEditDialog(BuildContext context, NoticeProvider noticeProvider, NoticeItem? existingNotice) {
     final titleController = TextEditingController(text: existingNotice?.title ?? '');
     final contentController = TextEditingController(text: existingNotice?.content ?? '');
+    // 구버전 공지(태그 필드 없음)는 고정 공지면 '필독'으로 시작
+    var tag = existingNotice == null
+        ? ''
+        : (existingNotice.tag.isNotEmpty
+            ? existingNotice.tag
+            : (existingNotice.isPinned ? '필독' : ''));
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(existingNotice == null ? '새 공지 등록' : '공지 내용 수정'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 💡 머리말 태그 딸깍 선택
+            Wrap(
+              spacing: 6,
+              children: [
+                for (final (value, label) in const [
+                  ('', '없음'),
+                  ('필독', '[필독]'),
+                  ('참고', '[참고]'),
+                ])
+                  GestureDetector(
+                    onTap: () => setDialogState(() => tag = value),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 11, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: tag == value
+                            ? Colors.blue[700]
+                            : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color:
+                              tag == value ? Colors.white : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             TextField(controller: titleController, decoration: const InputDecoration(labelText: '제목')),
             TextField(controller: contentController, decoration: const InputDecoration(labelText: '내용'), maxLines: 3),
           ],
@@ -789,13 +842,16 @@ class HomeScreen extends StatelessWidget {
             onPressed: () async {
               if (titleController.text.isEmpty || contentController.text.isEmpty) return;
               if (existingNotice == null) {
-                await noticeProvider.addNotice(titleController.text, contentController.text);
+                await noticeProvider.addNotice(
+                    titleController.text, contentController.text,
+                    tag: tag);
               } else {
                 await noticeProvider.updateNotice(
                     existingNotice.id,
                     titleController.text,
                     contentController.text,
-                    imageUrls: existingNotice.imageUrls
+                    imageUrls: existingNotice.imageUrls,
+                    tag: tag,
                 );
               }
               if (context.mounted) Navigator.pop(context);
@@ -803,6 +859,7 @@ class HomeScreen extends StatelessWidget {
             child: const Text('저장'),
           ),
         ],
+        ),
       ),
     );
   }

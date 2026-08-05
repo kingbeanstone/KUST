@@ -6,6 +6,9 @@ class NoticeItem {
   final bool isPinned;
   final List<String> imageUrls;
 
+  /// 💡 머리말 태그 ('필독'/'참고' 등, ''=없음) — 홈 배너에 [태그] 형태로 표시
+  final String tag;
+
   NoticeItem({
     required this.id,
     required this.title,
@@ -13,6 +16,7 @@ class NoticeItem {
     required this.timestamp,
     this.isPinned = false,
     this.imageUrls = const [],
+    this.tag = '',
   });
 
   // 💡 데이터를 Map으로 변환 (저장용)
@@ -23,6 +27,7 @@ class NoticeItem {
       'timestamp': timestamp.toIso8601String(),
       'isPinned': isPinned,
       'imageUrls': imageUrls,
+      'tag': tag,
     };
   }
 
@@ -35,6 +40,7 @@ class NoticeItem {
       timestamp: DateTime.tryParse(map['timestamp'] ?? '') ?? DateTime.now(),
       isPinned: map['isPinned'] ?? false,
       imageUrls: List<String>.from(map['imageUrls'] ?? []),
+      tag: (map['tag'] ?? '').toString(),
     );
   }
 }

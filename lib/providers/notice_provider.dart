@@ -157,15 +157,15 @@ class NoticeProvider with ChangeNotifier {
     return urls;
   }
 
-  Future<void> addNotice(String title, String content, {List<String> imageUrls = const []}) async {
+  Future<void> addNotice(String title, String content, {List<String> imageUrls = const [], String tag = ''}) async {
     await _db.collection('notices').add({
       'title': title, 'content': content, 'timestamp': DateTime.now().toIso8601String(),
-      'isPinned': false, 'imageUrls': imageUrls,
+      'isPinned': false, 'imageUrls': imageUrls, 'tag': tag,
     });
   }
 
-  Future<void> updateNotice(String id, String title, String content, {List<String> imageUrls = const []}) async {
-    await _db.collection('notices').doc(id).update({'title': title, 'content': content, 'imageUrls': imageUrls});
+  Future<void> updateNotice(String id, String title, String content, {List<String> imageUrls = const [], String tag = ''}) async {
+    await _db.collection('notices').doc(id).update({'title': title, 'content': content, 'imageUrls': imageUrls, 'tag': tag});
   }
 
   Future<void> deleteNotice(String id) async {
