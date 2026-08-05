@@ -148,6 +148,7 @@ const Map<String, Color> _kTrendColors = {
   'growth': Color(0xFF8E24AA), // 보라
   'tab_schedule': Color(0xFFD81B60), // 분홍
   'tab_site': Color(0xFF43A047), // 초록
+  'earth': Color(0xFF00ACC1), // 청록(밝은)
   'tab_meal': Color(0xFFE53935), // 빨강
   'tab_more': Color(0xFF6D4C41), // 갈색
 };

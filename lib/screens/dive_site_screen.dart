@@ -10,6 +10,7 @@ import '../providers/dive_site_provider.dart';
 import '../util/maps_ready_stub.dart'
     if (dart.library.js_interop) '../util/maps_ready_web.dart';
 import '../util/site_photos.dart';
+import '../util/usage_stats.dart';
 
 /// 💡 다이브 사이트: 울릉도 포인트를 구글맵 마커로.
 /// 마커/목록 탭 = 상세, 관리자는 지도를 길게 눌러 포인트 추가.
@@ -73,6 +74,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   };
 
   void _openEarth(String url) {
+    // 💡 어스 버튼 4개(죽도·관음도·공암·쌍정초)를 하나로 묶어 집계
+    UsageStats.log('earth');
     // PC(넓은 화면)는 바로 열림 — 안내가 필요 없다
     if (MediaQuery.of(context).size.width > 700) {
       launchUrlString(url, mode: LaunchMode.externalApplication);
@@ -1416,6 +1419,9 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                 note: _noteController.text.trim(),
                 youtube: _youtubeController.text.trim(),
                 isBase: isBase,
+                // 💡 세부 포인트는 이 다이얼로그에서 안 다루므로 기존 것을 보존
+                //    (빼먹으면 빈 배열로 덮어써 세부 포인트가 날아간다!)
+                subPoints: site?.subPoints ?? const [],
               );
               if (site == null) {
                 provider.addSite(newSite);
@@ -1453,7 +1459,7 @@ class _PhotoGallery extends StatefulWidget {
 }
 
 class _PhotoGalleryState extends State<_PhotoGallery> {
-  late final List<String> _photos = List.of(widget.photos);
+  late List<String> _photos = List.of(widget.photos);
 
   Widget _thumb(int i) => GestureDetector(
         onTap: () => Navigator.push(
@@ -1497,53 +1503,199 @@ class _PhotoGalleryState extends State<_PhotoGallery> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.isAdmin) {
-      return SizedBox(
-        height: 110,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: _photos.length,
-          separatorBuilder: (_, i) => const SizedBox(width: 6),
-          itemBuilder: (context, i) => _thumb(i),
-        ),
-      );
-    }
+    final gallery = SizedBox(
+      height: 110,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _photos.length,
+        separatorBuilder: (_, i) => const SizedBox(width: 6),
+        itemBuilder: (context, i) => _thumb(i),
+      ),
+    );
 
-    // 관리자: 길게 눌러 드래그 재정렬
+    if (!widget.isAdmin) return gallery;
+
+    // 관리자: [순서 수정] → 전체가 한눈에 보이는 격자 화면에서 드래그 드롭
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          height: 110,
-          child: ReorderableListView(
-            scrollDirection: Axis.horizontal,
-            buildDefaultDragHandles: false,
-            onReorder: (oldIndex, newIndex) {
-              setState(() {
-                if (newIndex > oldIndex) newIndex--;
-                final item = _photos.removeAt(oldIndex);
-                _photos.insert(newIndex, item);
-              });
-              widget.provider
-                  .savePhotoOrder(widget.photoKey, List.of(_photos));
-            },
-            children: [
-              for (var i = 0; i < _photos.length; i++)
-                Padding(
-                  key: ValueKey(_photos[i]),
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ReorderableDelayedDragStartListener(
-                    index: i,
-                    child: _thumb(i),
-                  ),
+        gallery,
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => _PhotoOrderScreen(
+                  photoKey: widget.photoKey,
+                  photos: List.of(_photos),
+                  provider: widget.provider,
                 ),
-            ],
+              ),
+            );
+            // 순서 화면에서 돌아오면 저장된 최신 순서로 갱신
+            if (!mounted) return;
+            setState(() {
+              _photos = widget.provider.orderedPhotos(
+                  widget.photoKey, kSitePhotos[widget.photoKey] ?? const []);
+            });
+          },
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            side: BorderSide(color: Colors.grey[300]!),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(9)),
+          ),
+          icon: Icon(Icons.swap_horiz_rounded,
+              size: 15, color: Colors.grey[700]),
+          label: Text('순서 수정',
+              style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700])),
+        ),
+      ],
+    );
+  }
+}
+
+/// 💡 사진 순서 수정 화면: 전체 사진이 격자로 한눈에 보이고,
+/// 길게 눌러 끌어서 원하는 자리에 놓으면 그 위치로 이동한다 (놓는 즉시 저장).
+class _PhotoOrderScreen extends StatefulWidget {
+  final String photoKey;
+  final List<String> photos;
+  final DiveSiteProvider provider;
+
+  const _PhotoOrderScreen({
+    required this.photoKey,
+    required this.photos,
+    required this.provider,
+  });
+
+  @override
+  State<_PhotoOrderScreen> createState() => _PhotoOrderScreenState();
+}
+
+class _PhotoOrderScreenState extends State<_PhotoOrderScreen> {
+  late final List<String> _photos = List.of(widget.photos);
+
+  Widget _cell(int i, {bool dragging = false, bool highlight = false}) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Opacity(
+            opacity: dragging ? 0.35 : 1,
+            child: Image.network(
+              _photos[i],
+              fit: BoxFit.cover,
+              loadingBuilder: (c, child, progress) => progress == null
+                  ? child
+                  : Container(color: const Color(0xFFF1F3F5)),
+              errorBuilder: (c, e, s) => Container(
+                color: const Color(0xFFF1F3F5),
+                child: Icon(Icons.broken_image_outlined,
+                    color: Colors.grey[400]),
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 4),
-        Text('길게 눌러 끌면 순서가 바뀝니다 (자동 저장)',
-            style: TextStyle(fontSize: 10.5, color: Colors.grey[400])),
+        // 순서 번호 뱃지
+        Positioned(
+          top: 4,
+          left: 4,
+          child: Container(
+            width: 22,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(140),
+              shape: BoxShape.circle,
+            ),
+            child: Text('${i + 1}',
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white)),
+          ),
+        ),
+        // 드롭 대상 강조 테두리
+        if (highlight)
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.blue[600]!, width: 2.5),
+            ),
+          ),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        title: const Text('사진 순서 수정',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('완료',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            color: const Color(0xFFE3F2FD),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Text('사진을 길게 눌러 끌어서 원하는 자리에 놓으세요. 놓는 즉시 저장됩니다.',
+                style: TextStyle(fontSize: 11.5, color: Colors.blue[900])),
+          ),
+          Expanded(
+            child: GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemCount: _photos.length,
+              itemBuilder: (context, i) => DragTarget<int>(
+                onWillAcceptWithDetails: (d) => d.data != i,
+                onAcceptWithDetails: (d) {
+                  setState(() {
+                    final item = _photos.removeAt(d.data);
+                    _photos.insert(i, item);
+                  });
+                  widget.provider
+                      .savePhotoOrder(widget.photoKey, List.of(_photos));
+                },
+                builder: (context, candidates, rejected) =>
+                    LongPressDraggable<int>(
+                  data: i,
+                  feedback: SizedBox(
+                    width: 100,
+                    height: 100,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(_photos[i], fit: BoxFit.cover),
+                    ),
+                  ),
+                  childWhenDragging: _cell(i, dragging: true),
+                  child: _cell(i, highlight: candidates.isNotEmpty),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

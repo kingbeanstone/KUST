@@ -18,6 +18,7 @@ class UsageStats {
     'growth': '성장 그래프',
     'tab_schedule': '일정 탭',
     'tab_site': '사이트 탭',
+    'earth': '구글 어스',
     'tab_meal': '식단',
     'tab_more': '더보기',
   };
@@ -49,6 +50,7 @@ class UsageStats {
     'growth': '성장',
     'tab_schedule': '일정',
     'tab_site': '사이트',
+    'earth': '어스',
     'tab_meal': '식단',
     'tab_more': '더보기',
   };

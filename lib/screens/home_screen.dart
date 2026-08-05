@@ -20,6 +20,8 @@ import 'personal_checklist_screen.dart';
 import 'guide_screen.dart';
 import 'dive_log_screen.dart';
 import 'usage_stats_screen.dart';
+import 'coming_soon_screen.dart';
+import 'species_guide_screen.dart';
 import '../util/usage_stats.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -32,10 +34,9 @@ class HomeScreen extends StatelessWidget {
     final expeditionProvider = Provider.of<ExpeditionProvider>(context);
 
     final isAdmin = equipmentProvider.isAdmin;
-    // 💡 800(개발자) 인증이면 관리자 표시가 빨간색
-    final adminColor = context.watch<AuthProvider>().isDeveloper
-        ? Colors.red[600]!
-        : Colors.blue;
+    // 💡 800(개발자) 인증이면 관리자 표시가 빨간색 + 개발 중 화면 미리보기 가능
+    final isDev = context.watch<AuthProvider>().isDeveloper;
+    final adminColor = isDev ? Colors.red[600]! : Colors.blue;
     final homeNotice = noticeProvider.homeNotice;
 
     return Scaffold(
@@ -113,20 +114,17 @@ class HomeScreen extends StatelessWidget {
                     statKey: 'buddy',
                     target: const BuddyScreen()),
                 _buildMenuCard(context,
-                    title: '개인 체크리스트',
-                    icon: Icons.luggage_outlined, color: Colors.indigo,
-                    statKey: 'personal_checklist',
-                    target: const PersonalChecklistScreen()),
-                _buildMenuCard(context,
-                    title: '신입생 가이드',
-                    icon: Icons.school_outlined, color: Colors.orange,
-                    statKey: 'guide',
-                    target: const GuideScreen()),
-                _buildMenuCard(context,
                     title: '성장 그래프',
                     icon: Icons.show_chart_rounded, color: Colors.purple,
                     statKey: 'growth',
                     target: const DiveLogScreen()),
+                // 💡 생물 도감: 일반은 준비 중, 개발자(800)만 실화면 미리보기
+                _buildMenuCard(context,
+                    title: '생물 도감',
+                    icon: Icons.emoji_nature_outlined, color: Colors.cyan,
+                    target: isDev
+                        ? const SpeciesGuideScreen()
+                        : const ComingSoonScreen()),
               ],
             ),
 
@@ -546,6 +544,27 @@ class HomeScreen extends StatelessWidget {
                 size: 40,
               ),
             ),
+          ),
+
+          // 💡 홈 카드에서 옮겨온 메뉴 (누구나 접근)
+          _drawerItem(
+            context,
+            icon: Icons.luggage_outlined,
+            title: '개인 체크리스트',
+            subtitle: '내 짐 목록 체크 (기기 저장)',
+            isAdmin: true,
+            statKey: 'personal_checklist',
+            target: const PersonalChecklistScreen(),
+          ),
+
+          _drawerItem(
+            context,
+            icon: Icons.school_outlined,
+            title: '신입생 가이드',
+            subtitle: '장비 준비부터 반납까지 단계별 안내',
+            isAdmin: true,
+            statKey: 'guide',
+            target: const GuideScreen(),
           ),
 
           _drawerItem(
