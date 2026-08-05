@@ -21,6 +21,7 @@ import 'guide_screen.dart';
 import 'dive_log_screen.dart';
 import 'usage_stats_screen.dart';
 import 'coming_soon_screen.dart';
+import 'game_hub_screen.dart';
 import 'species_guide_screen.dart';
 import '../util/usage_stats.dart';
 
@@ -123,6 +124,7 @@ class HomeScreen extends StatelessWidget {
                 _buildMenuCard(context,
                     title: '생물 도감',
                     icon: Icons.emoji_nature_outlined, color: Colors.cyan,
+                    statKey: 'species',
                     target: isDev
                         ? const SpeciesGuideScreen()
                         : const ComingSoonScreen()),
@@ -579,10 +581,10 @@ class HomeScreen extends StatelessWidget {
 
           _drawerItem(
             context,
-            icon: isAdmin ? Icons.how_to_reg_outlined : Icons.lock_outline,
-            title: '원정 참가자 관리',
-            subtitle: '이번 원정에 갈 대원 선택',
-            isAdmin: isAdmin,
+            icon: Icons.how_to_reg_outlined,
+            title: '원정 참가자',
+            subtitle: '이번 원정에 가는 대원 명단',
+            isAdmin: true, // 💡 열람은 누구나 (수정은 화면 안에서 관리자만)
             target: const ParticipantScreen(),
           ),
 
@@ -602,6 +604,19 @@ class HomeScreen extends StatelessWidget {
             subtitle: '기능별 누적 접속 횟수',
             isAdmin: true, // 열람은 누구나
             target: const UsageStatsScreen(),
+          ),
+
+          // 💡 미니 게임: 일반은 준비 중, 개발자(800)만 미리보기
+          _drawerItem(
+            context,
+            icon: Icons.casino_outlined,
+            title: '미니 게임',
+            subtitle: '주루마블 — 대원들과 한 판!',
+            isAdmin: true,
+            statKey: 'game',
+            target: Provider.of<AuthProvider>(context).isDeveloper
+                ? const GameHubScreen()
+                : const ComingSoonScreen(),
           ),
 
           const Spacer(),

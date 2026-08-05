@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../util/usage_stats.dart';
@@ -146,6 +144,8 @@ const Map<String, Color> _kTrendColors = {
   'personal_checklist': Color(0xFF3949AB), // 남색
   'guide': Color(0xFFFB8C00), // 주황
   'growth': Color(0xFF8E24AA), // 보라
+  'species': Color(0xFFAFB42B), // 라임
+  'game': Color(0xFF546E7A), // 청회색
   'tab_schedule': Color(0xFFD81B60), // 분홍
   'tab_site': Color(0xFF43A047), // 초록
   'earth': Color(0xFF00ACC1), // 청록(밝은)
@@ -262,8 +262,8 @@ class _UsageTrendState extends State<_UsageTrend> {
           const SizedBox(height: 2),
           Text(
               _byHour
-                  ? '최근 48시간 · 아래로 갈수록 최신 · 오른쪽일수록 많이 사용'
-                  : '최근 14일 · 아래로 갈수록 최신 · 오른쪽일수록 많이 사용',
+                  ? '최근 48시간 · 위가 최신 · 오른쪽일수록 많이 사용'
+                  : '최근 14일 · 위가 최신 · 오른쪽일수록 많이 사용',
               style: TextStyle(fontSize: 10.5, color: Colors.grey[400])),
           const SizedBox(height: 10),
           // 범례 (딸깍해서 선 켜고 끄기)
@@ -311,30 +311,44 @@ class _UsageTrendState extends State<_UsageTrend> {
               String two(int v) => v.toString().padLeft(2, '0');
 
               // 💡 활동 없는 시간/일도 0으로 채워 연속된 시간축을 만든다.
-              // 위=과거 → 아래=최신.
+              // 위=최신 → 아래=과거 (시간이 아래에서 위로 흐른다).
+              // 라벨은 기준 시각에만: 자정=날짜(진한 선), 6·12·18시=보조선.
               final now = DateTime.now();
-              final timeLabels = <String>[];
+              final rowLabels = <String>[];
+              final rowLevels = <int>[]; // 0 없음 · 1 보조 · 2 날짜 · 3 지금
               final series = {
                 for (final k in UsageStats.labels.keys) k: <double>[],
               };
 
               if (_byHour) {
-                for (var i = 47; i >= 0; i--) {
+                for (var i = 0; i <= 47; i++) {
                   final t = now.subtract(Duration(hours: i));
                   final id =
                       '${t.year}-${two(t.month)}-${two(t.day)}-${two(t.hour)}';
                   final data = byId[id];
-                  timeLabels.add('${t.month}/${t.day} ${t.hour}시');
+                  if (t.hour == 0) {
+                    rowLabels.add('${t.month}/${t.day}');
+                    rowLevels.add(2);
+                  } else if (t.hour == 6 || t.hour == 12 || t.hour == 18) {
+                    rowLabels.add('${t.hour}시');
+                    rowLevels.add(1);
+                  } else {
+                    rowLabels.add('');
+                    rowLevels.add(0);
+                  }
                   for (final k in UsageStats.labels.keys) {
                     series[k]!.add(
                         ((data?[k] as num?)?.toInt() ?? 0).toDouble());
                   }
                 }
               } else {
-                for (var i = 13; i >= 0; i--) {
+                for (var i = 0; i <= 13; i++) {
                   final t = now.subtract(Duration(days: i));
                   final prefix = '${t.year}-${two(t.month)}-${two(t.day)}';
-                  timeLabels.add('${t.month}/${t.day}');
+                  rowLabels.add('${t.month}/${t.day}');
+                  // 매주 월요일·매달 1일은 진한 구분선
+                  rowLevels.add(
+                      (t.day == 1 || t.weekday == DateTime.monday) ? 2 : 1);
                   final sums = {for (final k in UsageStats.labels.keys) k: 0};
                   for (final e in byId.entries) {
                     if (!e.key.startsWith(prefix)) continue;
@@ -348,20 +362,25 @@ class _UsageTrendState extends State<_UsageTrend> {
                 }
               }
 
+              // 맨 위(현재) 행: 라벨이 없으면 '지금'으로 표시
+              if (rowLabels.first.isEmpty) rowLabels[0] = '지금';
+              rowLevels[0] = 3;
+
               final visible = {
                 for (final e in series.entries)
                   if (!_hidden.contains(e.key)) e.key: e.value,
               };
 
               final rowH = _byHour ? 13.0 : 24.0;
-              final chartHeight = 24 + timeLabels.length * rowH;
+              final chartHeight = 24 + rowLabels.length * rowH;
 
               return SizedBox(
                 height: chartHeight,
                 width: double.infinity,
                 child: CustomPaint(
                   painter: _VerticalTrendPainter(
-                    timeLabels: timeLabels,
+                    rowLabels: rowLabels,
+                    rowLevels: rowLevels,
                     series: visible,
                     colors: _kTrendColors,
                   ),
@@ -377,13 +396,16 @@ class _UsageTrendState extends State<_UsageTrend> {
 
 /// 세로형 다중 꺾은선 그래프 (외부 라이브러리 없이).
 /// 세로축 = 시간(위→아래), 가로축 = 접속 수(왼→오른쪽).
+/// 시간축 라벨은 기준 시각에만: 자정=날짜(진한 구분선), 6·12·18시=보조선, 지금=파랑.
 class _VerticalTrendPainter extends CustomPainter {
-  final List<String> timeLabels;
+  final List<String> rowLabels; // '' = 라벨 없음
+  final List<int> rowLevels; // 0 없음 · 1 보조 · 2 날짜(진한 선) · 3 지금(파랑)
   final Map<String, List<double>> series;
   final Map<String, Color> colors;
 
   _VerticalTrendPainter({
-    required this.timeLabels,
+    required this.rowLabels,
+    required this.rowLevels,
     required this.series,
     required this.colors,
   });
@@ -395,7 +417,7 @@ class _VerticalTrendPainter extends CustomPainter {
     const topPad = 16.0;
     const bottomPad = 4.0;
     final chartW = size.width - leftPad - rightPad;
-    final n = timeLabels.length;
+    final n = rowLabels.length;
     if (n == 0) return;
     final rowH = (size.height - topPad - bottomPad) / n;
 
@@ -423,16 +445,37 @@ class _VerticalTrendPainter extends CustomPainter {
           Colors.grey[500]!);
     }
 
-    // ── 시간 라벨 (왼쪽, 겹치지 않게 건너뛰기) + 옅은 가로 안내선
-    final rowGuide = Paint()
-      ..color = const Color(0xFFF4F6F8)
+    // ── 시간축: 기준 시각에만 구분선 + 라벨
+    final minorGuide = Paint()
+      ..color = const Color(0xFFE3E8EE)
       ..strokeWidth = 1;
-    final step = math.max(1, (n / 10).ceil());
-    for (var i = 0; i < n; i += step) {
-      canvas.drawLine(Offset(leftPad, y(i)),
-          Offset(size.width - rightPad, y(i)), rowGuide);
-      _text(canvas, timeLabels[i], Offset(0, y(i) - 5), 8.5,
-          Colors.grey[600]!);
+    final majorGuide = Paint()
+      ..color = const Color(0xFFB0BEC5)
+      ..strokeWidth = 1.3;
+    final nowGuide = Paint()
+      ..color = Colors.blue[300]!
+      ..strokeWidth = 1.2;
+    for (var i = 0; i < n; i++) {
+      final level = rowLevels[i];
+      if (level == 0) continue;
+      final paint = level == 2
+          ? majorGuide
+          : level == 3
+              ? nowGuide
+              : minorGuide;
+      canvas.drawLine(
+          Offset(leftPad, y(i)), Offset(size.width - rightPad, y(i)), paint);
+      if (rowLabels[i].isEmpty) continue;
+      _text(
+        canvas,
+        rowLabels[i],
+        Offset(0, y(i) - 5),
+        level == 2 ? 9.5 : 8.5,
+        level == 3
+            ? Colors.blue[600]!
+            : (level == 2 ? Colors.grey[800]! : Colors.grey[500]!),
+        bold: level >= 2,
+      );
     }
 
     // ── 기능별 선 (모두 0인 기능은 생략해 왼쪽 끝 겹침을 줄인다)
@@ -468,11 +511,16 @@ class _VerticalTrendPainter extends CustomPainter {
   }
 
   void _text(
-      Canvas canvas, String text, Offset offset, double size, Color color) {
+      Canvas canvas, String text, Offset offset, double size, Color color,
+      {bool bold = false}) {
     final painter = TextPainter(
       text: TextSpan(
         text: text,
-        style: TextStyle(fontSize: size, color: color),
+        style: TextStyle(
+          fontSize: size,
+          color: color,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
@@ -481,5 +529,5 @@ class _VerticalTrendPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _VerticalTrendPainter old) =>
-      old.timeLabels != timeLabels || old.series != series;
+      old.rowLabels != rowLabels || old.series != series;
 }

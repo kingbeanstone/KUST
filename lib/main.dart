@@ -29,7 +29,6 @@ import 'util/web_plugins_fix_stub.dart'
 import 'screens/home_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/dive_site_screen.dart';
-import 'screens/coming_soon_screen.dart';
 import 'util/usage_stats.dart';
 import 'screens/meal_plan_screen.dart';
 import 'screens/more_screen.dart';

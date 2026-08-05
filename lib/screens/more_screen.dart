@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import '../app_version.dart';
 import '../util/app_update.dart';
+import 'suggestion_screen.dart';
 import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/executive_provider.dart';
@@ -572,6 +573,26 @@ class _MoreScreenState extends State<MoreScreen> {
                       }
                     },
                   );
+                },
+              ),
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              // 💡 서비스 제안: 일반 = 작성, 관리자 = 제안함 열람
+              ListTile(
+                leading: Icon(Icons.lightbulb_outline, color: Colors.amber[700]),
+                title: Text(auth.isAdmin ? '서비스 제안함' : '서비스 제안',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                subtitle: Text(
+                  auth.isAdmin ? '대원들이 보낸 제안 보기' : '필요한 기능·아이디어를 보내주세요',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () {
+                  if (auth.isAdmin) {
+                    Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => const SuggestionListScreen()));
+                  } else {
+                    showSuggestionDialog(context);
+                  }
                 },
               ),
               // 💡 저장된 비밀번호 정보를 삭제할 수 있는 관리자용 옵션
