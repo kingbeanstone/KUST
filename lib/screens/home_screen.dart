@@ -26,9 +26,6 @@ import 'weather_screen.dart';
 import '../util/usage_stats.dart';
 import '../util/weather_service.dart';
 
-/// 💡 날씨 배너 스위치 — 스플래시 속도 실험용 (true로 되돌리면 복구)
-const bool kWeatherEnabled = false;
-
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -101,12 +98,9 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
-            // 💡 울릉도 날씨 배너 — 탭하면 시간대별 상세
-            // (임시 테스트: 스플래시 속도 확인 위해 꺼둠 — kWeatherEnabled로 복구)
-            if (kWeatherEnabled) ...[
-              _buildWeatherBanner(context),
-              const SizedBox(height: 16),
-            ],
+            // 💡 울릉도 날씨 배너 — 앱 시작 부하와 겹치지 않게 2초 뒤 로드
+            const _WeatherBanner(),
+            const SizedBox(height: 16),
 
             // 💡 v2: 장비 3분할을 하나로 통합하여 1행 2열로 단순화
             GridView.count(
@@ -535,93 +529,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// 💡 울릉도 날씨 배너 — 현재 시각 기온·날씨·바람·파고 요약.
-  /// 탭하면 오늘/내일 시간대별 상세 화면으로 이동한다.
-  Widget _buildWeatherBanner(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        UsageStats.log('weather');
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const WeatherScreen()));
-      },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-        // 💡 폰 날씨 위젯 느낌: 푸른 그라데이션 + 흰 글씨 (라운드 20 + 은은한 그림자)
-        decoration: BoxDecoration(
-          // 💡 하단 공지 배너와 동일한 색·그림자 (UI 통일)
-          gradient:
-              LinearGradient(colors: [Colors.blue[800]!, Colors.blue[600]!]),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.blue.withAlpha(50),
-                blurRadius: 10,
-                offset: const Offset(0, 5)),
-          ],
-        ),
-        child: FutureBuilder<WeatherData>(
-          future: WeatherService.fetchForecast(),
-          builder: (context, snap) {
-            final now = snap.data?.now;
-            if (now == null) {
-              return Row(
-                children: [
-                  const Text('🌊', style: TextStyle(fontSize: 22)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      snap.hasError
-                          ? '날씨를 불러올 수 없어요 — 탭해서 다시 시도'
-                          : '울릉도 날씨 불러오는 중...',
-                      style: const TextStyle(
-                          fontSize: 13, color: Colors.white70),
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, color: Colors.white70),
-                ],
-              );
-            }
-            final (emoji, desc) = WeatherService.describe(now.code);
-            return Row(
-              children: [
-                Text(emoji, style: const TextStyle(fontSize: 26)),
-                const SizedBox(width: 12),
-                Expanded(
-                  // 💡 온도만 살짝 크게, 나머지는 가늘게 — 위젯처럼 세련되게
-                  child: Text.rich(
-                    TextSpan(children: [
-                      TextSpan(
-                          text: '울릉도  ',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.2,
-                              color: Colors.white.withAlpha(245))),
-                      TextSpan(
-                          text: '${now.temp.round()}°',
-                          style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
-                      TextSpan(
-                          text: '  $desc',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withAlpha(230))),
-                    ]),
-                  ),
-                ),
-                const Icon(Icons.chevron_right, color: Colors.white70),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   // 사이드바 구성
   Widget _buildSideBar(BuildContext context, EquipmentProvider provider, bool isAdmin) {
     return Drawer(
@@ -970,6 +877,117 @@ class HomeScreen extends StatelessWidget {
             child: const Text('저장'),
           ),
         ],
+        ),
+      ),
+    );
+  }
+}
+/// 💡 울릉도 날씨 배너 — 현재 기온·날씨 요약, 탭하면 시간대별 상세.
+/// 앱 시작 부하(엔진 초기화·Firestore 구독)와 겹치지 않도록
+/// 첫 프레임 후 2초 뒤에 날씨를 불러온다 (스플래시 지연 방지).
+class _WeatherBanner extends StatefulWidget {
+  const _WeatherBanner();
+
+  @override
+  State<_WeatherBanner> createState() => _WeatherBannerState();
+}
+
+class _WeatherBannerState extends State<_WeatherBanner> {
+  Future<WeatherData>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() => _future = WeatherService.fetchForecast());
+        }
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        UsageStats.log('weather');
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const WeatherScreen()));
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        // 💡 하단 공지 배너와 동일한 색·그림자 (UI 통일)
+        decoration: BoxDecoration(
+          gradient:
+              LinearGradient(colors: [Colors.blue[800]!, Colors.blue[600]!]),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.blue.withAlpha(50),
+                blurRadius: 10,
+                offset: const Offset(0, 5)),
+          ],
+        ),
+        // 💡 _future가 null인 동안(시작 직후 2초)은 로딩 문구가 보인다
+        child: FutureBuilder<WeatherData>(
+          future: _future,
+          builder: (context, snap) {
+            final now = snap.data?.now;
+            if (now == null) {
+              return Row(
+                children: [
+                  const Text('🌊', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      snap.hasError
+                          ? '날씨를 불러올 수 없어요 — 탭해서 다시 시도'
+                          : '울릉도 날씨 불러오는 중...',
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.white70),
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.white70),
+                ],
+              );
+            }
+            final (emoji, desc) = WeatherService.describe(now.code);
+            return Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 26)),
+                const SizedBox(width: 12),
+                Expanded(
+                  // 💡 온도만 살짝 크게, 나머지는 가늘게 — 위젯처럼 세련되게
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: '울릉도  ',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                              color: Colors.white.withAlpha(245))),
+                      TextSpan(
+                          text: '${now.temp.round()}°',
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white)),
+                      TextSpan(
+                          text: '  $desc',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withAlpha(230))),
+                    ]),
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.white70),
+              ],
+            );
+          },
         ),
       ),
     );
