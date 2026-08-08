@@ -543,17 +543,15 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
         // 💡 폰 날씨 위젯 느낌: 푸른 그라데이션 + 흰 글씨 (라운드 20 + 은은한 그림자)
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF2F63C7), Color(0xFF5590E4)],
-          ),
+          // 💡 하단 공지 배너와 동일한 색·그림자 (UI 통일)
+          gradient:
+              LinearGradient(colors: [Colors.blue[800]!, Colors.blue[600]!]),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.blue.withAlpha(80),
-                blurRadius: 7,
-                offset: const Offset(0, 3)),
+                color: Colors.blue.withAlpha(50),
+                blurRadius: 10,
+                offset: const Offset(0, 5)),
           ],
         ),
         child: FutureBuilder<WeatherData>(
