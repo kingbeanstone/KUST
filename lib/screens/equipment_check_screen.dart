@@ -67,9 +67,24 @@ bool _needsCheck(String value) {
 }
 
 /// 💡 열별 예외를 반영한 체크 대상 판정.
-/// 가방은 세는 단위(가방 기준 완료 카운트)라서 개인 가방이어도 항상 체크한다.
-bool _needsCheckFor(String gear, String value) =>
-    gear == '가방' ? true : _needsCheck(value);
+/// 가방은 세는 단위라 '개인' 가방이어도 체크하지만,
+/// 아예 입력이 없거나 'X'면 가방이 없는 것 — 체크도 셈도 하지 않는다.
+bool _needsCheckFor(String gear, String value) {
+  if (gear == '가방') {
+    final v = value.trim();
+    return v.isNotEmpty && v.toUpperCase() != 'X';
+  }
+  return _needsCheck(value);
+}
+
+/// 💡 이 블록에 셀 가방이 있는지 (가방 칸이 비어있으면 가방 카운트 제외)
+bool _blockHasBag(_Block block) {
+  if (block.sharesGear('가방')) {
+    return _needsCheckFor('가방', block.members.first.gears['가방']?.value ?? '');
+  }
+  return block.members
+      .any((m) => _needsCheckFor('가방', m.gears['가방']?.value ?? ''));
+}
 
 /// 💡 표시 순서: 저장된 order(드래그로 변경 가능) 우선, 같으면 기수→이름.
 int _compareRows(Map<String, MemberItem> club, MemberEquipment a, MemberEquipment b) {
@@ -268,10 +283,12 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
   }
 
   /// 섹션 헤더 우측 요약 — 장비 부장은 '가방 몇 개 중 몇 개 완료'로 생각한다.
+  /// 💡 가방 칸이 빈 블록(가방 없이 오는 사람)은 셈에서 뺀다.
   String _sectionSummary(_Section section) {
     if (_isEditMode) return '${section.allMembers.length}명';
-    final total = section.blocks.length;
-    final done = section.blocks.where(_isBlockComplete).length;
+    final bagBlocks = section.blocks.where(_blockHasBag).toList();
+    final total = bagBlocks.length;
+    final done = bagBlocks.where(_isBlockComplete).length;
     return '$done/$total 가방';
   }
 
@@ -1224,14 +1241,17 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
           ),
         ));
         if (collapsed || section.blocks.isEmpty) {
-          blockNo += section.blocks.length; // 접혀 있어도 번호는 이어지게
+          // 접혀 있어도 번호는 이어지게 (가방 있는 블록만 셈)
+          blockNo += section.blocks.where(_blockHasBag).length;
           cells.add(_gap(_fixedWidth));
           continue;
         }
       }
 
       for (final block in section.blocks) {
-        blockNo++;
+        // 💡 가방 칸이 빈 블록은 가방 번호를 받지 않는다 ('-' 표시)
+        final hasBag = _blockHasBag(block);
+        if (hasBag) blockNo++;
         // 💡 가방이 다 싸졌으면 번호·이름 칸이 녹색이 된다
         final complete = !_isEditMode && _isBlockComplete(block);
         final bodyHeight = _slotHeight * block.members.length;
@@ -1289,7 +1309,7 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
                     border: Border(right: BorderSide(color: Colors.grey[200]!)),
                   ),
                   child: Text(
-                    '$blockNo',
+                    hasBag ? '$blockNo' : '-',
                     style: const TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.bold,

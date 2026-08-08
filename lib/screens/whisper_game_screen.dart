@@ -42,8 +42,8 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
     '버디 몰래 먼저 올라갈 것 같은 사람은?',
   ];
 
-  // 💡 수위 UP 전용 질문. [수위 질문 뽑기]로만 뽑히고,
-  // 뽑히면 빨간 경고 + 새로고침 버튼이 함께 나온다.
+  // 💡 수위 UP 질문 — 일반 질문과 한 덱에 섞여서 뽑힌다.
+  // 뽑히면 빨간 경고가 함께 나오고, 빡세면 한 잔 마시고 새로고침.
   static const List<String> _spicyQuestions = [
     '이 중에서 나를 좋아하고 있을 것 같은 사람은?',
     '지금 이 자리에서 짝사랑 중인 것 같은 사람은?',
@@ -60,10 +60,8 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
 
   /// 0=홈(룰+뽑기 버튼), 1=질문 카드
   int _stage = 0;
-  late List<int> _order; // 일반 질문 셔플 순서
+  late List<int> _order; // 전체 덱(일반+수위) 셔플 순서
   int _cursor = 0;
-  late List<int> _spicyOrder; // 수위 질문 셔플 순서
-  int _spicyCursor = 0;
   String _question = '';
   bool _isSpicy = false;
   bool _peeking = false; // 꾹 누르는 동안만 질문 표시
@@ -71,7 +69,7 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
   @override
   void initState() {
     super.initState();
-    _shufflePools();
+    _shuffleDeck();
   }
 
   @override
@@ -80,13 +78,11 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
     super.dispose();
   }
 
-  void _shufflePools() {
-    _order = List.generate(_questions.length, (i) => i)
+  void _shuffleDeck() {
+    _order = List.generate(
+        _questions.length + _spicyQuestions.length, (i) => i)
       ..shuffle(math.Random());
     _cursor = 0;
-    _spicyOrder = List.generate(_spicyQuestions.length, (i) => i)
-      ..shuffle(math.Random());
-    _spicyCursor = 0;
   }
 
   Future<void> _playSfx(String file) async {
@@ -99,23 +95,18 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
     }
   }
 
-  void _draw({bool spicy = false}) {
-    _playSfx(spicy ? 'beep.wav' : 'land.wav');
+  void _draw({bool refresh = false}) {
+    _playSfx(refresh ? 'beep.wav' : 'land.wav');
     setState(() {
-      if (spicy) {
-        if (_spicyCursor >= _spicyOrder.length) {
-          _spicyOrder.shuffle(math.Random());
-          _spicyCursor = 0;
-        }
-        _question = _spicyQuestions[_spicyOrder[_spicyCursor++]];
-      } else {
-        if (_cursor >= _order.length) {
-          _order.shuffle(math.Random());
-          _cursor = 0;
-        }
-        _question = _questions[_order[_cursor++]];
+      if (_cursor >= _order.length) {
+        _order.shuffle(math.Random());
+        _cursor = 0;
       }
-      _isSpicy = spicy;
+      final idx = _order[_cursor++];
+      _isSpicy = idx >= _questions.length;
+      _question = _isSpicy
+          ? _spicyQuestions[idx - _questions.length]
+          : _questions[idx];
       _stage = 1;
       _peeking = false;
     });
@@ -202,27 +193,9 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
                     borderRadius: BorderRadius.circular(16)),
               ),
               onPressed: _draw,
-              child: const Text('🎁 일반 질문 뽑기',
+              child: const Text('🎁 질문 뽑기',
                   style:
                       TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFB71C1C),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: Color(0xFFFF5252))),
-              ),
-              onPressed: () => _draw(spicy: true),
-              child: const Text('🔞 수위 질문 뽑기 — 분위기 보고!',
-                  style:
-                      TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -308,16 +281,14 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
               ),
             ),
           ),
-          if (_isSpicy) ...[
-            const SizedBox(height: 8),
-            // 💡 수위 질문은 다른 수위 질문으로 새로고침 가능
-            TextButton.icon(
-              onPressed: () => _draw(spicy: true),
-              icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
-              label: const Text('다른 수위 질문으로 새로고침',
-                  style: TextStyle(fontSize: 13.5, color: Colors.white70)),
-            ),
-          ],
+          const SizedBox(height: 8),
+          // 💡 질문이 너무 빡세면 본인이 벌주 한 잔 마시고 새 질문으로
+          TextButton.icon(
+            onPressed: () => _draw(refresh: true),
+            icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
+            label: const Text('너무 빡세다... 한 잔 마시고 새로고침 🍺',
+                style: TextStyle(fontSize: 13.5, color: Colors.white70)),
+          ),
           const SizedBox(height: 14),
           Text('질문을 외웠으면 오른쪽 사람에게 귓속말!\n들은 사람은 어울리는 사람을 조용히 지목 🫵',
               textAlign: TextAlign.center,
