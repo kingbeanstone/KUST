@@ -139,6 +139,7 @@ class UsageStatsScreen extends StatelessWidget {
 
 /// 기능별 선 색 (이용 추이 그래프)
 const Map<String, Color> _kTrendColors = {
+  'weather': Color(0xFFFFB300), // 호박색
   'equipment_check': Color(0xFF1E88E5), // 파랑
   'buddy': Color(0xFF00897B), // 청록
   'personal_checklist': Color(0xFF3949AB), // 남색

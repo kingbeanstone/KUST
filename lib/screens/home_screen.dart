@@ -22,7 +22,9 @@ import 'dive_log_screen.dart';
 import 'usage_stats_screen.dart';
 import 'game_hub_screen.dart';
 import 'species_guide_screen.dart';
+import 'weather_screen.dart';
 import '../util/usage_stats.dart';
+import '../util/weather_service.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -94,7 +96,11 @@ class HomeScreen extends StatelessWidget {
                   : '상단에서 원정을 선택해주세요.',
               style: const TextStyle(color: Colors.black54),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // 💡 울릉도 날씨 배너 — 탭하면 시간대별 상세
+            _buildWeatherBanner(context),
+            const SizedBox(height: 16),
 
             // 💡 v2: 장비 3분할을 하나로 통합하여 1행 2열로 단순화
             GridView.count(
@@ -518,6 +524,71 @@ class HomeScreen extends StatelessWidget {
               child: const Text('확인'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// 💡 울릉도 날씨 배너 — 현재 시각 기온·날씨·바람·파고 요약.
+  /// 탭하면 오늘/내일 시간대별 상세 화면으로 이동한다.
+  Widget _buildWeatherBanner(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        UsageStats.log('weather');
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const WeatherScreen()));
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+        // 💡 하단 공지 배너와 같은 결: 라운드 20 + 그림자 (입체감·UI 통일)
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.lightBlue[50]!, Colors.blue[50]!],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.blue.withAlpha(28),
+                blurRadius: 6,
+                offset: const Offset(0, 3)),
+          ],
+        ),
+        child: FutureBuilder<WeatherData>(
+          future: WeatherService.fetchForecast(),
+          builder: (context, snap) {
+            final now = snap.data?.now;
+            if (now == null) {
+              return Row(
+                children: [
+                  const Text('🌊', style: TextStyle(fontSize: 24)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      snap.hasError
+                          ? '날씨를 불러올 수 없어요 — 탭해서 다시 시도'
+                          : '울릉도 날씨 불러오는 중...',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: Colors.grey[400]),
+                ],
+              );
+            }
+            final (emoji, desc) = WeatherService.describe(now.code);
+            return Row(
+              children: [
+                Text(emoji, style: const TextStyle(fontSize: 28)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('울릉도  ${now.temp.round()}°  $desc',
+                      style: const TextStyle(
+                          fontSize: 15.5, fontWeight: FontWeight.bold)),
+                ),
+                Icon(Icons.chevron_right, color: Colors.blue[300]),
+              ],
+            );
+          },
         ),
       ),
     );
