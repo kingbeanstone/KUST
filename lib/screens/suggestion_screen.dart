@@ -13,7 +13,7 @@ void showSuggestionDialog(BuildContext context) {
     context: context,
     builder: (dialogContext) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('💡 서비스 제안',
+      title: const Text('💡 서비스 제안 및 문의',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -82,7 +82,7 @@ class SuggestionListScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('💡 서비스 제안함',
+        title: const Text('💡 서비스 제안·문의함',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,

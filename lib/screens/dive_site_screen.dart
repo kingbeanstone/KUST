@@ -166,8 +166,16 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   // ------------------------------------------------------------- 포인트 사진
 
   /// 이 포인트(또는 세부 포인트)의 사진 목록 (존재·개수 확인용, 기본 순서)
+  /// 💡 세부 포인트 이름 앞의 번호("1. ")를 뗀 원래 이름.
+  /// 사진 매핑(kSitePhotos)·저장된 사진 순서 키는 번호 없는 이름 기준이라,
+  /// 번호를 새로 붙이거나 바꿔도 사진 연결이 깨지지 않는다.
+  String _plainName(String name) =>
+      name.replaceFirst(RegExp(r'^\d+\.\s*'), '');
+
   List<String> _photosFor(String siteName, [String? subName]) =>
-      kSitePhotos[subName == null ? siteName : '$siteName|$subName'] ??
+      kSitePhotos[subName == null
+          ? siteName
+          : '$siteName|${_plainName(subName)}'] ??
       const [];
 
   /// 갤러리 위젯 — 저장된 순서 적용. 관리자는 길게 눌러 드래그로 재정렬.
@@ -1151,7 +1159,8 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                         fontWeight: FontWeight.bold,
                         color: Colors.blueGrey[400])),
                 const SizedBox(height: 6),
-                _photoGallery('${site.name}|${(sp['name'] ?? '').trim()}',
+                _photoGallery(
+                    '${site.name}|${_plainName((sp['name'] ?? '').trim())}',
                     isAdmin: isAdmin),
               ],
               const SizedBox(height: 8),

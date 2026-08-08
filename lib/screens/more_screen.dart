@@ -579,10 +579,11 @@ class _MoreScreenState extends State<MoreScreen> {
               // 💡 서비스 제안: 일반 = 작성, 관리자 = 제안함 열람
               ListTile(
                 leading: Icon(Icons.lightbulb_outline, color: Colors.amber[700]),
-                title: Text(auth.isAdmin ? '서비스 제안함' : '서비스 제안',
+                title: Text(
+                    auth.isAdmin ? '서비스 제안(피드백) 및 문의함' : '서비스 제안(피드백) 및 문의',
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                 subtitle: Text(
-                  auth.isAdmin ? '대원들이 보낸 제안 보기' : '필요한 기능·아이디어를 보내주세요',
+                  auth.isAdmin ? '대원들이 보낸 제안·문의 보기' : '기능 제안, 피드백, 궁금한 점을 보내주세요',
                   style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                 ),
                 trailing: const Icon(Icons.chevron_right, size: 20),

@@ -540,16 +540,18 @@ class HomeScreen extends StatelessWidget {
       },
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-        // 💡 하단 공지 배너와 같은 결: 라운드 20 + 그림자 (입체감·UI 통일)
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+        // 💡 폰 날씨 위젯 느낌: 푸른 그라데이션 + 흰 글씨 (라운드 20 + 은은한 그림자)
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.lightBlue[50]!, Colors.blue[50]!],
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF4A80D6), Color(0xFF77AAE8)],
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.blue.withAlpha(28),
+                color: Colors.blue.withAlpha(60),
                 blurRadius: 6,
                 offset: const Offset(0, 3)),
           ],
@@ -561,31 +563,34 @@ class HomeScreen extends StatelessWidget {
             if (now == null) {
               return Row(
                 children: [
-                  const Text('🌊', style: TextStyle(fontSize: 24)),
+                  const Text('🌊', style: TextStyle(fontSize: 22)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       snap.hasError
                           ? '날씨를 불러올 수 없어요 — 탭해서 다시 시도'
                           : '울릉도 날씨 불러오는 중...',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                      style: const TextStyle(
+                          fontSize: 13, color: Colors.white70),
                     ),
                   ),
-                  Icon(Icons.chevron_right, color: Colors.grey[400]),
+                  const Icon(Icons.chevron_right, color: Colors.white70),
                 ],
               );
             }
             final (emoji, desc) = WeatherService.describe(now.code);
             return Row(
               children: [
-                Text(emoji, style: const TextStyle(fontSize: 28)),
+                Text(emoji, style: const TextStyle(fontSize: 26)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text('울릉도  ${now.temp.round()}°  $desc',
                       style: const TextStyle(
-                          fontSize: 15.5, fontWeight: FontWeight.bold)),
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
                 ),
-                Icon(Icons.chevron_right, color: Colors.blue[300]),
+                const Icon(Icons.chevron_right, color: Colors.white70),
               ],
             );
           },

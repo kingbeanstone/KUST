@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/dive_log_model.dart';
 import '../providers/dive_site_provider.dart';
 
-/// 💡 성장 그래프: 로그 기록 → 티어 · 능력치 레이더 · 잔여 바/분당 소모 그래프.
+/// 💡 성장 그래프: 로그 기록 → 티어 · 능력치 레이더 · 분당 소모(수심 보정) 그래프.
 /// 이 기기(브라우저)에만 저장된다 — 열면 바로 내 기록.
 class DiveLogScreen extends StatefulWidget {
   const DiveLogScreen({super.key});
@@ -32,6 +32,8 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
   final TextEditingController _dateController = TextEditingController();
   final TextEditingController _siteController = TextEditingController();
   final TextEditingController _depthController = TextEditingController();
+  final TextEditingController _avgDepthController = TextEditingController();
+  final TextEditingController _tempController = TextEditingController();
   final TextEditingController _durationController = TextEditingController();
   final TextEditingController _startBarController = TextEditingController();
   final TextEditingController _endBarController = TextEditingController();
@@ -48,6 +50,8 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     _dateController.dispose();
     _siteController.dispose();
     _depthController.dispose();
+    _avgDepthController.dispose();
+    _tempController.dispose();
     _durationController.dispose();
     _startBarController.dispose();
     _endBarController.dispose();
@@ -172,21 +176,14 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // 꺾은선 그래프 데이터
-    final endValues = <double>[];
-    final endLabels = <String>[];
+    // 꺾은선 그래프 데이터 — 수심 보정 분당 소모 (평균 수심 없으면 원값)
     final sacValues = <double>[];
     final sacLabels = <String>[];
     for (final log in _logs) {
-      final label = _shortDate(log.date);
-      if (log.endBar > 0) {
-        endValues.add(log.endBar);
-        endLabels.add(label);
-      }
-      final sac = log.consumptionPerMin;
+      final sac = log.correctedPerMin;
       if (sac != null) {
         sacValues.add(sac);
-        sacLabels.add(label);
+        sacLabels.add(_shortDate(log.date));
       }
     }
 
@@ -354,18 +351,11 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
           ),
           const SizedBox(height: 12),
 
-          // ── 잔여 바 그래프
+          // ── 분당 소모 그래프 (수심 보정) — 성장 평가의 메인 지표
           _card(
-            title: '잔여 바',
-            subtitle: '다이빙 후 남은 공기. 높아질수록 성장!',
-            child: _lineChart(endValues, endLabels, Colors.blue[700]!, 'bar'),
-          ),
-          const SizedBox(height: 12),
-
-          // ── 분당 소모 그래프
-          _card(
-            title: '분당 소모',
-            subtitle: '1분에 쓰는 공기(bar/min). 낮아질수록 성장!',
+            title: '분당 소모 (수심 보정)',
+            subtitle:
+                '1분에 쓰는 공기를 수면 기준으로 환산(bar/min). 낮아질수록 성장!\n평균 수심을 입력하면 수심 보정이 적용돼 공정하게 비교됩니다.',
             child: _lineChart(sacValues, sacLabels, Colors.teal[600]!, ''),
           ),
           const SizedBox(height: 12),
@@ -454,18 +444,23 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
   }
 
   Widget _logRow(int index, DiveLog log) {
-    final sac = log.consumptionPerMin;
+    final sac = log.correctedPerMin;
     final scoreAvg = log.scores.isEmpty
         ? null
         : log.scores.values.reduce((a, b) => a + b) / log.scores.length;
     final infoParts = <String>[
       if (log.startTime.isNotEmpty && log.endTime.isNotEmpty)
         '${log.startTime}~${log.endTime}',
-      if (log.depth > 0) '${_fmt(log.depth)}m',
+      if (log.depth > 0) '최대 ${_fmt(log.depth)}m',
+      if (log.avgDepth > 0) '평균 ${_fmt(log.avgDepth)}m',
       if (log.duration > 0) '${_fmt(log.duration)}분',
+      if (log.waterTemp != null) '수온 ${_fmt(log.waterTemp!)}℃',
       if (log.startBar > 0) '${_fmt(log.startBar)}→${_fmt(log.endBar)}bar',
-      if (sac != null) '소모 ${sac.toStringAsFixed(1)}/분',
+      if (sac != null)
+        '${log.avgDepth > 0 ? '보정 소모' : '소모'} ${sac.toStringAsFixed(1)}/분',
       if (scoreAvg != null) '평가 ${scoreAvg.toStringAsFixed(1)}',
+      if (log.tags.isNotEmpty)
+        '⚠ ${log.tags.map((t) => kDiveTags[t] ?? t).join('·')}',
     ];
 
     return GestureDetector(
@@ -526,6 +521,10 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     _siteController.text = log?.site ?? '';
     _depthController.text = log != null && log.depth > 0 ? _fmt(log.depth) : '';
+    _avgDepthController.text =
+        log != null && log.avgDepth > 0 ? _fmt(log.avgDepth) : '';
+    _tempController.text =
+        log?.waterTemp != null ? _fmt(log!.waterTemp!) : '';
     _durationController.text =
         log != null && log.duration > 0 ? _fmt(log.duration) : '';
     _startBarController.text =
@@ -533,8 +532,9 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
     _endBarController.text =
         log != null && log.endBar > 0 ? _fmt(log.endBar) : '';
 
-    // 셀프 평가 점수·시간 (다이얼로그 안 로컬 상태)
+    // 셀프 평가 점수·태그·시간 (다이얼로그 안 로컬 상태)
     final scores = Map<String, int>.from(log?.scores ?? {});
+    final tags = Set<String>.from(log?.tags ?? const []);
     var startTime = log?.startTime ?? '';
     var endTime = log?.endTime ?? '';
 
@@ -679,9 +679,19 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    numField(_depthController, '수심 m'),
+                    numField(_depthController, '최대 수심 m'),
                     const SizedBox(width: 8),
+                    // 💡 평균 수심은 다이빙 컴퓨터 있을 때만 — 선택 입력.
+                    // 넣으면 분당 소모에 수심 보정이 적용된다.
+                    numField(_avgDepthController, '평균 수심 m (선택)'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
                     numField(_durationController, '시간 분 (자동 계산)'),
+                    const SizedBox(width: 8),
+                    numField(_tempController, '수온 ℃ (선택)'),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -756,6 +766,46 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 14),
+                // 💡 실수/특이사항 태그 — 나중에 인사이트(실수 패턴 분석)의 원료
+                Text('특이사항 태그 (선택)',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[600])),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 5,
+                  runSpacing: 5,
+                  children: [
+                    for (final tag in kDiveTags.entries)
+                      GestureDetector(
+                        onTap: () => setDialogState(() {
+                          if (!tags.remove(tag.key)) tags.add(tag.key);
+                        }),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: tags.contains(tag.key)
+                                ? Colors.orange[700]
+                                : Colors.grey[100],
+                            borderRadius: BorderRadius.circular(9),
+                          ),
+                          child: Text(
+                            tag.value,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: tags.contains(tag.key)
+                                  ? Colors.white
+                                  : Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -787,10 +837,13 @@ class _DiveLogScreenState extends State<DiveLogScreen> {
                   startTime: startTime,
                   endTime: endTime,
                   depth: num0(_depthController),
+                  avgDepth: num0(_avgDepthController),
+                  waterTemp: double.tryParse(_tempController.text.trim()),
                   duration: num0(_durationController),
                   startBar: num0(_startBarController),
                   endBar: num0(_endBarController),
                   scores: Map<String, int>.from(scores),
+                  tags: tags.toList(),
                 );
                 setState(() {
                   _logs.removeWhere((l) => l.id == newLog.id);
@@ -859,13 +912,180 @@ const Map<String, Color> _kTierColors = {
 
 /// 💡 예시 미리보기(? 버튼): 가짜 데이터로 티어·능력치·그래프가
 /// 어떤 그림이 되는지 보여준다. 저장과는 무관한 구경용 화면.
-class _GrowthDemoScreen extends StatelessWidget {
+/// 옆으로 넘기면(뷰페이저) 로그가 쌓였을 때 열리는 인사이트 예시가 나온다.
+class _GrowthDemoScreen extends StatefulWidget {
   const _GrowthDemoScreen();
 
   @override
+  State<_GrowthDemoScreen> createState() => _GrowthDemoScreenState();
+}
+
+class _GrowthDemoScreenState extends State<_GrowthDemoScreen> {
+  int _page = 0;
+
+  @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      appBar: AppBar(
+        title: Text(_page == 0 ? '이렇게 기록돼요 (예시)' : '이런 인사이트가 열려요 (예시)',
+            style:
+                const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: PageView(
+              onPageChanged: (i) => setState(() => _page = i),
+              children: [_buildRecordPage(), _buildInsightPage()],
+            ),
+          ),
+          // 페이지 점 표시 + 넘기기 힌트
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < 2; i++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: _page == i ? 18 : 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color:
+                              _page == i ? Colors.blue[700] : Colors.grey[300],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  _page == 0 ? '← 옆으로 넘기면 인사이트 예시' : '기록 예시로 돌아가기 →',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 페이지 2: 로그가 쌓이면 열리는 인사이트 예시
+  Widget _buildInsightPage() {
+    Widget insightCard(String emoji, String title, String body, String basis) =>
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 18)),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(title,
+                        style: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(body,
+                  style: const TextStyle(fontSize: 12.5, height: 1.55)),
+              const SizedBox(height: 5),
+              Text(basis,
+                  style: TextStyle(fontSize: 10.5, color: Colors.grey[400])),
+            ],
+          ),
+        );
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.amber[50],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.amber[200]!),
+          ),
+          child: const Text(
+            '아래는 예시입니다. 수온·수심·특이사항 태그까지 기록하면\n내 데이터에서 이런 인사이트가 자동으로 나옵니다!',
+            style: TextStyle(fontSize: 12, height: 1.5),
+          ),
+        ),
+        const SizedBox(height: 12),
+        insightCard(
+          '🥶',
+          '수온이 낮으면 공기를 많이 써요',
+          '수온 20℃ 이하 다이빙에서 분당 소모가 평균보다 18% 높았어요. '
+              '추울 때 호흡이 빨라지는 타입 — 후드·두꺼운 슈트를 챙기면 좋아요.',
+          '수온 기록이 있는 로그 6개 기준',
+        ),
+        insightCard(
+          '📉',
+          '호흡이 눈에 띄게 늘고 있어요',
+          '최근 5회 보정 소모(0.9/분)가 처음 5회(1.4/분)보다 36% 낮아요. '
+              '물속이 편해지고 있다는 뜻!',
+          '전체 로그 12개 기준',
+        ),
+        insightCard(
+          '⚠️',
+          '아침 첫 입수에서 실수가 몰려요',
+          "'압평형 고생' 태그 4번 중 3번이 그날 첫 다이빙이었어요. "
+              '입수 전에 미리 귀를 풀어주세요.',
+          "'압평형 고생' 태그 4개 기준",
+        ),
+        insightCard(
+          '📍',
+          '조류 있는 포인트에서 긴장해요',
+          '죽도에서 분당 소모가 다른 포인트보다 22% 높았어요. '
+              "'조류 셌음' 태그와 겹치는 걸 보면 조류에서 힘이 들어가는 편이에요.",
+          '죽도 로그 5개 기준',
+        ),
+        // 💡 잠금 카드 — 데이터가 모자라면 억지 인사이트 대신 잠가둔다
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Row(
+            children: [
+              Text('🔒',
+                  style: TextStyle(fontSize: 18, color: Colors.grey[400])),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '인사이트는 관련 기록이 5개 이상 쌓이면 열립니다.\n적은 데이터로는 우연을 경향으로 착각할 수 있어서요!',
+                  style: TextStyle(
+                      fontSize: 12, height: 1.5, color: Colors.grey[600]),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── 페이지 1: 기록 예시 (티어·레이더·그래프·로그)
+  Widget _buildRecordPage() {
     // 꺾임이 살아있는 예시 수치 (전체적으로는 성장 추세)
-    const endValues = [45.0, 70.0, 55.0, 85.0, 65.0, 95.0, 110.0];
     const sacValues = [17.5, 13.8, 15.6, 12.2, 13.9, 10.4, 9.6];
     const labels = ['8/4', '8/5', '8/5', '8/6', '8/7', '8/8', '8/9'];
     const radarValues = [0.80, 0.55, 0.65, 0.90, 0.70];
@@ -892,15 +1112,7 @@ class _GrowthDemoScreen extends StatelessWidget {
           ),
         );
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text('이렇게 기록돼요 (예시)',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-      ),
-      body: ListView(
+    return ListView(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
         children: [
           // 안내 배너
@@ -993,28 +1205,10 @@ class _GrowthDemoScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // 잔여 바 예시
-          card(
-            '잔여 바',
-            '다이빙 후 남은 공기. 높아질수록 성장!',
-            SizedBox(
-              height: 160,
-              width: double.infinity,
-              child: CustomPaint(
-                painter: _LineChartPainter(
-                    values: endValues,
-                    labels: labels,
-                    color: Colors.blue[700]!,
-                    unit: 'bar'),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-
           // 분당 소모 예시
           card(
-            '분당 소모',
-            '1분에 쓰는 공기(bar/min). 낮아질수록 성장!',
+            '분당 소모 (수심 보정)',
+            '1분에 쓰는 공기를 수면 기준으로 환산(bar/min). 낮아질수록 성장!',
             SizedBox(
               height: 160,
               width: double.infinity,
@@ -1036,8 +1230,10 @@ class _GrowthDemoScreen extends StatelessWidget {
             Column(
               children: [
                 for (final (n, date, site, info) in const [
-                  (7, '2026-08-09', '죽도', '10:12~10:58 · 22m · 46분 · 200→110bar'),
-                  (6, '2026-08-08', '관음도', '14:05~14:47 · 18m · 42분 · 200→95bar'),
+                  (7, '2026-08-09', '죽도',
+                      '최대 22m · 평균 14m · 46분 · 수온 24℃ · 200→110bar · 보정 소모 0.8/분'),
+                  (6, '2026-08-08', '관음도',
+                      '최대 18m · 평균 12m · 42분 · 수온 23℃ · 200→95bar · 보정 소모 1.1/분'),
                 ])
                   Container(
                     margin: const EdgeInsets.only(bottom: 6),
@@ -1087,7 +1283,6 @@ class _GrowthDemoScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
     );
   }
 }

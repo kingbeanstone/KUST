@@ -86,6 +86,14 @@ class WeatherScreen extends StatelessWidget {
 
   Widget _daySection(BuildContext context, String title,
       List<HourlyWeather> hours, Map<String, double> waves, DateTime now) {
+    // 💡 그날의 대표 날씨: 시간대별 이모지를 등장 순서대로 중복 없이 (최대 4개)
+    final dayEmojis = <String>[];
+    for (final h in hours) {
+      final (e, _) = WeatherService.describe(h.code);
+      if (!dayEmojis.contains(e)) dayEmojis.add(e);
+      if (dayEmojis.length >= 4) break;
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -97,9 +105,16 @@ class WeatherScreen extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-            child: Text(title,
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.bold)),
+            child: Row(
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 8),
+                Text(dayEmojis.join(' '),
+                    style: const TextStyle(fontSize: 15)),
+              ],
+            ),
           ),
           // 열 머리
           Padding(
