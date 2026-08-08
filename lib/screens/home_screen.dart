@@ -546,13 +546,13 @@ class HomeScreen extends StatelessWidget {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF4A80D6), Color(0xFF77AAE8)],
+            colors: [Color(0xFF2F63C7), Color(0xFF5590E4)],
           ),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.blue.withAlpha(60),
-                blurRadius: 6,
+                color: Colors.blue.withAlpha(80),
+                blurRadius: 7,
                 offset: const Offset(0, 3)),
           ],
         ),

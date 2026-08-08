@@ -56,6 +56,16 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   /// 💡 마지막 카메라 상태 (800의 '카메라 저장'용)
   CameraPosition? _lastCamera;
 
+  /// 💡 핵심 포인트 시트를 비모달(지속 시트)로 열기 위한 키/컨트롤러 —
+  /// 시트가 떠 있는 동안에도 지도를 움직일 수 있다.
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  PersistentBottomSheetController? _sheetController;
+
+  void _closeSiteSheet() {
+    _sheetController?.close();
+    _sheetController = null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -418,6 +428,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     }
 
     return Scaffold(
+      key: _scaffoldKey,
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('🗺 다이브 사이트',
@@ -469,8 +480,9 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   zoomControlsEnabled: false,
                   mapToolbarEnabled: false,
                   myLocationButtonEnabled: false,
-                  // 빈 지도를 탭하면 펼쳐진 세부 포인트를 접는다
+                  // 빈 지도를 탭하면 시트를 닫고 펼쳐진 세부 포인트를 접는다
                   onTap: (_) {
+                    _closeSiteSheet();
                     if (_expandedSiteId != null) {
                       setState(() => _expandedSiteId = null);
                     }
@@ -818,7 +830,10 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   ),
                   if (_showPointList)
                     SizedBox(
-                    height: 210,
+                    // 💡 가로 회전 등 낮은 화면에서 하단 패널이 넘치지 않게
+                    // 화면 높이에 비례해 줄어든다 (세로에선 기존 210 유지)
+                    height: math.min(
+                        210.0, MediaQuery.of(context).size.height * 0.28),
                     child: sites.isEmpty
                   ? Center(
                       child: Text(
@@ -1032,14 +1047,16 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   // ------------------------------------------------------------- 상세 시트
 
   void _showSiteSheet(DiveSite site, bool isAdmin, DiveSiteProvider provider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      // 💡 지도를 계속 볼 수 있게: 배경을 어둡게 덮지 않고,
-      //    낮게 열리는 드래그 시트로 (위로 끌면 전체 내용)
-      barrierColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (sheetContext) => DraggableScrollableSheet(
+    _closeSiteSheet();
+    // 💡 모달이 아닌 '지속 시트' — 시트가 떠 있는 동안에도 지도를
+    // 자유롭게 움직일 수 있다. 아래로 끝까지 끌어내리거나 X로 닫는다.
+    _sheetController = _scaffoldKey.currentState?.showBottomSheet(
+      (sheetContext) => NotificationListener<DraggableScrollableNotification>(
+        onNotification: (n) {
+          if (n.extent <= n.minExtent + 0.005) _closeSiteSheet();
+          return false;
+        },
+        child: DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.45,
         minChildSize: 0.28,
@@ -1088,11 +1105,17 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                   if (isAdmin)
                     TextButton(
                       onPressed: () {
-                        Navigator.pop(sheetContext);
+                        _closeSiteSheet();
                         _showEditDialog(provider, site: site);
                       },
                       child: const Text('수정', style: TextStyle(fontSize: 13)),
                     ),
+                  IconButton(
+                    icon: Icon(Icons.close, size: 19, color: Colors.grey[500]),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: _closeSiteSheet,
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -1163,7 +1186,10 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
           ),
           ),
         ),
+        ),
       ),
+      backgroundColor: Colors.transparent,
+      enableDrag: false,
     );
   }
 
