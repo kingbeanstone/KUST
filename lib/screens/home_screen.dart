@@ -588,22 +588,22 @@ class HomeScreen extends StatelessWidget {
                       TextSpan(
                           text: '울릉도  ',
                           style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                               letterSpacing: 0.2,
-                              color: Colors.white.withAlpha(235))),
+                              color: Colors.white.withAlpha(245))),
                       TextSpan(
                           text: '${now.temp.round()}°',
                           style: const TextStyle(
                               fontSize: 18,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               color: Colors.white)),
                       TextSpan(
                           text: '  $desc',
                           style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white.withAlpha(215))),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white.withAlpha(230))),
                     ]),
                   ),
                 ),
