@@ -100,7 +100,13 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
   @override
   void initState() {
     super.initState();
-    _setupAudio();
+    // 💡 오디오 준비(웹은 626KB 로드+변환)를 화면 전환 애니메이션이
+    // 끝난 뒤로 미뤄서 진입 버벅임을 줄인다
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 350), () {
+        if (mounted) _setupAudio();
+      });
+    });
   }
 
   Future<void> _setupAudio() async {
@@ -122,11 +128,18 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
   }
 
   Future<void> _ensureBgm() async {
-    if (!_soundOn || _bgmStarted) return;
+    if (!_soundOn) return;
+    // 💡 웹: 순정 <audio> 브리지 — 이미 재생 중이면 play()가 무시되므로
+    // 사용자 제스처마다 불러도 안전하다 (자동재생이 막혔던 경우 여기서 시작)
+    if (webAudioPlay('jurumarble_bgm.wav', loop: true, volume: 0.5)) {
+      _bgmStarted = true;
+      return;
+    }
+    if (_bgmStarted) return;
     try {
       await _bgm.setReleaseMode(ReleaseMode.loop);
       await _bgm.setVolume(0.5);
-      await _bgm.play(await gameAudioSource('jurumarble_bgm.wav'));
+      await _bgm.play(AssetSource('audio/jurumarble_bgm.wav'));
       _bgmStarted = true;
     } catch (_) {
       // 자동재생 차단 — 다음 사용자 제스처(굴리기/토글) 때 재시도
@@ -136,6 +149,7 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
   /// 어떤 이유로든 브금이 멈췄으면 다시 살린다 (매 턴 종료 시 호출)
   void _reviveBgm() {
     if (!_soundOn) return;
+    if (webAudioPlay('jurumarble_bgm.wav', loop: true, volume: 0.5)) return;
     if (!_bgmStarted) {
       _ensureBgm();
       return;
@@ -146,10 +160,15 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
   Future<void> _toggleSound() async {
     if (_soundOn) {
       setState(() => _soundOn = false);
-      await _bgm.pause();
+      if (!webAudioPause('jurumarble_bgm.wav')) await _bgm.pause();
     } else {
       setState(() => _soundOn = true);
+      if (webAudioPlay('jurumarble_bgm.wav', loop: true, volume: 0.5)) {
+        _bgmStarted = true;
+        return;
+      }
       if (_bgmStarted) {
+        // 네이티브: 일시정지 상태를 이어서 재생
         try {
           await _bgm.resume();
         } catch (_) {
@@ -164,13 +183,13 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
 
   void _playSfx(String file) {
     if (!_soundOn) return;
-    gameAudioSource(file)
-        .then((s) => _sfx.play(s, volume: 0.9))
-        .catchError((_) {});
+    if (webAudioPlay(file, volume: 0.9)) return;
+    _sfx.play(AssetSource('audio/$file'), volume: 0.9).catchError((_) {});
   }
 
   @override
   void dispose() {
+    webAudioPause('jurumarble_bgm.wav'); // 웹: 화면 나가면 브금 정지
     _bgm.dispose();
     _sfx.dispose();
     super.dispose();

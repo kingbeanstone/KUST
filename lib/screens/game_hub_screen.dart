@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../util/game_audio.dart';
 import 'jurumarble_screen.dart';
 import 'whisper_game_screen.dart';
 
@@ -8,6 +9,8 @@ class GameHubScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 💡 게임 진입 전에 오디오를 미리 준비 — 진입 버벅임 완화 (중복 호출 무해)
+    preloadGameAudio();
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(

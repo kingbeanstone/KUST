@@ -95,6 +95,43 @@
   };
 </script>
 
+<!-- 💡 게임 오디오 브리지: 웹(PWA)에서는 플러그인 대신 순정 <audio>로 재생.
+     사용자 제스처(버튼 탭)에서 호출되면 모바일 브라우저에서도 확실히 소리가 난다. -->
+<script>
+  var kustAudioEls = {};
+  function kustAudioGet(url, loop) {
+    var key = url + (loop ? '#loop' : '');
+    var a = kustAudioEls[key];
+    if (!a) {
+      a = new Audio(url);
+      a.preload = 'auto';
+      kustAudioEls[key] = a;
+    }
+    a.loop = !!loop;
+    return a;
+  }
+  window.kustAudioLoad = function (url) {
+    try { kustAudioGet(url, false); } catch (e) {}
+  };
+  window.kustAudioPlay = function (url, loop, volume) {
+    try {
+      var a = kustAudioGet(url, loop);
+      a.volume = volume;
+      if (!loop) { try { a.currentTime = 0; } catch (e) {} }
+      var p = a.play();
+      if (p && p.catch) {
+        p.catch(function (e) { console.warn('kust audio blocked:', e && e.name); });
+      }
+    } catch (e) { console.warn('kust audio error:', e); }
+  };
+  window.kustAudioPause = function (url) {
+    try {
+      var a = kustAudioEls[url + '#loop'];
+      if (a) a.pause();
+    } catch (e) {}
+  };
+</script>
+
 <!-- Flutter 부트스트랩 스크립트 -->
 <script src="flutter_bootstrap.js" async=""></script>
 

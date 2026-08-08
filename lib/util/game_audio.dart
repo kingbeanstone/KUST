@@ -1,20 +1,36 @@
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
-/// 💡 게임 오디오 소스 헬퍼.
-/// PWA(웹)에서는 서비스워커가 캐시한 오디오 파일을 <audio> 태그로 재생할 때
-/// Range 요청이 처리되지 않아 소리 없이 실패하는 문제가 있다 (특히 안드로이드
-/// 크롬). 그래서 웹에서는 에셋을 바이트로 읽어 data URI로 재생하고,
-/// 네이티브에서는 기존 AssetSource를 그대로 쓴다.
-final Map<String, BytesSource> _bytesCache = {};
+import 'game_audio_stub.dart'
+    if (dart.library.js_interop) 'game_audio_web.dart' as bridge;
 
-Future<Source> gameAudioSource(String file) async {
-  if (!kIsWeb) return AssetSource('audio/$file');
-  final cached = _bytesCache[file];
-  if (cached != null) return cached;
-  final data = await rootBundle.load('assets/audio/$file');
-  final src = BytesSource(data.buffer.asUint8List(), mimeType: 'audio/wav');
-  _bytesCache[file] = src;
-  return src;
+/// 💡 게임 오디오.
+/// 웹(PWA)에서는 audioplayers 웹 구현이 기기에 따라 소리 없이 실패하는
+/// 문제가 있어, index.html의 순정 <audio> 브리지(kustAudio*)로 재생한다.
+/// 네이티브에서는 이 함수들이 전부 false를 돌려주므로 호출부가
+/// 기존 audioplayers(AssetSource) 경로를 그대로 탄다.
+const String _base = 'assets/assets/audio/';
+
+/// 웹이면 순정 <audio>로 재생하고 true. 아니면 false (호출부가 폴백).
+bool webAudioPlay(String file, {bool loop = false, double volume = 1.0}) {
+  if (!kIsWeb) return false;
+  return bridge.audioPlay('$_base$file', loop, volume);
+}
+
+/// 웹 브금 일시정지. 처리했으면 true.
+bool webAudioPause(String file) {
+  if (!kIsWeb) return false;
+  return bridge.audioPause('$_base$file');
+}
+
+/// 💡 게임 허브 진입 시 미리 불러두기 — 첫 재생 지연·버벅임 완화.
+void preloadGameAudio() {
+  if (!kIsWeb) return;
+  for (final f in [
+    'jurumarble_bgm.wav',
+    'dice.wav',
+    'land.wav',
+    'beep.wav',
+  ]) {
+    bridge.audioLoad('$_base$f');
+  }
 }

@@ -88,9 +88,10 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
 
   Future<void> _playSfx(String file) async {
     if (!_soundOn) return;
+    if (webAudioPlay(file, volume: 0.9)) return; // 웹: 순정 <audio> 브리지
     try {
       await _sfx.stop();
-      await _sfx.play(await gameAudioSource(file), volume: 0.9);
+      await _sfx.play(AssetSource('audio/$file'), volume: 0.9);
     } catch (_) {
       // 오디오 실패는 게임 진행에 영향 없음
     }
