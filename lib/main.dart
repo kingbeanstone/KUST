@@ -247,25 +247,16 @@ class MainTabScreen extends StatefulWidget {
 class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
-  // 💡 탭 화면은 '처음 방문할 때' 만든다 — 시작 시 5개 전부 만들면
-  //    스플래시(첫 프레임)가 길어진다. 한 번 만든 탭은 IndexedStack이
-  //    상태(편집·스크롤·지도 로딩)를 그대로 유지한다.
-  final List<Widget?> _builtTabs = List<Widget?>.filled(5, null);
-
-  Widget _buildTab(int index) {
-    switch (index) {
-      case 0:
-        return const HomeScreen();
-      case 1:
-        return const ScheduleScreen();
-      case 2:
-        return const DiveSiteScreen();
-      case 3:
-        return const MealPlanScreen();
-      default:
-        return const MoreScreen();
-    }
-  }
+  // 💡 앱 시작 때 5개 탭을 전부 만들어둔다 — 탭 전환 즉시,
+  //    편집 상태·스크롤·지도 로딩 상태 모두 유지.
+  //    (스플래시가 길던 원인은 탭이 아니라 날씨 API 동시 호출이었음 — 지연 로드로 해결)
+  final List<Widget> _screens = [
+    const HomeScreen(),
+    const ScheduleScreen(),
+    const DiveSiteScreen(),
+    const MealPlanScreen(),
+    const MoreScreen(),
+  ];
 
 
   @override
@@ -313,16 +304,10 @@ class _MainTabScreenState extends State<MainTabScreen> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
-    // 현재 탭이 아직 안 만들어졌으면 지금 만든다 (최초 1회)
-    _builtTabs[_selectedIndex] ??= _buildTab(_selectedIndex);
-
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
-        children: [
-          for (var i = 0; i < _builtTabs.length; i++)
-            _builtTabs[i] ?? const SizedBox.shrink(),
-        ],
+        children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
