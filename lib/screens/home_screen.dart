@@ -26,6 +26,9 @@ import 'weather_screen.dart';
 import '../util/usage_stats.dart';
 import '../util/weather_service.dart';
 
+/// 💡 날씨 배너 스위치 — 스플래시 속도 실험용 (true로 되돌리면 복구)
+const bool kWeatherEnabled = false;
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -99,8 +102,11 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // 💡 울릉도 날씨 배너 — 탭하면 시간대별 상세
-            _buildWeatherBanner(context),
-            const SizedBox(height: 16),
+            // (임시 테스트: 스플래시 속도 확인 위해 꺼둠 — kWeatherEnabled로 복구)
+            if (kWeatherEnabled) ...[
+              _buildWeatherBanner(context),
+              const SizedBox(height: 16),
+            ],
 
             // 💡 v2: 장비 3분할을 하나로 통합하여 1행 2열로 단순화
             GridView.count(
