@@ -43,7 +43,7 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
   ];
 
   // 💡 수위 UP 질문 — 일반 질문과 한 덱에 섞여서 뽑힌다.
-  // 뽑히면 빨간 경고가 함께 나오고, 빡세면 한 잔 마시고 새로고침.
+  // 별도 경고 없음: 질문자가 보고 빡세면 한 잔 마시고 새로고침.
   static const List<String> _spicyQuestions = [
     '이 중에서 나를 좋아하고 있을 것 같은 사람은?',
     '지금 이 자리에서 짝사랑 중인 것 같은 사람은?',
@@ -63,7 +63,6 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
   late List<int> _order; // 전체 덱(일반+수위) 셔플 순서
   int _cursor = 0;
   String _question = '';
-  bool _isSpicy = false;
   bool _peeking = false; // 꾹 누르는 동안만 질문 표시
 
   @override
@@ -103,8 +102,7 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
         _cursor = 0;
       }
       final idx = _order[_cursor++];
-      _isSpicy = idx >= _questions.length;
-      _question = _isSpicy
+      _question = idx >= _questions.length
           ? _spicyQuestions[idx - _questions.length]
           : _questions[idx];
       _stage = 1;
@@ -215,28 +213,6 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.white)),
-          if (_isSpicy) ...[
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFB71C1C),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFFF5252)),
-              ),
-              child: const Text(
-                '🔞 수위 UP 질문! ⚠️ 분위기 보고 질문할 것!\n애매하면 아래 새로고침으로 다른 질문!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 13,
-                    height: 1.5,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
-              ),
-            ),
-          ],
           const SizedBox(height: 18),
           // 💡 꾹 누르는 동안만 질문이 보인다 — 옆 사람 훔쳐보기 방지
           GestureDetector(
