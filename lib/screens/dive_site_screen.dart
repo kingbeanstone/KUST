@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher_string.dart';
+import '../providers/auth_provider.dart';
 import '../providers/equipment_provider.dart';
 import '../providers/dive_site_provider.dart';
 import '../util/maps_ready_stub.dart'
@@ -51,6 +52,26 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
   /// 캔버스로 그린 라벨 마커 캐시 (내용+배율 → 아이콘)
   final Map<String, BitmapDescriptor> _labelIcons = {};
   final Set<String> _labelPending = {};
+
+  /// 💡 마지막 카메라 상태 (800의 '카메라 저장'용)
+  CameraPosition? _lastCamera;
+
+  @override
+  void initState() {
+    super.initState();
+    // 💡 웹(CanvasKit)은 한글 폰트를 뒤늦게 내려받는다 — 폰트가 준비되기 전에
+    // 그린 라벨은 글자가 □□(tofu)로 깨진 채 캐시되므로, 폰트 로딩이 끝나는
+    // 순간 캐시를 비우고 전부 다시 그린다.
+    PaintingBinding.instance.systemFonts.addListener(_onFontsChanged);
+  }
+
+  void _onFontsChanged() {
+    if (!mounted) return;
+    setState(() {
+      _labelIcons.clear();
+      _labelPending.clear();
+    });
+  }
 
   /// 💡 구글맵 JS가 준비된 뒤에만 지도 위젯을 만든다 (타이밍 크래시 방지)
   late final Future<bool> _mapsReady = waitForGoogleMaps();
@@ -153,6 +174,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
 
   @override
   void dispose() {
+    PaintingBinding.instance.systemFonts.removeListener(_onFontsChanged);
     _mapController?.dispose();
     _nameController.dispose();
     _depthController.dispose();
@@ -343,6 +365,13 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
     });
   }
 
+  /// 💡 세부 보기 카메라 — 800이 저장해둔 화면이 있으면 그 위치·줌으로,
+  /// 없으면 포인트 중심 + 기본 줌.
+  CameraUpdate _siteCamera(DiveSite site) => CameraUpdate.newLatLngZoom(
+        LatLng(site.camLat ?? site.lat, site.camLng ?? site.lng),
+        site.camZoom ?? 14.2,
+      );
+
   void _onMainMarkerTap(DiveSite site, bool isAdmin, DiveSiteProvider provider) {
     if (site.subPoints.isEmpty) {
       _showSiteSheet(site, isAdmin, provider);
@@ -353,9 +382,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
       _showSiteSheet(site, isAdmin, provider);
     } else {
       setState(() => _expandedSiteId = site.id);
-      _mapController?.animateCamera(
-        CameraUpdate.newLatLngZoom(LatLng(site.lat, site.lng), 14.2),
-      );
+      _mapController?.animateCamera(_siteCamera(site));
     }
   }
 
@@ -455,6 +482,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                       : null,
                   // 💡 줌 아웃하면 마커 라벨도 함께 작아진다 (3단계)
                   onCameraMove: (pos) {
+                    _lastCamera = pos; // 800 '카메라 저장'용
                     final s = pos.zoom >= 13
                         ? 1.0
                         : pos.zoom >= 11.8
@@ -572,6 +600,63 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                                     color: _moveMode
                                         ? Colors.white
                                         : Colors.grey[800],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    // 💡 800 전용: 세부 포인트가 펼쳐진 상태에서 지도를 원하는
+                    // 위치·줌으로 맞춘 뒤 누르면, 그 화면이 이 포인트의
+                    // 세부 보기 카메라로 저장된다 (모든 사용자에게 적용).
+                    if (isAdmin &&
+                        context.watch<AuthProvider>().isDeveloper &&
+                        expanded != null)
+                      Positioned(
+                        top: 52,
+                        right: 10,
+                        child: GestureDetector(
+                          onTap: () {
+                            final cam = _lastCamera;
+                            if (cam == null) return;
+                            provider.saveCamera(
+                                expanded!.id,
+                                cam.target.latitude,
+                                cam.target.longitude,
+                                cam.zoom);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    '📷 ${expanded.name} 세부 보기 카메라 저장! (줌 ${cam.zoom.toStringAsFixed(1)})'),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 11, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: Colors.red[600],
+                              borderRadius: BorderRadius.circular(9),
+                              boxShadow: [
+                                BoxShadow(
+                                    color: Colors.black.withAlpha(40),
+                                    blurRadius: 6),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.photo_camera_outlined,
+                                    size: 14, color: Colors.white),
+                                SizedBox(width: 4),
+                                Text(
+                                  '카메라 저장',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ],
@@ -753,10 +838,7 @@ class _DiveSiteScreenState extends State<DiveSiteScreen> {
                               if (site.subPoints.isNotEmpty) {
                                 setState(() => _expandedSiteId = site.id);
                               }
-                              _mapController?.animateCamera(
-                                CameraUpdate.newLatLngZoom(
-                                    LatLng(site.lat, site.lng), 14.2),
-                              );
+                              _mapController?.animateCamera(_siteCamera(site));
                               _showSiteSheet(site, isAdmin, provider);
                             },
                             child: Container(

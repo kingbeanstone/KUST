@@ -16,6 +16,12 @@ class DiveSite {
   final String youtube; // 유튜브 링크 (핵심 포인트 상세 시트에 버튼으로)
   final bool isBase; // 베이스 포인트 (마커·목록에서 특별 표시)
 
+  /// 💡 세부 보기 진입 시 쓸 저장된 카메라 (800이 지도에서 맞춰 저장).
+  /// null이면 기본값(포인트 중심, 줌 14.2)을 쓴다.
+  final double? camLat;
+  final double? camLng;
+  final double? camZoom;
+
   /// 세부 포인트 목록: {name, depth, level, desc}
   final List<Map<String, String>> subPoints;
 
@@ -30,10 +36,18 @@ class DiveSite {
     this.note = '',
     this.youtube = '',
     this.isBase = false,
+    this.camLat,
+    this.camLng,
+    this.camZoom,
     this.subPoints = const [],
   });
 
+  // 💡 카메라 값은 있을 때만 포함 — 수정 다이얼로그의 merge 저장이
+  // 저장된 카메라를 지우지 않게 하기 위함.
   Map<String, dynamic> toMap() => {
+        if (camLat != null) 'camLat': camLat,
+        if (camLng != null) 'camLng': camLng,
+        if (camZoom != null) 'camZoom': camZoom,
         'name': name,
         'lat': lat,
         'lng': lng,
@@ -57,6 +71,9 @@ class DiveSite {
         note: (map['note'] ?? '').toString(),
         youtube: (map['youtube'] ?? '').toString(),
         isBase: map['isBase'] == true,
+        camLat: (map['camLat'] as num?)?.toDouble(),
+        camLng: (map['camLng'] as num?)?.toDouble(),
+        camZoom: (map['camZoom'] as num?)?.toDouble(),
         subPoints: [
           for (final sp in (map['subPoints'] as List? ?? const []))
             if (sp is Map)
@@ -165,6 +182,14 @@ class DiveSiteProvider with ChangeNotifier {
 
   Future<void> deleteSite(String id) async {
     await _db.collection('dive_sites').doc(id).delete();
+  }
+
+  /// 💡 800 전용: 세부 보기 진입 카메라(중심+줌) 저장
+  Future<void> saveCamera(
+      String id, double lat, double lng, double zoom) async {
+    await _db.collection('dive_sites').doc(id).set(
+        {'camLat': lat, 'camLng': lng, 'camZoom': zoom},
+        SetOptions(merge: true));
   }
 
   /// 💡 위치 조정 모드: 마커 드래그 결과 저장
