@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
+import '../util/game_audio.dart';
+
 /// 💡 귓속말 게임: 술래가 오른쪽 사람에게만 귓속말로 질문 → 들은 사람이
 /// 어울리는 사람을 조용히 지목 → 지목당한 사람이 이어받아 자기 오른쪽에게
 /// 새 질문 → 무한 체인. 질문이 궁금하면 누구든 벌주 한 잔 마시고 귓속말로
@@ -88,7 +90,7 @@ class _WhisperGameScreenState extends State<WhisperGameScreen> {
     if (!_soundOn) return;
     try {
       await _sfx.stop();
-      await _sfx.play(AssetSource('audio/$file'), volume: 0.9);
+      await _sfx.play(await gameAudioSource(file), volume: 0.9);
     } catch (_) {
       // 오디오 실패는 게임 진행에 영향 없음
     }

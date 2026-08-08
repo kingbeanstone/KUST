@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/member_provider.dart';
 import '../providers/participant_provider.dart';
+import '../util/game_audio.dart';
 
 /// 주루마블 칸 하나: (이모지, 짧은 라벨, 자세한 설명, 종류)
 /// 종류: drink(마시기) / game(게임) / mission(미션) / move(이동) / chance(찬스)
@@ -125,7 +126,7 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
     try {
       await _bgm.setReleaseMode(ReleaseMode.loop);
       await _bgm.setVolume(0.5);
-      await _bgm.play(AssetSource('audio/jurumarble_bgm.wav'));
+      await _bgm.play(await gameAudioSource('jurumarble_bgm.wav'));
       _bgmStarted = true;
     } catch (_) {
       // 자동재생 차단 — 다음 사용자 제스처(굴리기/토글) 때 재시도
@@ -163,7 +164,9 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
 
   void _playSfx(String file) {
     if (!_soundOn) return;
-    _sfx.play(AssetSource('audio/$file'), volume: 0.9).catchError((_) {});
+    gameAudioSource(file)
+        .then((s) => _sfx.play(s, volume: 0.9))
+        .catchError((_) {});
   }
 
   @override
