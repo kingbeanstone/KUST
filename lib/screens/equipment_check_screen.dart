@@ -236,25 +236,23 @@ class _EquipmentCheckScreenState extends State<EquipmentCheckScreen> {
 
   /// 💡 한 덩어리(=가방)가 다 싸졌는지.
   /// 관리 대상 칸(_needsCheck)만 보고, 전부 체크됐을 때 완료.
-  /// 관리 대상이 하나도 없는 블록은 미완료로 본다.
+  /// 관리 대상이 하나도 없는 블록(동아리 장비 미대여 — 전부 '-')은
+  /// 챙길 게 없으니 기본 완료(초록)로 본다.
   bool _isBlockComplete(_Block block) {
-    var needed = 0;
     for (final gear in _gearKeys) {
       if (block.sharesGear(gear)) {
         final status = block.members.first.gears[gear];
         if (!_needsCheckFor(gear, status?.value ?? '')) continue;
-        needed++;
         if (!(status?.checked ?? false)) return false;
       } else {
         for (final m in block.members) {
           final status = m.gears[gear];
           if (!_needsCheckFor(gear, status?.value ?? '')) continue;
-          needed++;
           if (!(status?.checked ?? false)) return false;
         }
       }
     }
-    return needed > 0;
+    return true;
   }
 
   /// 💡 열(장비) 하나의 전체 현황: 관리 대상 칸 중 몇 개가 체크됐는지.
