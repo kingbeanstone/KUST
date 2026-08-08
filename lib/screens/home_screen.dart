@@ -23,6 +23,7 @@ import 'usage_stats_screen.dart';
 import 'game_hub_screen.dart';
 import 'species_guide_screen.dart';
 import 'weather_screen.dart';
+import 'trip_guide_screen.dart';
 import '../util/usage_stats.dart';
 import '../util/weather_service.dart';
 
@@ -135,6 +136,12 @@ class HomeScreen extends StatelessWidget {
                     target: const SpeciesGuideScreen()),
               ],
             ),
+
+            const SizedBox(height: 16),
+
+            // 💡 동기여행 추천: 카드 하나만 더 넣으면 그리드에 빈칸이 생기므로
+            // 가로로 긴 배너형 버튼으로 배치
+            _buildTripBanner(context),
 
             const SizedBox(height: 32),
 
@@ -724,6 +731,60 @@ class HomeScreen extends StatelessWidget {
                 title,
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 💡 동기여행 추천 — 가로로 긴 메뉴 버튼 (메뉴 카드와 같은 흰 카드 톤)
+  Widget _buildTripBanner(BuildContext context) {
+    const color = Colors.deepOrange;
+    return GestureDetector(
+      onTap: () {
+        UsageStats.log('trip');
+        Navigator.push(context,
+            MaterialPageRoute(builder: (context) => const TripGuideScreen()));
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+                color: color.withOpacity(0.08),
+                blurRadius: 15,
+                offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                  color: color.withOpacity(0.1), shape: BoxShape.circle),
+              child:
+                  const Icon(Icons.card_travel_rounded, color: color, size: 26),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('동기여행 추천 🏝️',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: Colors.black87)),
+                  const SizedBox(height: 3),
+                  Text('마지막 날, 울릉도 명소·스노클·맛집 한눈에',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
           ],
         ),
       ),

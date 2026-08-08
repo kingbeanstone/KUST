@@ -12,6 +12,7 @@ class UsageStats {
   /// 💡 여기 있는 키만 집계·표시한다 — 항목 조정 시 이 맵만 고치면 된다.
   static const Map<String, String> labels = {
     'weather': '날씨',
+    'trip': '동기여행',
     'equipment_check': '장비 체크',
     'buddy': '버디표',
     'personal_checklist': '개인 체크리스트',
@@ -47,6 +48,7 @@ class UsageStats {
   /// 히트맵 열 머리용 짧은 이름
   static const Map<String, String> shortLabels = {
     'weather': '날씨',
+    'trip': '여행',
     'equipment_check': '장비',
     'buddy': '버디',
     'personal_checklist': '체크',
