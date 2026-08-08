@@ -53,7 +53,16 @@ class _SpeciesGuideScreenState extends State<SpeciesGuideScreen> {
     }
   }
 
-  Widget _photo(String url, {double? height, BorderRadius? radius}) {
+  /// 💡 자체 호스팅 사진의 목록용 400px 썸네일 주소.
+  /// 외부 URL이거나 이미 썸네일이면 그대로 둔다.
+  String _thumbUrl(String url) {
+    const marker = '/species_photos/';
+    if (!url.contains(marker) || url.contains('${marker}thumb/')) return url;
+    return url.replaceFirst(marker, '${marker}thumb/');
+  }
+
+  Widget _photo(String url,
+      {double? height, BorderRadius? radius, bool thumb = false}) {
     final r = radius ?? BorderRadius.circular(12);
     if (url.trim().isEmpty) {
       return ClipRRect(
@@ -68,10 +77,11 @@ class _SpeciesGuideScreenState extends State<SpeciesGuideScreen> {
         ),
       );
     }
+    final display = thumb ? _thumbUrl(url) : url;
     return ClipRRect(
       borderRadius: r,
       child: Image.network(
-        url,
+        display,
         height: height,
         width: double.infinity,
         fit: BoxFit.cover,
@@ -88,13 +98,17 @@ class _SpeciesGuideScreenState extends State<SpeciesGuideScreen> {
                   ),
                 ),
               ),
-        errorBuilder: (c, e, s) => Container(
-          height: height,
-          color: const Color(0xFFF1F3F5),
-          child: Center(
-            child: Icon(Icons.broken_image_outlined, color: Colors.grey[400]),
-          ),
-        ),
+        // 💡 썸네일이 없는 사진(관리자가 새로 등록 등)은 원본으로 폴백
+        errorBuilder: (c, e, s) => display != url
+            ? _photo(url, height: height, radius: radius)
+            : Container(
+                height: height,
+                color: const Color(0xFFF1F3F5),
+                child: Center(
+                  child: Icon(Icons.broken_image_outlined,
+                      color: Colors.grey[400]),
+                ),
+              ),
       ),
     );
   }
@@ -279,6 +293,7 @@ class _SpeciesGuideScreenState extends State<SpeciesGuideScreen> {
                             Expanded(
                               child: _photo(
                                 (data['photo'] ?? '').toString(),
+                                thumb: true,
                                 radius: const BorderRadius.vertical(
                                     top: Radius.circular(14)),
                               ),
