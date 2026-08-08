@@ -582,11 +582,30 @@ class HomeScreen extends StatelessWidget {
                 Text(emoji, style: const TextStyle(fontSize: 26)),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text('울릉도  ${now.temp.round()}°  $desc',
-                      style: const TextStyle(
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white)),
+                  // 💡 온도만 살짝 크게, 나머지는 가늘게 — 위젯처럼 세련되게
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                          text: '울릉도  ',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0.2,
+                              color: Colors.white.withAlpha(235))),
+                      TextSpan(
+                          text: '${now.temp.round()}°',
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white)),
+                      TextSpan(
+                          text: '  $desc',
+                          style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.white.withAlpha(215))),
+                    ]),
+                  ),
                 ),
                 const Icon(Icons.chevron_right, color: Colors.white70),
               ],
