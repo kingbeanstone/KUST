@@ -20,7 +20,6 @@ import 'personal_checklist_screen.dart';
 import 'guide_screen.dart';
 import 'dive_log_screen.dart';
 import 'usage_stats_screen.dart';
-import 'coming_soon_screen.dart';
 import 'game_hub_screen.dart';
 import 'species_guide_screen.dart';
 import '../util/usage_stats.dart';
@@ -35,8 +34,10 @@ class HomeScreen extends StatelessWidget {
     final expeditionProvider = Provider.of<ExpeditionProvider>(context);
 
     final isAdmin = equipmentProvider.isAdmin;
-    // 💡 800(개발자) 인증이면 관리자 표시가 빨간색 + 개발 중 화면 미리보기 가능
-    final isDev = context.watch<AuthProvider>().isDeveloper;
+    // 💡 800(개발자) 인증이면 관리자 표시가 빨간색 + 개발 중 화면 미리보기 가능.
+    // 관리자 모드를 끄면 미리보기도 꺼져서 일반 사용자와 같은 화면을 본다
+    // (통계 집계 제외는 기기 단위로 계속 유지됨).
+    final isDev = context.watch<AuthProvider>().isDeveloper && isAdmin;
     final adminColor = isDev ? Colors.red[600]! : Colors.blue;
     final homeNotice = noticeProvider.homeNotice;
 
@@ -125,9 +126,7 @@ class HomeScreen extends StatelessWidget {
                     title: '생물 도감',
                     icon: Icons.emoji_nature_outlined, color: Colors.cyan,
                     statKey: 'species',
-                    target: isDev
-                        ? const SpeciesGuideScreen()
-                        : const ComingSoonScreen()),
+                    target: const SpeciesGuideScreen()),
               ],
             ),
 
@@ -611,12 +610,10 @@ class HomeScreen extends StatelessWidget {
             context,
             icon: Icons.casino_outlined,
             title: '미니 게임',
-            subtitle: '주루마블 — 대원들과 한 판!',
+            subtitle: '주루마블·귓속말 게임 — 대원들과 한 판!',
             isAdmin: true,
             statKey: 'game',
-            target: Provider.of<AuthProvider>(context).isDeveloper
-                ? const GameHubScreen()
-                : const ComingSoonScreen(),
+            target: const GameHubScreen(),
           ),
 
           const Spacer(),
