@@ -7,6 +7,16 @@ import 'whisper_game_screen.dart';
 class GameHubScreen extends StatelessWidget {
   const GameHubScreen({super.key});
 
+  /// 💡 게임 화면은 무거운 슬라이드 전환 대신 짧은 페이드로 —
+  /// 웹에서 전환 애니메이션 프레임 비용이 줄어 버벅임이 완화된다
+  Route<void> _fadeRoute(Widget page) => PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 120),
+        reverseTransitionDuration: const Duration(milliseconds: 100),
+        pageBuilder: (_, _, _) => page,
+        transitionsBuilder: (_, anim, _, child) =>
+            FadeTransition(opacity: anim, child: child),
+      );
+
   @override
   Widget build(BuildContext context) {
     // 💡 게임 진입 전에 오디오를 미리 준비 — 진입 버벅임 완화 (중복 호출 무해)
@@ -23,8 +33,8 @@ class GameHubScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         children: [
           GestureDetector(
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const JurumarbleScreen())),
+            onTap: () =>
+                Navigator.push(context, _fadeRoute(const JurumarbleScreen())),
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
@@ -59,8 +69,8 @@ class GameHubScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           GestureDetector(
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const WhisperGameScreen())),
+            onTap: () =>
+                Navigator.push(context, _fadeRoute(const WhisperGameScreen())),
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
