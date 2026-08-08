@@ -608,7 +608,7 @@ class _JurumarbleScreenState extends State<JurumarbleScreen> {
                     color: Colors.white)),
             const SizedBox(height: 22),
             card('⚔️', '기본 모드', '1팀 vs 2팀 — 자유롭게 나눠 앉아서 시작!', 'basic'),
-            card('🚻', '남녀 모드', '남자팀 vs 여자팀 — 참가자 명단으로 자동 편성', 'gender'),
+            card('🚻', '남녀 전쟁 모드', '남자팀 vs 여자팀 — 참가자 명단으로 자동 편성', 'gender'),
             card('🔀', '랜덤 모드', '참가자 명단을 앱이 무작위로 섞어 두 팀 편성', 'random'),
           ],
         ),
